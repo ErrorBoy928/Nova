@@ -97,7 +97,7 @@ class DiscordConfig:
 @dataclass
 class WhatsAppConfig:
     enabled: bool = True
-    owner_number: str = "923347973707"
+    owner_number: str = ""
 
 
 @dataclass

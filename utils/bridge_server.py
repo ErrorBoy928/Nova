@@ -60,7 +60,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._send_json({
                 "status": "online",
                 "service": "Nova AI Desktop Bridge",
-                "owner": "Error Boy",
+                "owner": "Admin",
                 "version": "2.0-master",
                 "port": PORT
             })

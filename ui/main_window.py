@@ -861,19 +861,19 @@ class MainWindow(QWidget):
         # Navigation Buttons
         self.nav_btns = []
 
-        self.nav_chat = self._create_nav_button("💬  Chat Console", 0)
+        self.nav_chat = self._create_nav_button("Chat Console", 0)
         sidebar_layout.addWidget(self.nav_chat)
 
-        self.nav_tasks = self._create_nav_button("📋  Tasks Hub", 1)
+        self.nav_tasks = self._create_nav_button("Tasks Hub", 1)
         sidebar_layout.addWidget(self.nav_tasks)
 
-        self.nav_conn = self._create_nav_button("🔗  Connections", 2)
+        self.nav_conn = self._create_nav_button("Connections", 2)
         sidebar_layout.addWidget(self.nav_conn)
 
-        self.nav_feed = self._create_nav_button("📡  Live Feed", 3)
+        self.nav_feed = self._create_nav_button("Live Feed", 3)
         sidebar_layout.addWidget(self.nav_feed)
 
-        self.nav_settings = self._create_nav_button("⚙️  Settings", 4)
+        self.nav_settings = self._create_nav_button("Settings", 4)
         sidebar_layout.addWidget(self.nav_settings)
 
         # Backward compatibility aliases
@@ -889,7 +889,7 @@ class MainWindow(QWidget):
         sidebar_layout.addWidget(ctrl_title)
 
         # Screen Vision Toggle
-        self.screen_vision_btn = QPushButton("👁️ Vision: OFF")
+        self.screen_vision_btn = QPushButton("Vision: OFF")
         self.screen_vision_btn.setCursor(Qt.PointingHandCursor)
         self.screen_vision_btn.setFixedHeight(26)
         self._style_quick_button(self.screen_vision_btn, active=self.config.ui.screen_observing)
@@ -897,7 +897,7 @@ class MainWindow(QWidget):
         sidebar_layout.addWidget(self.screen_vision_btn)
 
         # Hands-Free Voice Mode Toggle
-        self.hands_free_btn = QPushButton("🎙️ Mic: OFF")
+        self.hands_free_btn = QPushButton("Mic: OFF")
         self.hands_free_btn.setCursor(Qt.PointingHandCursor)
         self.hands_free_btn.setFixedHeight(26)
         self._style_quick_button(self.hands_free_btn, active=False)
@@ -905,7 +905,7 @@ class MainWindow(QWidget):
         sidebar_layout.addWidget(self.hands_free_btn)
 
         # Speech Toggle Button
-        self.speak_toggle_btn = QPushButton("🔊 Speech: ON" if self.config.voice.auto_speak else "🔊 Speech: OFF")
+        self.speak_toggle_btn = QPushButton("Speech: ON" if self.config.voice.auto_speak else "Speech: OFF")
         self.speak_toggle_btn.setCursor(Qt.PointingHandCursor)
         self.speak_toggle_btn.setFixedHeight(26)
         self._style_quick_button(self.speak_toggle_btn, active=self.config.voice.auto_speak)
@@ -950,7 +950,7 @@ class MainWindow(QWidget):
         top_bar.addWidget(self.status_pill)
 
         # Snip Button
-        snip_btn = QPushButton("✂️ Snip")
+        snip_btn = QPushButton("Snip Screen")
         snip_btn.setToolTip("Snip Screen (Ctrl+Shift+D)")
         snip_btn.setCursor(Qt.PointingHandCursor)
         snip_btn.setFixedHeight(24)
@@ -973,7 +973,7 @@ class MainWindow(QWidget):
         top_bar.addWidget(snip_btn)
 
         # Clear Chat Button
-        clear_btn = QPushButton("🗑️ Clear")
+        clear_btn = QPushButton("Clear Chat")
         clear_btn.setToolTip("Clear conversation history")
         clear_btn.setCursor(Qt.PointingHandCursor)
         clear_btn.setFixedHeight(24)

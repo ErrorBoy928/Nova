@@ -141,8 +141,8 @@ class SettingsView(QWidget):
 
         # Header Title
         title_box = QVBoxLayout()
-        title_lbl = QLabel("⚙️ MASTER SYSTEM SETTINGS")
-        title_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff; letter-spacing: 0.8px;")
+        title_lbl = QLabel("MASTER SYSTEM SETTINGS")
+        title_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff; letter-spacing: 0.8px;")
         sub_lbl = QLabel("Configure AI Models, Voice Synthesis, Desktop Automation, and Cloud Sync.")
         sub_lbl.setStyleSheet("font-size: 11px; color: #94a3b8;")
         title_box.addWidget(title_lbl)
@@ -197,11 +197,11 @@ class SettingsView(QWidget):
 
         layout_ai.addLayout(form_ai)
 
-        btn_test_llm = QPushButton("⚡ Test API Connection")
+        btn_test_llm = QPushButton("Test API Connection")
         btn_test_llm.clicked.connect(self._test_api_connection)
         layout_ai.addWidget(btn_test_llm)
         layout_ai.addStretch()
-        tabs.addTab(tab_ai, "⚡ AI Engine")
+        tabs.addTab(tab_ai, "AI Engine")
 
         # ── TAB 2: Voice & Audio ─────────────────────────────────────
         tab_voice = QWidget()
@@ -239,7 +239,7 @@ class SettingsView(QWidget):
 
         layout_voice.addLayout(form_v)
         layout_voice.addStretch()
-        tabs.addTab(tab_voice, "🎙️ Voice & Audio")
+        tabs.addTab(tab_voice, "Voice & Audio")
 
         # ── TAB 3: Desktop & Vision ──────────────────────────────────
         tab_dt = QWidget()
@@ -267,7 +267,7 @@ class SettingsView(QWidget):
 
         layout_dt.addLayout(form_dt)
         layout_dt.addStretch()
-        tabs.addTab(tab_dt, "💻 Desktop & Vision")
+        tabs.addTab(tab_dt, "Desktop & Vision")
 
         # ── TAB 4: Cloud Sync ────────────────────────────────────────
         tab_cloud = QWidget()
@@ -285,7 +285,7 @@ class SettingsView(QWidget):
         form_c.addRow("GitHub Repo:", self.cloud_url_input)
         layout_cloud.addLayout(form_c)
         layout_cloud.addStretch()
-        tabs.addTab(tab_cloud, "☁️ Cloud Sync")
+        tabs.addTab(tab_cloud, "Cloud Sync")
 
         root.addWidget(tabs)
 
@@ -293,7 +293,9 @@ class SettingsView(QWidget):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        self.btn_save = QPushButton("💾 Save All Changes")
+        self.btn_save = QPushButton("Save All Changes")
+        self.btn_save.clicked.connect(self._save_all)
+        btn_row.addWidget(self.btn_save)
         self.btn_save.clicked.connect(self._save_all)
         btn_row.addWidget(self.btn_save)
 

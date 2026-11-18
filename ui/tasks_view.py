@@ -112,8 +112,8 @@ class TasksView(QWidget):
 
         # Header Title
         title_box = QVBoxLayout()
-        title_lbl = QLabel("📋 NOVA AUTONOMOUS TASKS & AUTOMATION HUB")
-        title_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff; letter-spacing: 0.8px;")
+        title_lbl = QLabel("AUTONOMOUS TASKS & AUTOMATION HUB")
+        title_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff; letter-spacing: 0.8px;")
         sub_lbl = QLabel("Schedule daily recurring routines, organize today's scheduled tasks, or monitor compound sequential pipelines.")
         sub_lbl.setStyleSheet("font-size: 11px; color: #94a3b8;")
         title_box.addWidget(title_lbl)
@@ -128,7 +128,7 @@ class TasksView(QWidget):
         layout_daily.setContentsMargins(14, 14, 14, 14)
         layout_daily.setSpacing(10)
 
-        daily_header = QLabel("⏰ <b>Daily Recurring Automations</b> — Executes automatically every day at your set time and alerts your accounts.")
+        daily_header = QLabel("<b>Daily Recurring Automations</b> — Executes automatically every day at your set time and alerts your accounts.")
         daily_header.setStyleSheet("color: #cbd5e1; font-size: 11px;")
         layout_daily.addWidget(daily_header)
 
@@ -185,7 +185,7 @@ class TasksView(QWidget):
         self.scroll_daily.setWidget(self.daily_container)
         layout_daily.addWidget(self.scroll_daily)
 
-        tabs.addTab(tab_daily, "⏰ Daily Automations")
+        tabs.addTab(tab_daily, "Daily Automations")
 
         # ── PORTION 2: Day Schedule Tasks ─────────────────────────────
         tab_day = QWidget()
@@ -193,7 +193,7 @@ class TasksView(QWidget):
         layout_day.setContentsMargins(14, 14, 14, 14)
         layout_day.setSpacing(10)
 
-        day_header = QLabel("📅 <b>Today's Scheduled Tasks</b> — Pre-schedule one-off tasks for today; Nova will execute them at the exact time.")
+        day_header = QLabel("<b>Today's Scheduled Tasks</b> — Pre-schedule one-off tasks for today; Nova will execute them at the exact time.")
         day_header.setStyleSheet("color: #cbd5e1; font-size: 11px;")
         layout_day.addWidget(day_header)
 
@@ -240,7 +240,7 @@ class TasksView(QWidget):
         self.scroll_day.setWidget(self.day_container)
         layout_day.addWidget(self.scroll_day)
 
-        tabs.addTab(tab_day, "📅 Day Schedule")
+        tabs.addTab(tab_day, "Day Schedule")
 
         # ── PORTION 3: Multi-Step Agent Goals ─────────────────────────
         tab_goals = QWidget()
@@ -248,7 +248,7 @@ class TasksView(QWidget):
         layout_goals.setContentsMargins(14, 14, 14, 14)
         layout_goals.setSpacing(10)
 
-        goals_header = QLabel("📋 <b>Multi-Step Agent Goals</b> — Complex goals executed sequentially across multiple autonomous steps.")
+        goals_header = QLabel("<b>Multi-Step Agent Goals</b> — Complex goals executed sequentially across multiple autonomous steps.")
         goals_header.setStyleSheet("color: #cbd5e1; font-size: 11px;")
         layout_goals.addWidget(goals_header)
 
@@ -263,7 +263,7 @@ class TasksView(QWidget):
         self.scroll_goals.setWidget(self.goals_container)
         layout_goals.addWidget(self.scroll_goals)
 
-        tabs.addTab(tab_goals, "🎯 Compound Goals")
+        tabs.addTab(tab_goals, "Compound Goals")
 
         root.addWidget(tabs)
 
@@ -361,7 +361,7 @@ class TasksView(QWidget):
         h.setSpacing(10)
 
         # Time Badge
-        time_badge = QLabel(f"⏰ {t.get('scheduled_time', '00:00')}")
+        time_badge = QLabel(f"{t.get('scheduled_time', '00:00')}")
         time_badge.setStyleSheet(f"background: #082f49; color: {_ACCENT_CYAN}; font-weight: 700; font-size: 10px; padding: 3px 8px; border-radius: 4px;")
         h.addWidget(time_badge)
 
@@ -383,15 +383,15 @@ class TasksView(QWidget):
             h.addWidget(ch_pill)
 
         # Run Now Button
-        btn_run = QPushButton("▶ Run Now")
-        btn_run.setStyleSheet("background: #065f46; color: #6ee7b7; font-size: 10px; padding: 4px 8px; font-weight: 700;")
+        btn_run = QPushButton("Run")
+        btn_run.setStyleSheet("background: #065f46; color: #6ee7b7; font-size: 10px; padding: 4px 10px; font-weight: 700;")
         btn_run.clicked.connect(lambda: self._execute_now(t))
         h.addWidget(btn_run)
 
         # Delete Button
-        btn_del = QPushButton("✕")
-        btn_del.setFixedSize(24, 24)
-        btn_del.setStyleSheet("background: #450a0a; color: #fca5a5; border-radius: 4px; font-weight: 700;")
+        btn_del = QPushButton("Delete")
+        btn_del.setFixedHeight(24)
+        btn_del.setStyleSheet("background: #450a0a; color: #fca5a5; border-radius: 4px; font-weight: 700; font-size: 10px; padding: 2px 8px;")
         btn_del.clicked.connect(lambda: self._delete_scheduled_task(t.get("id"), is_daily))
         h.addWidget(btn_del)
 

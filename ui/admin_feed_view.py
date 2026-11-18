@@ -84,8 +84,8 @@ class AdminFeedView(QWidget):
         # Header Title
         top_row = QHBoxLayout()
         title_box = QVBoxLayout()
-        title_lbl = QLabel("📡 CENTRAL ADMIN LIVE FEED")
-        title_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff; letter-spacing: 0.8px;")
+        title_lbl = QLabel("CENTRAL ADMIN LIVE FEED")
+        title_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff; letter-spacing: 0.8px;")
         sub_lbl = QLabel("Live real-time feed of all conversations and commands occurring across WhatsApp, Discord, and Desktop.")
         sub_lbl.setStyleSheet("font-size: 11px; color: #94a3b8;")
         title_box.addWidget(title_lbl)
@@ -93,7 +93,7 @@ class AdminFeedView(QWidget):
         top_row.addLayout(title_box)
         top_row.addStretch()
 
-        self.status_pill = QLabel("● LIVE STREAM ONLINE")
+        self.status_pill = QLabel("LIVE STREAM ONLINE")
         self.status_pill.setStyleSheet("color: #10b981; font-weight: 700; font-size: 10px; padding: 4px 10px; background: #064e3b; border-radius: 6px; border: 1px solid #059669;")
         top_row.addWidget(self.status_pill)
         layout.addLayout(top_row)
@@ -112,32 +112,32 @@ class AdminFeedView(QWidget):
         self.btn_all.clicked.connect(lambda: self._set_filter("ALL"))
         ctrl_row.addWidget(self.btn_all)
 
-        self.btn_wa = QPushButton("📱 WhatsApp")
+        self.btn_wa = QPushButton("WhatsApp")
         self.btn_wa.setCheckable(True)
         self.btn_wa.clicked.connect(lambda: self._set_filter("WhatsApp"))
         ctrl_row.addWidget(self.btn_wa)
 
-        self.btn_dc = QPushButton("🤖 Discord")
+        self.btn_dc = QPushButton("Discord")
         self.btn_dc.setCheckable(True)
         self.btn_dc.clicked.connect(lambda: self._set_filter("Discord"))
         ctrl_row.addWidget(self.btn_dc)
 
-        self.btn_pc = QPushButton("💻 Desktop")
+        self.btn_pc = QPushButton("Desktop")
         self.btn_pc.setCheckable(True)
         self.btn_pc.clicked.connect(lambda: self._set_filter("Desktop"))
         ctrl_row.addWidget(self.btn_pc)
 
         ctrl_row.addStretch()
 
-        btn_test = QPushButton("⚡ Test Event")
+        btn_test = QPushButton("Test Event")
         btn_test.clicked.connect(self._send_test_event)
         ctrl_row.addWidget(btn_test)
 
-        btn_refresh = QPushButton("🔄 Refresh")
+        btn_refresh = QPushButton("Refresh")
         btn_refresh.clicked.connect(self._fetch_feed)
         ctrl_row.addWidget(btn_refresh)
 
-        btn_clear = QPushButton("🗑️ Clear")
+        btn_clear = QPushButton("Clear Feed")
         btn_clear.clicked.connect(self._clear_feed)
         ctrl_row.addWidget(btn_clear)
 

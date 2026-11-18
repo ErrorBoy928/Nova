@@ -51,13 +51,13 @@ def _send_desktop_notification(title: str, message: str):
 
 
 def _send_whatsapp_notification(title: str, message: str):
-    """Sends notification to Error Boy's WhatsApp."""
+    """Sends notification to user's WhatsApp."""
     try:
         # Check if local WhatsApp Baileys bridge is listening on port 3000
-        text = f"🔔 *NOVA AI NOTIFICATION* 🔔\n\n📌 *{title}*\n{message}"
+        text = f"*NOVA AI NOTIFICATION*\n\n*{title}*\n{message}"
         req = urllib.request.Request(
             "http://127.0.0.1:3000/notify",
-            data=json.dumps({"number": "923347973707", "message": text}).encode("utf-8"),
+            data=json.dumps({"number": "", "message": text}).encode("utf-8"),
             headers={"Content-Type": "application/json"}
         )
         urllib.request.urlopen(req, timeout=3)

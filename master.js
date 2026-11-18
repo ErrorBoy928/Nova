@@ -2,9 +2,9 @@ const { spawn } = require("child_process");
 const path = require("path");
 
 console.log("==========================================================");
-console.log("👑 NOVA AI - UNIFIED MASTER RUNNER 👑");
-console.log("👑 Hosting Discord Bot & WhatsApp Bot in 1 Unified Engine");
-console.log("👑 Dedicated to King Error Boy (Mohib)");
+console.log("NOVA AI - UNIFIED MULTI-PLATFORM RUNNER");
+console.log(" Hosting Discord Bot & WhatsApp Bot in 1 Unified Engine");
+console.log(" Autonomous Cloud Multi-Platform Engine");
 console.log("==========================================================");
 
 const pythonExecutable = process.platform === "win32" ? "python" : "python3";
@@ -18,15 +18,15 @@ const groqKey = process.env.GROQ_API_KEY;
 const discordToken = process.env.DISCORD_BOT_TOKEN;
 
 if (!groqKey) {
-    console.warn("⚠️ [WARNING] GROQ_API_KEY environment variable is NOT set! AI responses will fail until added.");
+    console.warn(" [WARNING] GROQ_API_KEY environment variable is NOT set! AI responses will fail until added.");
 } else {
-    console.log("✅ [CONFIG] GROQ_API_KEY detected.");
+    console.log(" [CONFIG] GROQ_API_KEY detected.");
 }
 
 if (!discordToken) {
-    console.warn("⚠️ [WARNING] DISCORD_BOT_TOKEN environment variable is NOT set! Discord bot cannot log in without it.");
+    console.warn(" [WARNING] DISCORD_BOT_TOKEN environment variable is NOT set! Discord bot cannot log in without it.");
 } else {
-    console.log("✅ [CONFIG] DISCORD_BOT_TOKEN detected.");
+    console.log(" [CONFIG] DISCORD_BOT_TOKEN detected.");
 }
 
 // 1. WhatsApp Engine Supervisor
@@ -36,7 +36,7 @@ let waStartTime = 0;
 function runWhatsApp() {
     if (isTerminating) return;
     waStartTime = Date.now();
-    console.log("📱 [LAUNCHER] Spawning WhatsApp Engine (index.js)...");
+    console.log(" [LAUNCHER] Spawning WhatsApp Engine (index.js)...");
     
     waProcess = spawn("node", ["index.js"], {
         cwd: __dirname,
@@ -45,7 +45,7 @@ function runWhatsApp() {
     });
 
     waProcess.on("error", (err) => {
-        console.error("❌ [WHATSAPP ERROR] Failed to start node process:", err.message);
+        console.error(" [WHATSAPP ERROR] Failed to start node process:", err.message);
     });
 
     waProcess.on("exit", (code, signal) => {
@@ -61,7 +61,7 @@ function runWhatsApp() {
             waRestartDelay = Math.min(waRestartDelay * 2, 180000);
         }
 
-        console.warn(`📱 [WHATSAPP] Process exited after ${uptime.toFixed(1)}s (code: ${code}, signal: ${signal}). Auto-restarting in ${(waRestartDelay / 1000).toFixed(0)}s...`);
+        console.warn(` [WHATSAPP] Process exited after ${uptime.toFixed(1)}s (code: ${code}, signal: ${signal}). Auto-restarting in ${(waRestartDelay / 1000).toFixed(0)}s...`);
         setTimeout(runWhatsApp, waRestartDelay);
     });
 }
@@ -82,7 +82,7 @@ function runDiscord() {
     });
 
     dcProcess.on("error", (err) => {
-        console.error(`❌ [DISCORD ERROR] Failed to start python process (${pythonExecutable}):`, err.message);
+        console.error(` [DISCORD ERROR] Failed to start python process (${pythonExecutable}):`, err.message);
     });
 
     dcProcess.on("exit", (code, signal) => {
@@ -124,7 +124,7 @@ function runDesktopAssistant() {
     });
 
     desktopProcess.on("error", (err) => {
-        console.error("❌ [DESKTOP ERROR] Failed to start desktop client:", err.message);
+        console.error(" [DESKTOP ERROR] Failed to start desktop client:", err.message);
     });
 
     desktopProcess.on("exit", (code) => {
@@ -135,7 +135,7 @@ function runDesktopAssistant() {
 
 // Graceful Shutdown on termination signals
 function gracefulShutdown(signal) {
-    console.log(`\n🛑 [SHUTDOWN] Received ${signal}. Terminating Nova sub-processes safely...`);
+    console.log(`\n [SHUTDOWN] Received ${signal}. Terminating Nova sub-processes safely...`);
     isTerminating = true;
 
     if (waProcess) {
@@ -149,7 +149,7 @@ function gracefulShutdown(signal) {
     }
 
     setTimeout(() => {
-        console.log("👋 [SHUTDOWN] Nova Master Engine stopped.");
+        console.log(" [SHUTDOWN] Nova Master Engine stopped.");
         process.exit(0);
     }, 1500);
 }

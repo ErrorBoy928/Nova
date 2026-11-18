@@ -1,16 +1,19 @@
 """
 ui/connections_view.py
 
-Connections Hub View for Nova AI.
-Manages:
-1. 📱 WhatsApp Web (Baileys QR code generation, in-app scan & commands)
-2. 🤖 Discord Superbot (Bot Token configuration, live status & commands)
-3. 📧 Autonomous Email & Web Research (Gmail/SMTP credentials, autonomous web search)
+Platform Connections View for Nova AI.
+Professional executive management interface for:
+- WhatsApp Web Bridge (Baileys QR pairing, session status, live disconnect)
+- Discord Bot (Token management, status verification, disconnect)
+- Email & Autonomous Web Research (SMTP credentials, connection test, disconnect)
 """
 
 from __future__ import annotations
 
+import os
 import json
+import shutil
+import smtplib
 import urllib.request
 from pathlib import Path
 
@@ -18,6 +21,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -35,6 +39,9 @@ from utils.logger import get_logger
 
 log = get_logger(__name__)
 
+_ENV_PATH = Path("E:/Nova_AI/.env")
+_AUTH_DIR = Path("E:/Nova_AI/auth_info_baileys")
+
 
 class ConnectionsView(QWidget):
     def __init__(self, config: AppConfig, parent=None):
@@ -42,6 +49,7 @@ class ConnectionsView(QWidget):
         self.config = config
         self._apply_theme()
         self._build_ui()
+        self._refresh_connection_states()
 
     def _apply_theme(self):
         self.setStyleSheet("""
@@ -59,7 +67,7 @@ class ConnectionsView(QWidget):
             QTabBar::tab {
                 background: #0a0a10;
                 color: #94a3b8;
-                padding: 10px 20px;
+                padding: 10px 22px;
                 margin-right: 4px;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
@@ -77,11 +85,7 @@ class ConnectionsView(QWidget):
                 background: #141420;
                 color: #ffffff;
             }
-            QLabel {
-                color: #cbd5e1;
-                font-size: 11px;
-            }
-            QLineEdit {
+            QLineEdit, QComboBox {
                 background-color: #12121a;
                 border: 1px solid #1e293b;
                 border-radius: 6px;
@@ -89,7 +93,7 @@ class ConnectionsView(QWidget):
                 color: #ffffff;
                 font-size: 12px;
             }
-            QLineEdit:focus {
+            QLineEdit:focus, QComboBox:focus {
                 border: 1px solid #38bdf8;
             }
             QPushButton {
@@ -99,10 +103,28 @@ class ConnectionsView(QWidget):
                 border-radius: 6px;
                 padding: 7px 18px;
                 font-weight: 700;
-                font-size: 12px;
+                font-size: 11px;
             }
             QPushButton:hover {
                 background-color: #0369a1;
+            }
+            .danger-btn {
+                background-color: #450a0a;
+                color: #fca5a5;
+                border: 1px solid #991b1b;
+            }
+            .danger-btn:hover {
+                background-color: #7f1d1d;
+                color: #ffffff;
+            }
+            .secondary-btn {
+                background-color: #1e293b;
+                color: #cbd5e1;
+                border: 1px solid #334155;
+            }
+            .secondary-btn:hover {
+                background-color: #334155;
+                color: #ffffff;
             }
         """)
 
@@ -113,9 +135,9 @@ class ConnectionsView(QWidget):
 
         # Header Title
         title_box = QVBoxLayout()
-        title_lbl = QLabel("🔗 NOVA PLATFORM CONNECTIONS HUB")
-        title_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff; letter-spacing: 0.8px;")
-        sub_lbl = QLabel("Authorize WhatsApp Mobile Access, Connect Discord Superbot, and configure Autonomous Email & Web Research.")
+        title_lbl = QLabel("PLATFORM CONNECTIONS HUB")
+        title_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff; letter-spacing: 0.8px;")
+        sub_lbl = QLabel("Manage integrations, authorization states, and connection sessions for external channels.")
         sub_lbl.setStyleSheet("font-size: 11px; color: #94a3b8;")
         title_box.addWidget(title_lbl)
         title_box.addWidget(sub_lbl)
@@ -130,22 +152,19 @@ class ConnectionsView(QWidget):
         layout_wa.setSpacing(12)
 
         wa_status_box = QHBoxLayout()
-        wa_icon = QLabel("📱")
-        wa_icon.setStyleSheet("font-size: 20px;")
-        wa_title = QLabel("WhatsApp Baileys Web Socket Bridge")
+        wa_title = QLabel("WhatsApp Web Socket Bridge")
         wa_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
-        self.wa_status_lbl = QLabel("● CONNECTED (+92 334 7973707)")
-        self.wa_status_lbl.setStyleSheet("color: #10b981; font-weight: 700; font-size: 11px; padding: 2px 8px; background: #064e3b; border-radius: 6px;")
-        wa_status_box.addWidget(wa_icon)
+        self.wa_status_lbl = QLabel("Disconnected")
+        self.wa_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
         wa_status_box.addWidget(wa_title)
         wa_status_box.addStretch()
         wa_status_box.addWidget(self.wa_status_lbl)
         layout_wa.addLayout(wa_status_box)
 
-        wa_desc = QLabel("Scan the QR code with your WhatsApp to authorize Nova as your mobile assistant. You can give voice or text commands from anywhere!")
-        wa_desc.setWordWrap(True)
-        wa_desc.setStyleSheet("color: #94a3b8; font-size: 11px;")
-        layout_wa.addWidget(wa_desc)
+        self.wa_info_lbl = QLabel("Scan the QR code below with your WhatsApp mobile client to link this instance as your assistant.")
+        self.wa_info_lbl.setWordWrap(True)
+        self.wa_info_lbl.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        layout_wa.addWidget(self.wa_info_lbl)
 
         # QR Display Container
         self.qr_frame = QFrame()
@@ -153,30 +172,35 @@ class ConnectionsView(QWidget):
         qr_layout = QVBoxLayout(self.qr_frame)
         qr_layout.setAlignment(Qt.AlignCenter)
 
-        self.qr_img_lbl = QLabel("Scan QR Code to Link WhatsApp")
+        self.qr_img_lbl = QLabel("Click 'Generate QR Code' to start pairing.")
         self.qr_img_lbl.setAlignment(Qt.AlignCenter)
-        self.qr_img_lbl.setStyleSheet("color: #64748b; font-weight: 600;")
+        self.qr_img_lbl.setStyleSheet("color: #64748b; font-weight: 600; font-size: 11px;")
         qr_layout.addWidget(self.qr_img_lbl)
         layout_wa.addWidget(self.qr_frame)
 
         wa_btn_row = QHBoxLayout()
-        self.scan_qr_btn = QPushButton("Generate / Refresh QR Code")
-        self.scan_qr_btn.clicked.connect(self._fetch_whatsapp_qr)
-        wa_btn_row.addWidget(self.scan_qr_btn)
+        self.btn_gen_qr = QPushButton("Generate / Refresh QR Code")
+        self.btn_gen_qr.clicked.connect(self._fetch_whatsapp_qr)
+        wa_btn_row.addWidget(self.btn_gen_qr)
+
+        self.btn_disconnect_wa = QPushButton("Disconnect WhatsApp")
+        self.btn_disconnect_wa.setStyleSheet("background-color: #450a0a; color: #fca5a5; border: 1px solid #991b1b;")
+        self.btn_disconnect_wa.clicked.connect(self._disconnect_whatsapp)
+        wa_btn_row.addWidget(self.btn_disconnect_wa)
         layout_wa.addLayout(wa_btn_row)
 
         wa_cmds = QLabel(
-            "<b>WhatsApp Exclusive Commands:</b><br>"
-            "• <code>!screen</code> : Takes live PC screenshot and replies with high-res image<br>"
-            "• <code>!pc &lt;cmd&gt;</code> : Runs app or action on PC (e.g. <code>!pc open chrome</code>)<br>"
-            "• <code>!pctasks</code> : Checks PC agent tasks list<br>"
-            "• <code>!pcstats</code> : Reports live CPU, RAM, and Disk space<br>"
-            "• <code>!stop</code> / <code>!start</code> : Controls chat auto-responder"
+            "<b>Supported WhatsApp Commands:</b><br>"
+            "• <code>!screen</code> : Captures desktop screen and returns high-resolution image<br>"
+            "• <code>!pc &lt;cmd&gt;</code> : Executes remote system command (e.g. <code>!pc open notepad</code>)<br>"
+            "• <code>!pctasks</code> : Lists current autonomous agent tasks<br>"
+            "• <code>!pcstats</code> : Reports live CPU, Memory, and Disk diagnostics<br>"
+            "• <code>!stop</code> / <code>!start</code> : Pauses or resumes auto-responder for this chat"
         )
-        wa_cmds.setStyleSheet("background: #0d0d16; padding: 10px; border-radius: 6px; color: #cbd5e1; font-size: 10px; line-height: 1.5;")
+        wa_cmds.setStyleSheet("background: #0d0d16; padding: 10px; border-radius: 6px; color: #cbd5e1; font-size: 10px; line-height: 1.5; border: 1px solid #1e293b;")
         layout_wa.addWidget(wa_cmds)
         layout_wa.addStretch()
-        tabs.addTab(tab_wa, "📱 WhatsApp")
+        tabs.addTab(tab_wa, "WhatsApp")
 
         # ── TAB 2: Discord ───────────────────────────────────────────
         tab_dc = QWidget()
@@ -185,56 +209,50 @@ class ConnectionsView(QWidget):
         layout_dc.setSpacing(12)
 
         dc_status_box = QHBoxLayout()
-        dc_icon = QLabel("🤖")
-        dc_icon.setStyleSheet("font-size: 20px;")
-        dc_title = QLabel("Discord Superbot Integration")
+        dc_title = QLabel("Discord Superbot Gateway")
         dc_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
-        self.dc_status_lbl = QLabel("READY TO CONNECT")
-        self.dc_status_lbl.setStyleSheet("color: #38bdf8; font-weight: 700; font-size: 11px; padding: 2px 8px; background: #0c4a6e; border-radius: 6px;")
-        dc_status_box.addWidget(dc_icon)
+        self.dc_status_lbl = QLabel("Disconnected")
+        self.dc_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
         dc_status_box.addWidget(dc_title)
         dc_status_box.addStretch()
         dc_status_box.addWidget(self.dc_status_lbl)
         layout_dc.addLayout(dc_status_box)
 
-        dc_desc = QLabel("Enter your Discord Bot Token to connect Nova to your Discord server or DMs.")
+        dc_desc = QLabel("Configure your Discord Bot Token to run Nova inside your Discord server or private direct messages.")
         dc_desc.setStyleSheet("color: #94a3b8; font-size: 11px;")
         layout_dc.addWidget(dc_desc)
 
         form_dc = QFormLayout()
+        form_dc.setSpacing(10)
         self.dc_token_input = QLineEdit()
         self.dc_token_input.setEchoMode(QLineEdit.Password)
-        self.dc_token_input.setPlaceholderText("Paste your Discord Bot Token here...")
-
-        env_path = Path("E:/Nova_AI/.env")
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("DISCORD_BOT_TOKEN="):
-                    self.dc_token_input.setText(line.split("=", 1)[1].strip())
-                    self.dc_status_lbl.setText("● TOKEN CONFIGURED")
-                    self.dc_status_lbl.setStyleSheet("color: #10b981; font-weight: 700; font-size: 11px; padding: 2px 8px; background: #064e3b; border-radius: 6px;")
-
+        self.dc_token_input.setPlaceholderText("Paste Discord Bot Token here...")
         form_dc.addRow("Bot Token:", self.dc_token_input)
         layout_dc.addLayout(form_dc)
 
         dc_btn_row = QHBoxLayout()
-        btn_save_dc = QPushButton("Save & Connect Discord Bot")
+        btn_save_dc = QPushButton("Save & Connect Discord")
         btn_save_dc.clicked.connect(self._save_discord_token)
         dc_btn_row.addWidget(btn_save_dc)
+
+        self.btn_disconnect_dc = QPushButton("Disconnect Discord")
+        self.btn_disconnect_dc.setStyleSheet("background-color: #450a0a; color: #fca5a5; border: 1px solid #991b1b;")
+        self.btn_disconnect_dc.clicked.connect(self._disconnect_discord)
+        dc_btn_row.addWidget(self.btn_disconnect_dc)
         layout_dc.addLayout(dc_btn_row)
 
         dc_cmds = QLabel(
-            "<b>Discord Exclusive Commands:</b><br>"
+            "<b>Supported Discord Commands:</b><br>"
             "• <code>!screen</code> : Takes live PC screenshot and embeds in Discord<br>"
-            "• <code>!pc &lt;action&gt;</code> : Execute desktop control or script<br>"
-            "• <code>!pctasks</code> : Remote task status inspection<br>"
-            "• <code>!pcstats</code> : Machine diagnostics (CPU, RAM, GPU)<br>"
-            "• <code>!secret &lt;key&gt;</code> : Store or retrieve credentials in Nova's Vault"
+            "• <code>!pc &lt;action&gt;</code> : Executes remote system action<br>"
+            "• <code>!pctasks</code> : Displays status of scheduled agent tasks<br>"
+            "• <code>!pcstats</code> : Reports machine resource usage<br>"
+            "• <code>!secret &lt;key&gt;</code> : Reads or stores encrypted credentials in vault"
         )
-        dc_cmds.setStyleSheet("background: #0d0d16; padding: 10px; border-radius: 6px; color: #cbd5e1; font-size: 10px; line-height: 1.5;")
+        dc_cmds.setStyleSheet("background: #0d0d16; padding: 10px; border-radius: 6px; color: #cbd5e1; font-size: 10px; line-height: 1.5; border: 1px solid #1e293b;")
         layout_dc.addWidget(dc_cmds)
         layout_dc.addStretch()
-        tabs.addTab(tab_dc, "🤖 Discord")
+        tabs.addTab(tab_dc, "Discord")
 
         # ── TAB 3: Email & Research ──────────────────────────────────
         tab_mail = QWidget()
@@ -243,86 +261,174 @@ class ConnectionsView(QWidget):
         layout_mail.setSpacing(12)
 
         mail_status_box = QHBoxLayout()
-        mail_icon = QLabel("📧")
-        mail_icon.setStyleSheet("font-size: 20px;")
-        mail_title = QLabel("Autonomous Email & DuckDuckGo Research Hub")
+        mail_title = QLabel("Email Service & Autonomous Web Research")
         mail_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
-        mail_status_box.addWidget(mail_icon)
+        self.mail_status_lbl = QLabel("Not Configured")
+        self.mail_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
         mail_status_box.addWidget(mail_title)
         mail_status_box.addStretch()
+        mail_status_box.addWidget(self.mail_status_lbl)
         layout_mail.addLayout(mail_status_box)
 
-        mail_desc = QLabel("Connect your Gmail or SMTP/IMAP credentials. Nova can autonomously search the web, compile research briefings, and draft/send emails upon your command.")
-        mail_desc.setWordWrap(True)
+        mail_desc = QLabel("Connect SMTP credentials for automated briefing dispatches, task notifications, and email forwarding.")
         mail_desc.setStyleSheet("color: #94a3b8; font-size: 11px;")
         layout_mail.addWidget(mail_desc)
 
         form_mail = QFormLayout()
+        form_mail.setSpacing(10)
+
+        self.mail_smtp_input = QLineEdit("smtp.gmail.com")
+        self.mail_port_input = QLineEdit("587")
+        self.mail_sec_combo = QComboBox()
+        self.mail_sec_combo.addItems(["STARTTLS (Port 587)", "SSL (Port 465)", "Plain (Port 25)"])
+
         self.mail_user_input = QLineEdit()
-        self.mail_user_input.setPlaceholderText("your-email@gmail.com")
+        self.mail_user_input.setPlaceholderText("user@example.com")
         self.mail_pass_input = QLineEdit()
         self.mail_pass_input.setEchoMode(QLineEdit.Password)
-        self.mail_pass_input.setPlaceholderText("App Password (16 characters)")
-        self.mail_smtp_input = QLineEdit("smtp.gmail.com:587")
+        self.mail_pass_input.setPlaceholderText("SMTP App Password")
 
-        # Load existing if available
-        if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("EMAIL_USER="):
-                    self.mail_user_input.setText(line.split("=", 1)[1].strip())
-                elif line.startswith("EMAIL_PASS="):
-                    self.mail_pass_input.setText(line.split("=", 1)[1].strip())
-                elif line.startswith("EMAIL_SMTP="):
-                    self.mail_smtp_input.setText(line.split("=", 1)[1].strip())
-
+        form_mail.addRow("SMTP Host:", self.mail_smtp_input)
+        form_mail.addRow("SMTP Port:", self.mail_port_input)
+        form_mail.addRow("Encryption:", self.mail_sec_combo)
         form_mail.addRow("Email Address:", self.mail_user_input)
-        form_mail.addRow("App Password:", self.mail_pass_input)
-        form_mail.addRow("SMTP Server:", self.mail_smtp_input)
+        form_mail.addRow("Password / Key:", self.mail_pass_input)
         layout_mail.addLayout(form_mail)
 
-        self.chk_auto_research = QCheckBox("Enable Autonomous Web Search Engine (DuckDuckGo Live)")
+        self.chk_auto_research = QCheckBox("Enable Autonomous DuckDuckGo Research Engine")
         self.chk_auto_research.setChecked(True)
         self.chk_auto_research.setStyleSheet("color: #38bdf8; font-weight: 600; font-size: 11px;")
         layout_mail.addWidget(self.chk_auto_research)
 
-        btn_save_mail = QPushButton("Save Email & Research Settings")
+        mail_btn_row = QHBoxLayout()
+        btn_save_mail = QPushButton("Save Email Configuration")
         btn_save_mail.clicked.connect(self._save_email_config)
-        layout_mail.addWidget(btn_save_mail)
+        mail_btn_row.addWidget(btn_save_mail)
 
-        mail_notes = QLabel(
-            "<b>Autonomous Capabilities:</b><br>"
-            "• Give prompt: <i>'Research latest AI benchmarks and email me the summary'</i>.<br>"
-            "• Nova will autonomously query the web, synthesize findings, and dispatch email notifications."
-        )
-        mail_notes.setStyleSheet("background: #0d0d16; padding: 10px; border-radius: 6px; color: #cbd5e1; font-size: 10px; line-height: 1.5;")
-        layout_mail.addWidget(mail_notes)
+        btn_test_mail = QPushButton("Test SMTP Connection")
+        btn_test_mail.setStyleSheet("background-color: #1e293b; color: #cbd5e1; border: 1px solid #334155;")
+        btn_test_mail.clicked.connect(self._test_smtp_connection)
+        mail_btn_row.addWidget(btn_test_mail)
+
+        self.btn_disconnect_mail = QPushButton("Clear Email")
+        self.btn_disconnect_mail.setStyleSheet("background-color: #450a0a; color: #fca5a5; border: 1px solid #991b1b;")
+        self.btn_disconnect_mail.clicked.connect(self._disconnect_email)
+        mail_btn_row.addWidget(self.btn_disconnect_mail)
+
+        layout_mail.addLayout(mail_btn_row)
         layout_mail.addStretch()
-        tabs.addTab(tab_mail, "📧 Email & Research")
+        tabs.addTab(tab_mail, "Email & Research")
 
         root.addWidget(tabs)
 
+        # Bottom Bar: Factory Reset
+        bottom_row = QHBoxLayout()
+        bottom_row.addStretch()
+        btn_reset_all = QPushButton("Reset All Connections")
+        btn_reset_all.setStyleSheet("background-color: #272735; color: #ef4444; border: 1px solid #450a0a; font-size: 10px; padding: 5px 12px;")
+        btn_reset_all.clicked.connect(self._reset_all_connections)
+        bottom_row.addWidget(btn_reset_all)
+        root.addLayout(bottom_row)
+
+    def _refresh_connection_states(self):
+        """Inspects disk/environment and updates badges and fields dynamically."""
+        # 1. WhatsApp
+        has_auth = _AUTH_DIR.exists() and any(_AUTH_DIR.glob("*.json"))
+        if has_auth:
+            self.wa_status_lbl.setText("Connected")
+            self.wa_status_lbl.setStyleSheet("color: #10b981; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #064e3b; border-radius: 6px; border: 1px solid #059669;")
+            self.qr_img_lbl.setText("Device session is active and linked.\nWhatsApp bridge is listening for commands.")
+            self.qr_img_lbl.setStyleSheet("color: #10b981; font-size: 12px; font-weight: 600; line-height: 1.5;")
+            self.btn_disconnect_wa.setEnabled(True)
+        else:
+            self.wa_status_lbl.setText("Disconnected")
+            self.wa_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
+            self.qr_img_lbl.setText("Click 'Generate QR Code' to pair your device.")
+            self.qr_img_lbl.setStyleSheet("color: #64748b; font-size: 11px;")
+            self.btn_disconnect_wa.setEnabled(False)
+
+        # 2. Discord
+        token = ""
+        if _ENV_PATH.exists():
+            for line in _ENV_PATH.read_text(encoding="utf-8").splitlines():
+                if line.startswith("DISCORD_BOT_TOKEN="):
+                    token = line.split("=", 1)[1].strip()
+                    break
+
+        if token:
+            self.dc_token_input.setText(token)
+            self.dc_status_lbl.setText("Connected")
+            self.dc_status_lbl.setStyleSheet("color: #10b981; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #064e3b; border-radius: 6px; border: 1px solid #059669;")
+            self.btn_disconnect_dc.setEnabled(True)
+        else:
+            self.dc_token_input.clear()
+            self.dc_status_lbl.setText("Disconnected")
+            self.dc_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
+            self.btn_disconnect_dc.setEnabled(False)
+
+        # 3. Email
+        mail_user = ""
+        mail_pass = ""
+        mail_smtp = ""
+        if _ENV_PATH.exists():
+            for line in _ENV_PATH.read_text(encoding="utf-8").splitlines():
+                if line.startswith("EMAIL_USER="): mail_user = line.split("=", 1)[1].strip()
+                elif line.startswith("EMAIL_PASS="): mail_pass = line.split("=", 1)[1].strip()
+                elif line.startswith("EMAIL_SMTP="): mail_smtp = line.split("=", 1)[1].strip()
+
+        if mail_user and mail_pass:
+            self.mail_user_input.setText(mail_user)
+            self.mail_pass_input.setText(mail_pass)
+            if mail_smtp: self.mail_smtp_input.setText(mail_smtp)
+            self.mail_status_lbl.setText("Configured")
+            self.mail_status_lbl.setStyleSheet("color: #10b981; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #064e3b; border-radius: 6px; border: 1px solid #059669;")
+            self.btn_disconnect_mail.setEnabled(True)
+        else:
+            self.mail_status_lbl.setText("Not Configured")
+            self.mail_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
+            self.btn_disconnect_mail.setEnabled(False)
+
     def _fetch_whatsapp_qr(self):
-        """Fetches live QR code from Baileys bridge or generates an interactive in-app QR."""
-        self.qr_img_lbl.setText("Generating fresh QR code...")
-        self.qr_img_lbl.setStyleSheet("color: #38bdf8; font-size: 12px; font-weight: 700;")
+        self.qr_img_lbl.setText("Requesting pairing code from local bridge...")
+        self.qr_img_lbl.setStyleSheet("color: #38bdf8; font-size: 11px; font-weight: 600;")
         try:
-            req = urllib.request.Request("http://127.0.0.1:3000/qr", headers={"User-Agent": "Nova"})
+            req = urllib.request.Request("http://127.0.0.1:3000/qr", headers={"User-Agent": "NovaUI"})
             with urllib.request.urlopen(req, timeout=2) as response:
                 img_data = response.read()
                 image = QImage()
                 if image.loadFromData(img_data):
-                    pix = QPixmap.fromImage(image).scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    pix = QPixmap.fromImage(image).scaled(190, 190, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                     self.qr_img_lbl.setPixmap(pix)
-                    self.wa_status_lbl.setText("● SCAN QR NOW")
-                    self.wa_status_lbl.setStyleSheet("color: #f59e0b; background: #451a03; border-radius: 6px; padding: 2px 8px;")
+                    self.wa_status_lbl.setText("Scan QR Code")
+                    self.wa_status_lbl.setStyleSheet("color: #f59e0b; background: #451a03; border-radius: 6px; padding: 3px 10px;")
                     return
         except Exception:
             pass
 
-        self.qr_img_lbl.setText("📱 WhatsApp Connected\nAuthorized for Error Boy (+92 334 7973707)\n\n(Live Bridge Online on port 3000)")
-        self.qr_img_lbl.setStyleSheet("color: #10b981; font-size: 12px; font-weight: 600; line-height: 1.4;")
-        self.wa_status_lbl.setText("● CONNECTED")
-        self.wa_status_lbl.setStyleSheet("color: #10b981; background: #064e3b; border-radius: 6px; padding: 2px 8px;")
+        self.qr_img_lbl.setText("WhatsApp Bridge Offline (Port 3000).\nRun 'node index.js' to start the local bridge.")
+        self.qr_img_lbl.setStyleSheet("color: #ef4444; font-size: 11px; font-weight: 600; line-height: 1.4;")
+
+    def _disconnect_whatsapp(self):
+        reply = QMessageBox.question(
+            self,
+            "Disconnect WhatsApp",
+            "Are you sure you want to log out and clear the WhatsApp session?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            req = urllib.request.Request("http://127.0.0.1:3000/whatsapp/disconnect", data=b"{}", headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=2)
+        except Exception:
+            pass
+
+        if _AUTH_DIR.exists():
+            shutil.rmtree(_AUTH_DIR, ignore_errors=True)
+
+        self._refresh_connection_states()
+        QMessageBox.information(self, "Disconnected", "WhatsApp session has been terminated and cleared.")
 
     def _save_discord_token(self):
         token = self.dc_token_input.text().strip()
@@ -330,32 +436,111 @@ class ConnectionsView(QWidget):
             QMessageBox.warning(self, "Invalid Token", "Please paste a valid Discord Bot Token.")
             return
 
-        env_path = Path("E:/Nova_AI/.env")
-        lines = []
-        if env_path.exists():
-            lines = [l for l in env_path.read_text(encoding="utf-8").splitlines() if not l.startswith("DISCORD_BOT_TOKEN=")]
-        lines.append(f"DISCORD_BOT_TOKEN={token}")
-        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self._write_env_var("DISCORD_BOT_TOKEN", token)
+        self._refresh_connection_states()
+        QMessageBox.information(self, "Saved", "Discord Bot Token saved successfully.")
 
-        self.dc_status_lbl.setText("● TOKEN SAVED")
-        self.dc_status_lbl.setStyleSheet("color: #10b981; background: #064e3b; border-radius: 6px; padding: 2px 8px;")
-        QMessageBox.information(self, "Success", "Discord Bot Token saved successfully! Nova can now connect to Discord.")
+    def _disconnect_discord(self):
+        reply = QMessageBox.question(
+            self,
+            "Disconnect Discord",
+            "Clear the saved Discord Bot Token?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        self._write_env_var("DISCORD_BOT_TOKEN", "")
+        self.dc_token_input.clear()
+        self._refresh_connection_states()
+        QMessageBox.information(self, "Disconnected", "Discord token cleared.")
 
     def _save_email_config(self):
         user = self.mail_user_input.text().strip()
         pwd = self.mail_pass_input.text().strip()
         smtp = self.mail_smtp_input.text().strip()
+        port = self.mail_port_input.text().strip()
 
-        env_path = Path("E:/Nova_AI/.env")
+        if not user or not pwd:
+            QMessageBox.warning(self, "Missing Credentials", "Please enter both Email Address and App Password.")
+            return
+
+        self._write_env_var("EMAIL_USER", user)
+        self._write_env_var("EMAIL_PASS", pwd)
+        self._write_env_var("EMAIL_SMTP", smtp)
+        self._write_env_var("EMAIL_PORT", port)
+
+        self._refresh_connection_states()
+        QMessageBox.information(self, "Saved", "Email configuration saved successfully.")
+
+    def _test_smtp_connection(self):
+        user = self.mail_user_input.text().strip()
+        pwd = self.mail_pass_input.text().strip()
+        smtp_host = self.mail_smtp_input.text().strip() or "smtp.gmail.com"
+        port_str = self.mail_port_input.text().strip() or "587"
+
+        if not user or not pwd:
+            QMessageBox.warning(self, "Missing Fields", "Please enter Email Address and Password to test.")
+            return
+
+        try:
+            port = int(port_str)
+            server = smtplib.SMTP(smtp_host, port, timeout=6)
+            server.ehlo()
+            server.starttls()
+            server.login(user, pwd)
+            server.quit()
+            QMessageBox.information(self, "Success", f"SMTP Connection verified successfully for {user}!")
+        except Exception as e:
+            QMessageBox.critical(self, "Connection Failed", f"SMTP Authentication failed:\n{str(e)}")
+
+    def _disconnect_email(self):
+        reply = QMessageBox.question(
+            self,
+            "Clear Email",
+            "Clear saved email credentials?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        self._write_env_var("EMAIL_USER", "")
+        self._write_env_var("EMAIL_PASS", "")
+        self._write_env_var("EMAIL_SMTP", "")
+        self._write_env_var("EMAIL_PORT", "")
+
+        self.mail_user_input.clear()
+        self.mail_pass_input.clear()
+        self._refresh_connection_states()
+        QMessageBox.information(self, "Cleared", "Email credentials cleared.")
+
+    def _reset_all_connections(self):
+        reply = QMessageBox.critical(
+            self,
+            "Reset All Connections",
+            "This will disconnect WhatsApp, remove Discord bot credentials, and wipe saved email configurations. Continue?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        if _AUTH_DIR.exists():
+            shutil.rmtree(_AUTH_DIR, ignore_errors=True)
+
+        self._write_env_var("DISCORD_BOT_TOKEN", "")
+        self._write_env_var("EMAIL_USER", "")
+        self._write_env_var("EMAIL_PASS", "")
+
+        self.dc_token_input.clear()
+        self.mail_user_input.clear()
+        self.mail_pass_input.clear()
+
+        self._refresh_connection_states()
+        QMessageBox.information(self, "Reset Complete", "All platform connections have been reset.")
+
+    def _write_env_var(self, key: str, value: str):
         lines = []
-        if env_path.exists():
-            lines = [l for l in env_path.read_text(encoding="utf-8").splitlines() if not (l.startswith("EMAIL_USER=") or l.startswith("EMAIL_PASS=") or l.startswith("EMAIL_SMTP="))]
-        if user:
-            lines.append(f"EMAIL_USER={user}")
-        if pwd:
-            lines.append(f"EMAIL_PASS={pwd}")
-        if smtp:
-            lines.append(f"EMAIL_SMTP={smtp}")
-        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-        QMessageBox.information(self, "Success", "Email & Autonomous Research configurations saved!")
+        if _ENV_PATH.exists():
+            lines = [l for l in _ENV_PATH.read_text(encoding="utf-8").splitlines() if not l.startswith(f"{key}=")]
+        lines.append(f"{key}={value}")
+        _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")

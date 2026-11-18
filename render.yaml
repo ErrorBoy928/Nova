@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: nova
+    env: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: OWNER_NAME
+        value: Admin
+      - key: OWNER_NUMBERS
+        sync: false
+      - key: PORT
+        value: 3000
