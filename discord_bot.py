@@ -22,6 +22,22 @@ import html
 # Tickets, Verification, Moderation, AntiNuke, AutoMod, JTC, Giveaways, Vouches
 # ==============================================================================
 
+# Fallback loading from data/user_config.json if not set in environment
+USER_CFG_PATH = Path(__file__).resolve().parent / "data" / "user_config.json"
+if USER_CFG_PATH.exists():
+    try:
+        u_cfg = json.loads(USER_CFG_PATH.read_text(encoding="utf-8"))
+        if not os.environ.get("GROQ_API_KEY") and u_cfg.get("llm", {}).get("api_key"):
+            os.environ["GROQ_API_KEY"] = u_cfg["llm"]["api_key"]
+        if not os.environ.get("DISCORD_BOT_TOKEN") and u_cfg.get("discord", {}).get("bot_token"):
+            os.environ["DISCORD_BOT_TOKEN"] = u_cfg["discord"]["bot_token"]
+        if not os.environ.get("OWNER_NAME") and u_cfg.get("user_name"):
+            os.environ["OWNER_NAME"] = u_cfg["user_name"]
+        if not os.environ.get("OWNER_DISCORD_IDS") and u_cfg.get("discord", {}).get("owner_id"):
+            os.environ["OWNER_DISCORD_IDS"] = str(u_cfg["discord"]["owner_id"])
+    except Exception:
+        pass
+
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 GREEN_API_ID = os.environ.get("GREEN_API_ID")
@@ -495,10 +511,13 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 def is_error_boy(user, guild=None):
-    name_matches = user.name.lower() in ["teamer", "teamer829", "errorboy", "admin", "errorboy928"]
+    owner_name_env = (os.environ.get("OWNER_NAME") or "Admin").lower()
+    owner_ids = [s.strip().lower() for s in (os.environ.get("OWNER_DISCORD_IDS") or "").split(",") if s.strip()]
+    name_matches = user.name.lower() in [owner_name_env, "admin"] or user.name.lower() in owner_ids
+    id_matches = str(user.id) in owner_ids
     is_guild_owner = (guild and guild.owner == user)
     is_saved_id = (bot_data.get("owner_id") and user.id == bot_data.get("owner_id"))
-    return name_matches or is_guild_owner or is_saved_id
+    return name_matches or id_matches or is_guild_owner or is_saved_id
 
 def get_user_eco(user_id):
     u_id = str(user_id)

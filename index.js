@@ -26,6 +26,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 const CONFIG_FILE = path.join(__dirname, "config.json");
+const USER_CONFIG_FILE = path.join(__dirname, "data", "user_config.json");
 let config = {
     groq_api_key: process.env.GROQ_API_KEY || "",
     owner_name: process.env.OWNER_NAME || "User",
@@ -38,6 +39,24 @@ if (fs.existsSync(CONFIG_FILE)) {
         config = { ...config, ...loaded };
     } catch (e) {
         console.error("Config load error:", e);
+    }
+}
+
+if (fs.existsSync(USER_CONFIG_FILE)) {
+    try {
+        const uloaded = JSON.parse(fs.readFileSync(USER_CONFIG_FILE, "utf-8"));
+        if (uloaded.user_name) config.owner_name = uloaded.user_name;
+        if (uloaded.whatsapp && uloaded.whatsapp.owner_number) {
+            const num = uloaded.whatsapp.owner_number.replace(/\D/g, "");
+            if (num && !config.owner_numbers.includes(num)) {
+                config.owner_numbers.push(num);
+            }
+        }
+        if (uloaded.llm && uloaded.llm.api_key && !config.groq_api_key) {
+            config.groq_api_key = uloaded.llm.api_key;
+        }
+    } catch (e) {
+        console.error("User config load error:", e);
     }
 }
 

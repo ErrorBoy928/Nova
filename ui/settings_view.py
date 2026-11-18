@@ -3,13 +3,20 @@ ui/settings_view.py
 
 Master System Settings Dashboard View for Nova AI.
 Comprehensive multi-tab configuration interface:
-- Tab 1: ⚡ AI & LLM Engine (Groq, Gemini, Models, Penalties, API Key, Test Connection)
-- Tab 2: 🎙️ Voice & Audio (TTS, STT, Voices, Speeds)
-- Tab 3: 💻 Desktop & Vision (Screen Vision, Opacity, Hotkeys)
-- Tab 4: ☁️ Cloud & Remote Sync
+- Tab 1: Profile & Identity (User Name, Phone Number, Discord ID, Assistant Name, Language)
+- Tab 2: AI Engine & API Keys (Groq, Gemini, OpenAI, Models, API Key, Live Verification)
+- Tab 3: Bot Integrations & Channels (Discord Bot Token, WhatsApp Status, Email SMTP)
+- Tab 4: Voice & Audio (TTS, STT, Voices, Speeds)
+- Tab 5: Desktop & Vision (Screen Vision, Opacity, Hotkeys)
+- Tab 6: Cloud Sync & Hosting (GitHub Repo, Auto-Update)
 """
 
 from __future__ import annotations
+
+import os
+import smtplib
+import urllib.request
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -38,9 +45,9 @@ log = get_logger(__name__)
 PROVIDERS = ["groq", "gemini", "openai", "anthropic", "ollama", "lmstudio"]
 POPULAR_MODELS = [
     "qwen/qwen3.8-27b",
+    "llama-3.3-70b-versatile",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
-    "llama-3.3-70b-versatile",
     "allam-2-7b",
 ]
 
@@ -82,7 +89,7 @@ class SettingsView(QWidget):
             QTabBar::tab {
                 background: #0a0a10;
                 color: #94a3b8;
-                padding: 10px 20px;
+                padding: 10px 18px;
                 margin-right: 4px;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
@@ -143,7 +150,7 @@ class SettingsView(QWidget):
         title_box = QVBoxLayout()
         title_lbl = QLabel("MASTER SYSTEM SETTINGS")
         title_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff; letter-spacing: 0.8px;")
-        sub_lbl = QLabel("Configure AI Models, Voice Synthesis, Desktop Automation, and Cloud Sync.")
+        sub_lbl = QLabel("Configure Profile Identity, AI Models, Platform Tokens, Audio, and Desktop Vision.")
         sub_lbl.setStyleSheet("font-size: 11px; color: #94a3b8;")
         title_box.addWidget(title_lbl)
         title_box.addWidget(sub_lbl)
@@ -151,7 +158,58 @@ class SettingsView(QWidget):
 
         tabs = QTabWidget()
 
-        # ── TAB 1: AI Engine ─────────────────────────────────────────
+        # ── TAB 1: Profile & Identity ────────────────────────────────
+        tab_profile = QWidget()
+        layout_prof = QVBoxLayout(tab_profile)
+        layout_prof.setContentsMargins(16, 16, 16, 16)
+        layout_prof.setSpacing(12)
+
+        prof_desc = QLabel(
+            "Configure your identity so Nova recognizes you across Desktop, WhatsApp, and Discord with full administrative authorization."
+        )
+        prof_desc.setWordWrap(True)
+        prof_desc.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        layout_prof.addWidget(prof_desc)
+
+        form_p = QFormLayout()
+        form_p.setSpacing(10)
+
+        self.user_name_input = QLineEdit()
+        self.user_name_input.setPlaceholderText("Enter your name (e.g. Mohib, Alex, Admin - Default: User)")
+        form_p.addRow("Your Name (Optional):", self.user_name_input)
+
+        self.user_phone_input = QLineEdit()
+        self.user_phone_input.setPlaceholderText("e.g. +923001234567 or 03347973707 (for WhatsApp owner alerts)")
+        form_p.addRow("Mobile Number (Optional):", self.user_phone_input)
+
+        self.discord_owner_input = QLineEdit()
+        self.discord_owner_input.setPlaceholderText("e.g. errorboy928 or 18-digit Discord User ID")
+        form_p.addRow("Discord Owner ID (Optional):", self.discord_owner_input)
+
+        self.assistant_name_input = QLineEdit("Nova")
+        form_p.addRow("Assistant Name:", self.assistant_name_input)
+
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItem("Auto Detect (Bilingual Urdu & English)", "auto")
+        self.lang_combo.addItem("Urdu Preferred (اردو / Roman)", "ur")
+        self.lang_combo.addItem("English Preferred", "en")
+        form_p.addRow("Language Preference:", self.lang_combo)
+
+        layout_prof.addLayout(form_p)
+
+        info_box = QLabel(
+            "<b>Owner Privilege Notice:</b><br>"
+            "Providing your phone number or Discord ID allows Nova to authenticate your commands over WhatsApp "
+            "and Discord (e.g. <code>!screen</code>, <code>!pc</code>, <code>!pctasks</code>) and send private task completions."
+        )
+        info_box.setWordWrap(True)
+        info_box.setStyleSheet("background: #0d0d16; padding: 10px; border-radius: 6px; color: #38bdf8; font-size: 10px; line-height: 1.5; border: 1px solid #1e293b;")
+        layout_prof.addWidget(info_box)
+
+        layout_prof.addStretch()
+        tabs.addTab(tab_profile, "User Profile")
+
+        # ── TAB 2: AI Engine & Keys ──────────────────────────────────
         tab_ai = QWidget()
         layout_ai = QVBoxLayout(tab_ai)
         layout_ai.setContentsMargins(16, 16, 16, 16)
@@ -173,7 +231,7 @@ class SettingsView(QWidget):
         key_box = QHBoxLayout()
         self.key_input = QLineEdit()
         self.key_input.setEchoMode(QLineEdit.Password)
-        self.key_input.setPlaceholderText("Enter Provider API Key...")
+        self.key_input.setPlaceholderText("Enter Provider API Key (e.g. gsk_...)...")
         self.btn_toggle_key = QPushButton("Show")
         self.btn_toggle_key.setFixedWidth(56)
         self.btn_toggle_key.clicked.connect(self._toggle_key_visibility)
@@ -197,13 +255,72 @@ class SettingsView(QWidget):
 
         layout_ai.addLayout(form_ai)
 
+        ai_hint = QLabel(
+            "<b>Free API Key Tip:</b> Fast Groq API keys with ultra-fast inference (300+ tok/s) can be obtained for free at <b>console.groq.com/keys</b>."
+        )
+        ai_hint.setWordWrap(True)
+        ai_hint.setStyleSheet("background: #0d0d16; padding: 8px 10px; border-radius: 6px; color: #94a3b8; font-size: 10px; border: 1px solid #1e293b;")
+        layout_ai.addWidget(ai_hint)
+
         btn_test_llm = QPushButton("Test API Connection")
         btn_test_llm.clicked.connect(self._test_api_connection)
         layout_ai.addWidget(btn_test_llm)
         layout_ai.addStretch()
         tabs.addTab(tab_ai, "AI Engine")
 
-        # ── TAB 2: Voice & Audio ─────────────────────────────────────
+        # ── TAB 3: Integrations & Bots ───────────────────────────────
+        tab_integ = QWidget()
+        layout_integ = QVBoxLayout(tab_integ)
+        layout_integ.setContentsMargins(16, 16, 16, 16)
+        layout_integ.setSpacing(12)
+
+        form_integ = QFormLayout()
+        form_integ.setSpacing(10)
+
+        # Discord Token
+        dc_token_box = QHBoxLayout()
+        self.dc_token_input = QLineEdit()
+        self.dc_token_input.setEchoMode(QLineEdit.Password)
+        self.dc_token_input.setPlaceholderText("Paste Discord Bot Token...")
+        self.btn_toggle_dc_token = QPushButton("Show")
+        self.btn_toggle_dc_token.setFixedWidth(56)
+        self.btn_toggle_dc_token.clicked.connect(self._toggle_dc_visibility)
+        dc_token_box.addWidget(self.dc_token_input)
+        dc_token_box.addWidget(self.btn_toggle_dc_token)
+        form_integ.addRow("Discord Bot Token:", dc_token_box)
+
+        # Email SMTP Setup
+        self.smtp_host_input = QLineEdit("smtp.gmail.com")
+        self.smtp_port_input = QLineEdit("587")
+        self.email_user_input = QLineEdit()
+        self.email_user_input.setPlaceholderText("user@example.com")
+        self.email_pass_input = QLineEdit()
+        self.email_pass_input.setEchoMode(QLineEdit.Password)
+        self.email_pass_input.setPlaceholderText("SMTP App Password")
+
+        form_integ.addRow("SMTP Host:", self.smtp_host_input)
+        form_integ.addRow("SMTP Port:", self.smtp_port_input)
+        form_integ.addRow("Email Address:", self.email_user_input)
+        form_integ.addRow("App Password:", self.email_pass_input)
+
+        layout_integ.addLayout(form_integ)
+
+        btn_test_smtp = QPushButton("Test SMTP Email Connection")
+        btn_test_smtp.setStyleSheet("background-color: #1e293b; color: #cbd5e1; border: 1px solid #334155;")
+        btn_test_smtp.clicked.connect(self._test_smtp_connection)
+        layout_integ.addWidget(btn_test_smtp)
+
+        integ_info = QLabel(
+            "<b>Channel Quick Access:</b> Use the <b>Connections</b> tab from the sidebar to pair WhatsApp via live QR code or manage active sessions."
+        )
+        integ_info.setWordWrap(True)
+        integ_info.setStyleSheet("color: #94a3b8; font-size: 10px; margin-top: 6px;")
+        layout_integ.addWidget(integ_info)
+
+        layout_integ.addStretch()
+        tabs.addTab(tab_integ, "Integrations")
+
+        # ── TAB 4: Voice & Audio ─────────────────────────────────────
         tab_voice = QWidget()
         layout_voice = QVBoxLayout(tab_voice)
         layout_voice.setContentsMargins(16, 16, 16, 16)
@@ -241,7 +358,7 @@ class SettingsView(QWidget):
         layout_voice.addStretch()
         tabs.addTab(tab_voice, "Voice & Audio")
 
-        # ── TAB 3: Desktop & Vision ──────────────────────────────────
+        # ── TAB 5: Desktop & Vision ──────────────────────────────────
         tab_dt = QWidget()
         layout_dt = QVBoxLayout(tab_dt)
         layout_dt.setContentsMargins(16, 16, 16, 16)
@@ -269,7 +386,7 @@ class SettingsView(QWidget):
         layout_dt.addStretch()
         tabs.addTab(tab_dt, "Desktop & Vision")
 
-        # ── TAB 4: Cloud Sync ────────────────────────────────────────
+        # ── TAB 6: Cloud Sync ────────────────────────────────────────
         tab_cloud = QWidget()
         layout_cloud = QVBoxLayout(tab_cloud)
         layout_cloud.setContentsMargins(16, 16, 16, 16)
@@ -296,12 +413,22 @@ class SettingsView(QWidget):
         self.btn_save = QPushButton("Save All Changes")
         self.btn_save.clicked.connect(self._save_all)
         btn_row.addWidget(self.btn_save)
-        self.btn_save.clicked.connect(self._save_all)
-        btn_row.addWidget(self.btn_save)
 
         root.addLayout(btn_row)
 
     def _load_current_values(self):
+        # 1. Profile
+        self.user_name_input.setText(self.config.user_name or "")
+        self.user_phone_input.setText(self.config.whatsapp.owner_number or "")
+        self.discord_owner_input.setText(self.config.discord.owner_id or "")
+        self.assistant_name_input.setText(self.config.ui.assistant_name or "Nova")
+
+        for i in range(self.lang_combo.count()):
+            if self.lang_combo.itemData(i) == self.config.language:
+                self.lang_combo.setCurrentIndex(i)
+                break
+
+        # 2. AI Engine
         llm = self.config.llm
         idx = self.provider_combo.findText(llm.provider)
         if idx >= 0:
@@ -312,6 +439,13 @@ class SettingsView(QWidget):
         self.max_tokens_spin.setValue(llm.max_tokens)
         self.chk_thinking.setChecked(llm.critical_thinking)
 
+        # 3. Integrations
+        self.dc_token_input.setText(self.config.discord.bot_token or "")
+        self.email_user_input.setText(self.config.email.email or "")
+        self.email_pass_input.setText(self.config.email.app_password or "")
+        self.smtp_host_input.setText(self.config.email.smtp_host or "smtp.gmail.com")
+
+        # 4. Voice
         v = self.config.voice
         self.chk_voice_enabled.setChecked(v.enabled)
         self.chk_auto_speak.setChecked(v.auto_speak)
@@ -326,10 +460,13 @@ class SettingsView(QWidget):
                 break
 
         r_idx = self.rate_combo.findText(v.speech_rate)
-        if r_idx >= 0: self.rate_combo.setCurrentIndex(r_idx)
+        if r_idx >= 0:
+            self.rate_combo.setCurrentIndex(r_idx)
         vol_idx = self.vol_combo.findText(v.volume)
-        if vol_idx >= 0: self.vol_combo.setCurrentIndex(vol_idx)
+        if vol_idx >= 0:
+            self.vol_combo.setCurrentIndex(vol_idx)
 
+        # 5. UI & Vision
         ui = self.config.ui
         self.chk_vision.setChecked(ui.screen_observing)
         self.chk_always_top.setChecked(ui.always_on_top)
@@ -343,21 +480,27 @@ class SettingsView(QWidget):
             self.key_input.setEchoMode(QLineEdit.Password)
             self.btn_toggle_key.setText("Show")
 
+    def _toggle_dc_visibility(self):
+        if self.dc_token_input.echoMode() == QLineEdit.Password:
+            self.dc_token_input.setEchoMode(QLineEdit.Normal)
+            self.btn_toggle_dc_token.setText("Hide")
+        else:
+            self.dc_token_input.setEchoMode(QLineEdit.Password)
+            self.btn_toggle_dc_token.setText("Show")
+
     def _test_api_connection(self):
         prov = self.provider_combo.currentText()
         key = self.key_input.text().strip()
-        model = self.model_combo.currentText().strip()
 
         if not key:
             QMessageBox.warning(self, "Missing Key", "Please enter an API Key to test.")
             return
 
-        import urllib.request
         try:
             if prov == "groq":
                 req = urllib.request.Request(
                     "https://api.groq.com/openai/v1/models",
-                    headers={"Authorization": f"Bearer {key}", "User-Agent": "Nova"}
+                    headers={"Authorization": f"Bearer {key}", "User-Agent": "Nova"},
                 )
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     if resp.status == 200:
@@ -373,7 +516,36 @@ class SettingsView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Connection Error", f"Failed to connect to {prov}:\n{str(e)}")
 
+    def _test_smtp_connection(self):
+        user = self.email_user_input.text().strip()
+        pwd = self.email_pass_input.text().strip()
+        host = self.smtp_host_input.text().strip() or "smtp.gmail.com"
+        port_str = self.smtp_port_input.text().strip() or "587"
+
+        if not user or not pwd:
+            QMessageBox.warning(self, "Missing Fields", "Please enter Email Address and Password to test.")
+            return
+
+        try:
+            port = int(port_str)
+            server = smtplib.SMTP(host, port, timeout=6)
+            server.ehlo()
+            server.starttls()
+            server.login(user, pwd)
+            server.quit()
+            QMessageBox.information(self, "Success", f"SMTP Connection verified successfully for {user}!")
+        except Exception as e:
+            QMessageBox.critical(self, "Connection Failed", f"SMTP Authentication failed:\n{str(e)}")
+
     def _save_all(self):
+        # 1. Profile
+        self.config.user_name = self.user_name_input.text().strip() or None
+        self.config.whatsapp.owner_number = self.user_phone_input.text().strip()
+        self.config.discord.owner_id = self.discord_owner_input.text().strip()
+        self.config.ui.assistant_name = self.assistant_name_input.text().strip() or "Nova"
+        self.config.language = self.lang_combo.currentData() or "auto"
+
+        # 2. AI Engine
         llm = self.config.llm
         llm.provider = self.provider_combo.currentText()
         llm.model = self.model_combo.currentText().strip()
@@ -382,6 +554,13 @@ class SettingsView(QWidget):
         llm.max_tokens = self.max_tokens_spin.value()
         llm.critical_thinking = self.chk_thinking.isChecked()
 
+        # 3. Integrations
+        self.config.discord.bot_token = self.dc_token_input.text().strip()
+        self.config.email.email = self.email_user_input.text().strip()
+        self.config.email.app_password = self.email_pass_input.text().strip()
+        self.config.email.smtp_host = self.smtp_host_input.text().strip()
+
+        # 4. Voice
         v = self.config.voice
         v.enabled = self.chk_voice_enabled.isChecked()
         v.auto_speak = self.chk_auto_speak.isChecked()
@@ -390,10 +569,24 @@ class SettingsView(QWidget):
         v.speech_rate = self.rate_combo.currentText()
         v.volume = self.vol_combo.currentText()
 
+        # 5. UI & Vision
         ui = self.config.ui
         ui.screen_observing = self.chk_vision.isChecked()
         ui.always_on_top = self.chk_always_top.isChecked()
         ui.window_opacity = self.opacity_slider.value() / 100.0
 
+        # Persist and synchronize to .env & runtime memory
         save_config(self.config)
-        QMessageBox.information(self, "Settings Saved", "Nova settings have been updated successfully!")
+
+        # Notify parent window of updated settings if available
+        parent = self.parent()
+        if parent and hasattr(parent, "status_pill"):
+            parent.status_pill.setText("READY")
+        if parent and hasattr(parent, "setWindowTitle"):
+            parent.setWindowTitle(f"{self.config.ui.assistant_name} - Autonomous Desktop Studio")
+
+        QMessageBox.information(
+            self,
+            "Settings Saved",
+            "Nova profile, API keys, platform credentials, and system preferences have been saved and activated!",
+        )

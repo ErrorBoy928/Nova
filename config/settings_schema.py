@@ -92,6 +92,7 @@ class EmailConfig:
 class DiscordConfig:
     enabled: bool = False
     bot_token: str = ""
+    owner_id: str = ""
 
 
 @dataclass
@@ -112,6 +113,97 @@ class AppConfig:
     whatsapp: WhatsAppConfig = field(default_factory=WhatsAppConfig)
     user_name: str | None = None
     language: Language = "auto"
+
+
+def sync_to_env(cfg: AppConfig) -> None:
+    """Synchronizes AppConfig state to E:/Nova_AI/.env and live os.environ."""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    existing_lines = []
+    if env_path.exists():
+        try:
+            existing_lines = env_path.read_text(encoding="utf-8").splitlines()
+        except Exception:
+            pass
+
+    env_map: dict[str, str] = {}
+    for line in existing_lines:
+        s = line.strip()
+        if s and not s.startswith("#") and "=" in s:
+            k, v = s.split("=", 1)
+            env_map[k.strip()] = v.strip()
+
+    # Update keys from cfg
+    if cfg.llm.api_key:
+        if cfg.llm.provider == "groq":
+            env_map["GROQ_API_KEY"] = cfg.llm.api_key
+            os.environ["GROQ_API_KEY"] = cfg.llm.api_key
+        elif cfg.llm.provider == "gemini":
+            env_map["GEMINI_API_KEY"] = cfg.llm.api_key
+            os.environ["GEMINI_API_KEY"] = cfg.llm.api_key
+        elif cfg.llm.provider == "openai":
+            env_map["OPENAI_API_KEY"] = cfg.llm.api_key
+            os.environ["OPENAI_API_KEY"] = cfg.llm.api_key
+        elif cfg.llm.provider == "anthropic":
+            env_map["ANTHROPIC_API_KEY"] = cfg.llm.api_key
+            os.environ["ANTHROPIC_API_KEY"] = cfg.llm.api_key
+
+    if cfg.user_name is not None:
+        env_map["OWNER_NAME"] = cfg.user_name.strip() or "Admin"
+    else:
+        env_map["OWNER_NAME"] = "Admin"
+    os.environ["OWNER_NAME"] = env_map["OWNER_NAME"]
+
+    clean_num = "".join(c for c in (cfg.whatsapp.owner_number or "") if c.isdigit())
+    env_map["OWNER_NUMBERS"] = clean_num
+    os.environ["OWNER_NUMBERS"] = clean_num
+
+    env_map["DISCORD_BOT_TOKEN"] = (cfg.discord.bot_token or "").strip()
+    os.environ["DISCORD_BOT_TOKEN"] = env_map["DISCORD_BOT_TOKEN"]
+
+    env_map["OWNER_DISCORD_IDS"] = (cfg.discord.owner_id or "").strip()
+    os.environ["OWNER_DISCORD_IDS"] = env_map["OWNER_DISCORD_IDS"]
+
+    env_map["EMAIL_USER"] = (cfg.email.email or "").strip()
+    os.environ["EMAIL_USER"] = env_map["EMAIL_USER"]
+
+    env_map["EMAIL_PASS"] = (cfg.email.app_password or "").strip()
+    os.environ["EMAIL_PASS"] = env_map["EMAIL_PASS"]
+
+    env_map["EMAIL_SMTP"] = (cfg.email.smtp_host or "smtp.gmail.com").strip()
+    os.environ["EMAIL_SMTP"] = env_map["EMAIL_SMTP"]
+
+    lines = [
+        "# Nova AI Environment Configuration",
+        "# Auto-synced from Desktop App Settings & Connections Hub",
+        "",
+        "# AI API Keys:",
+        f"GROQ_API_KEY={env_map.get('GROQ_API_KEY', '')}",
+        f"GEMINI_API_KEY={env_map.get('GEMINI_API_KEY', '')}",
+        f"OPENAI_API_KEY={env_map.get('OPENAI_API_KEY', '')}",
+        f"ANTHROPIC_API_KEY={env_map.get('ANTHROPIC_API_KEY', '')}",
+        "",
+        "# User Profile & Service Owner:",
+        f"OWNER_NAME={env_map.get('OWNER_NAME', 'Admin')}",
+        f"OWNER_NUMBERS={env_map.get('OWNER_NUMBERS', '')}",
+        f"OWNER_DISCORD_IDS={env_map.get('OWNER_DISCORD_IDS', '')}",
+        "",
+        "# Bot & Channel Credentials:",
+        f"DISCORD_BOT_TOKEN={env_map.get('DISCORD_BOT_TOKEN', '')}",
+        "",
+        "# Email / SMTP Configuration:",
+        f"EMAIL_USER={env_map.get('EMAIL_USER', '')}",
+        f"EMAIL_PASS={env_map.get('EMAIL_PASS', '')}",
+        f"EMAIL_SMTP={env_map.get('EMAIL_SMTP', 'smtp.gmail.com')}",
+        f"EMAIL_PORT={env_map.get('EMAIL_PORT', '587')}",
+        "",
+        "# Cloud Server Port:",
+        f"PORT={env_map.get('PORT', '3000')}",
+        "",
+    ]
+    try:
+        env_path.write_text("\n".join(lines), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def load_config() -> AppConfig:
@@ -145,6 +237,19 @@ def load_config() -> AppConfig:
         user_name=raw.get("user_name"),
         language=raw.get("language", "auto"),
     )
+
+    # Sync missing values from environment if available
+    if not cfg.user_name and os.environ.get("OWNER_NAME"):
+        cfg.user_name = os.environ.get("OWNER_NAME")
+    if not cfg.whatsapp.owner_number and os.environ.get("OWNER_NUMBERS"):
+        cfg.whatsapp.owner_number = os.environ.get("OWNER_NUMBERS")
+    if not cfg.discord.bot_token and os.environ.get("DISCORD_BOT_TOKEN"):
+        cfg.discord.bot_token = os.environ.get("DISCORD_BOT_TOKEN")
+    if not cfg.discord.owner_id and os.environ.get("OWNER_DISCORD_IDS"):
+        cfg.discord.owner_id = os.environ.get("OWNER_DISCORD_IDS")
+    if not cfg.llm.api_key and os.environ.get("GROQ_API_KEY"):
+        cfg.llm.api_key = os.environ.get("GROQ_API_KEY")
+
     # Ensure Groq is default if provider unset or legacy gemini
     if not cfg.llm.provider or cfg.llm.provider == "gemini":
         cfg.llm.provider = "groq"
@@ -160,12 +265,13 @@ def load_config() -> AppConfig:
 
 
 def save_config(cfg: AppConfig) -> None:
-    """Save configuration to disk as formatted JSON."""
+    """Save configuration to disk as formatted JSON and sync with .env."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text(
         json.dumps(asdict(cfg), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    sync_to_env(cfg)
 
 
 def get_api_key(cfg: AppConfig) -> str | None:

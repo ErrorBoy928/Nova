@@ -3,22 +3,22 @@ ui/connections_view.py
 
 Platform Connections View for Nova AI.
 Professional executive management interface for:
-- WhatsApp Web Bridge (Baileys QR pairing, session status, live disconnect)
-- Discord Bot (Token management, status verification, disconnect)
+- WhatsApp Web Bridge (Owner Number setup, Baileys QR pairing, session status, live disconnect)
+- Discord Bot (Bot Token setup, Owner ID configuration, status verification, disconnect)
 - Email & Autonomous Web Research (SMTP credentials, connection test, disconnect)
 """
 
 from __future__ import annotations
 
-import os
 import json
+import os
 import shutil
 import smtplib
 import urllib.request
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap, QImage
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -108,24 +108,6 @@ class ConnectionsView(QWidget):
             QPushButton:hover {
                 background-color: #0369a1;
             }
-            .danger-btn {
-                background-color: #450a0a;
-                color: #fca5a5;
-                border: 1px solid #991b1b;
-            }
-            .danger-btn:hover {
-                background-color: #7f1d1d;
-                color: #ffffff;
-            }
-            .secondary-btn {
-                background-color: #1e293b;
-                color: #cbd5e1;
-                border: 1px solid #334155;
-            }
-            .secondary-btn:hover {
-                background-color: #334155;
-                color: #ffffff;
-            }
         """)
 
     def _build_ui(self):
@@ -160,6 +142,19 @@ class ConnectionsView(QWidget):
         wa_status_box.addStretch()
         wa_status_box.addWidget(self.wa_status_lbl)
         layout_wa.addLayout(wa_status_box)
+
+        # Owner Phone Setup on WhatsApp Tab
+        wa_owner_form = QFormLayout()
+        wa_owner_row = QHBoxLayout()
+        self.wa_owner_input = QLineEdit()
+        self.wa_owner_input.setPlaceholderText("Enter your WhatsApp number (e.g. +923001234567 or 03347973707)...")
+        self.btn_save_wa_owner = QPushButton("Save Number")
+        self.btn_save_wa_owner.setFixedWidth(110)
+        self.btn_save_wa_owner.clicked.connect(self._save_wa_owner_number)
+        wa_owner_row.addWidget(self.wa_owner_input)
+        wa_owner_row.addWidget(self.btn_save_wa_owner)
+        wa_owner_form.addRow("Owner Mobile (Optional):", wa_owner_row)
+        layout_wa.addLayout(wa_owner_form)
 
         self.wa_info_lbl = QLabel("Scan the QR code below with your WhatsApp mobile client to link this instance as your assistant.")
         self.wa_info_lbl.setWordWrap(True)
@@ -224,10 +219,22 @@ class ConnectionsView(QWidget):
 
         form_dc = QFormLayout()
         form_dc.setSpacing(10)
+
+        dc_token_box = QHBoxLayout()
         self.dc_token_input = QLineEdit()
         self.dc_token_input.setEchoMode(QLineEdit.Password)
         self.dc_token_input.setPlaceholderText("Paste Discord Bot Token here...")
-        form_dc.addRow("Bot Token:", self.dc_token_input)
+        self.btn_toggle_dc = QPushButton("Show")
+        self.btn_toggle_dc.setFixedWidth(56)
+        self.btn_toggle_dc.clicked.connect(self._toggle_dc_visibility)
+        dc_token_box.addWidget(self.dc_token_input)
+        dc_token_box.addWidget(self.btn_toggle_dc)
+        form_dc.addRow("Bot Token:", dc_token_box)
+
+        self.dc_owner_input = QLineEdit()
+        self.dc_owner_input.setPlaceholderText("Enter owner Discord ID or Username (Optional)...")
+        form_dc.addRow("Owner ID (Optional):", self.dc_owner_input)
+
         layout_dc.addLayout(form_dc)
 
         dc_btn_row = QHBoxLayout()
@@ -330,6 +337,14 @@ class ConnectionsView(QWidget):
         bottom_row.addWidget(btn_reset_all)
         root.addLayout(bottom_row)
 
+    def _toggle_dc_visibility(self):
+        if self.dc_token_input.echoMode() == QLineEdit.Password:
+            self.dc_token_input.setEchoMode(QLineEdit.Normal)
+            self.btn_toggle_dc.setText("Hide")
+        else:
+            self.dc_token_input.setEchoMode(QLineEdit.Password)
+            self.btn_toggle_dc.setText("Show")
+
     def _refresh_connection_states(self):
         """Inspects disk/environment and updates badges and fields dynamically."""
         # 1. WhatsApp
@@ -347,13 +362,12 @@ class ConnectionsView(QWidget):
             self.qr_img_lbl.setStyleSheet("color: #64748b; font-size: 11px;")
             self.btn_disconnect_wa.setEnabled(False)
 
+        saved_wa_num = self.config.whatsapp.owner_number or os.environ.get("OWNER_NUMBERS", "")
+        self.wa_owner_input.setText(saved_wa_num)
+
         # 2. Discord
-        token = ""
-        if _ENV_PATH.exists():
-            for line in _ENV_PATH.read_text(encoding="utf-8").splitlines():
-                if line.startswith("DISCORD_BOT_TOKEN="):
-                    token = line.split("=", 1)[1].strip()
-                    break
+        token = self.config.discord.bot_token or os.environ.get("DISCORD_BOT_TOKEN", "")
+        owner_id = self.config.discord.owner_id or os.environ.get("OWNER_DISCORD_IDS", "")
 
         if token:
             self.dc_token_input.setText(token)
@@ -366,20 +380,17 @@ class ConnectionsView(QWidget):
             self.dc_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
             self.btn_disconnect_dc.setEnabled(False)
 
+        self.dc_owner_input.setText(owner_id)
+
         # 3. Email
-        mail_user = ""
-        mail_pass = ""
-        mail_smtp = ""
-        if _ENV_PATH.exists():
-            for line in _ENV_PATH.read_text(encoding="utf-8").splitlines():
-                if line.startswith("EMAIL_USER="): mail_user = line.split("=", 1)[1].strip()
-                elif line.startswith("EMAIL_PASS="): mail_pass = line.split("=", 1)[1].strip()
-                elif line.startswith("EMAIL_SMTP="): mail_smtp = line.split("=", 1)[1].strip()
+        mail_user = self.config.email.email or os.environ.get("EMAIL_USER", "")
+        mail_pass = self.config.email.app_password or os.environ.get("EMAIL_PASS", "")
+        mail_smtp = self.config.email.smtp_host or os.environ.get("EMAIL_SMTP", "smtp.gmail.com")
 
         if mail_user and mail_pass:
             self.mail_user_input.setText(mail_user)
             self.mail_pass_input.setText(mail_pass)
-            if mail_smtp: self.mail_smtp_input.setText(mail_smtp)
+            self.mail_smtp_input.setText(mail_smtp)
             self.mail_status_lbl.setText("Configured")
             self.mail_status_lbl.setStyleSheet("color: #10b981; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #064e3b; border-radius: 6px; border: 1px solid #059669;")
             self.btn_disconnect_mail.setEnabled(True)
@@ -387,6 +398,13 @@ class ConnectionsView(QWidget):
             self.mail_status_lbl.setText("Not Configured")
             self.mail_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
             self.btn_disconnect_mail.setEnabled(False)
+
+    def _save_wa_owner_number(self):
+        num = self.wa_owner_input.text().strip()
+        self.config.whatsapp.owner_number = num
+        save_config(self.config)
+        self._refresh_connection_states()
+        QMessageBox.information(self, "Saved", f"WhatsApp owner mobile number saved successfully:\n{num or '(Cleared)'}")
 
     def _fetch_whatsapp_qr(self):
         self.qr_img_lbl.setText("Requesting pairing code from local bridge...")
@@ -413,13 +431,17 @@ class ConnectionsView(QWidget):
             self,
             "Disconnect WhatsApp",
             "Are you sure you want to log out and clear the WhatsApp session?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
 
         try:
-            req = urllib.request.Request("http://127.0.0.1:3000/whatsapp/disconnect", data=b"{}", headers={"Content-Type": "application/json"})
+            req = urllib.request.Request(
+                "http://127.0.0.1:3000/whatsapp/disconnect",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+            )
             urllib.request.urlopen(req, timeout=2)
         except Exception:
             pass
@@ -432,26 +454,34 @@ class ConnectionsView(QWidget):
 
     def _save_discord_token(self):
         token = self.dc_token_input.text().strip()
+        owner_id = self.dc_owner_input.text().strip()
         if not token:
             QMessageBox.warning(self, "Invalid Token", "Please paste a valid Discord Bot Token.")
             return
 
-        self._write_env_var("DISCORD_BOT_TOKEN", token)
+        self.config.discord.bot_token = token
+        self.config.discord.owner_id = owner_id
+        save_config(self.config)
+
         self._refresh_connection_states()
-        QMessageBox.information(self, "Saved", "Discord Bot Token saved successfully.")
+        QMessageBox.information(self, "Saved", "Discord Bot Token and Owner ID saved successfully.")
 
     def _disconnect_discord(self):
         reply = QMessageBox.question(
             self,
             "Disconnect Discord",
             "Clear the saved Discord Bot Token?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
 
-        self._write_env_var("DISCORD_BOT_TOKEN", "")
+        self.config.discord.bot_token = ""
+        self.config.discord.owner_id = ""
+        save_config(self.config)
+
         self.dc_token_input.clear()
+        self.dc_owner_input.clear()
         self._refresh_connection_states()
         QMessageBox.information(self, "Disconnected", "Discord token cleared.")
 
@@ -459,16 +489,15 @@ class ConnectionsView(QWidget):
         user = self.mail_user_input.text().strip()
         pwd = self.mail_pass_input.text().strip()
         smtp = self.mail_smtp_input.text().strip()
-        port = self.mail_port_input.text().strip()
 
         if not user or not pwd:
             QMessageBox.warning(self, "Missing Credentials", "Please enter both Email Address and App Password.")
             return
 
-        self._write_env_var("EMAIL_USER", user)
-        self._write_env_var("EMAIL_PASS", pwd)
-        self._write_env_var("EMAIL_SMTP", smtp)
-        self._write_env_var("EMAIL_PORT", port)
+        self.config.email.email = user
+        self.config.email.app_password = pwd
+        self.config.email.smtp_host = smtp
+        save_config(self.config)
 
         self._refresh_connection_states()
         QMessageBox.information(self, "Saved", "Email configuration saved successfully.")
@@ -499,15 +528,14 @@ class ConnectionsView(QWidget):
             self,
             "Clear Email",
             "Clear saved email credentials?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
 
-        self._write_env_var("EMAIL_USER", "")
-        self._write_env_var("EMAIL_PASS", "")
-        self._write_env_var("EMAIL_SMTP", "")
-        self._write_env_var("EMAIL_PORT", "")
+        self.config.email.email = ""
+        self.config.email.app_password = ""
+        save_config(self.config)
 
         self.mail_user_input.clear()
         self.mail_pass_input.clear()
@@ -519,7 +547,7 @@ class ConnectionsView(QWidget):
             self,
             "Reset All Connections",
             "This will disconnect WhatsApp, remove Discord bot credentials, and wipe saved email configurations. Continue?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
@@ -527,20 +555,18 @@ class ConnectionsView(QWidget):
         if _AUTH_DIR.exists():
             shutil.rmtree(_AUTH_DIR, ignore_errors=True)
 
-        self._write_env_var("DISCORD_BOT_TOKEN", "")
-        self._write_env_var("EMAIL_USER", "")
-        self._write_env_var("EMAIL_PASS", "")
+        self.config.discord.bot_token = ""
+        self.config.discord.owner_id = ""
+        self.config.whatsapp.owner_number = ""
+        self.config.email.email = ""
+        self.config.email.app_password = ""
+        save_config(self.config)
 
         self.dc_token_input.clear()
+        self.dc_owner_input.clear()
+        self.wa_owner_input.clear()
         self.mail_user_input.clear()
         self.mail_pass_input.clear()
 
         self._refresh_connection_states()
         QMessageBox.information(self, "Reset Complete", "All platform connections have been reset.")
-
-    def _write_env_var(self, key: str, value: str):
-        lines = []
-        if _ENV_PATH.exists():
-            lines = [l for l in _ENV_PATH.read_text(encoding="utf-8").splitlines() if not l.startswith(f"{key}=")]
-        lines.append(f"{key}={value}")
-        _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
