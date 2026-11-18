@@ -133,8 +133,9 @@ class ApiKeyDialog(QDialog):
         row.addWidget(self.key_edit, 1)
 
         # Toggle Show / Hide Password
-        self.show_btn = QPushButton("👁")
-        self.show_btn.setFixedSize(32, 32)
+        self.show_btn = QPushButton("Show")
+        self.show_btn.setFixedHeight(32)
+        self.show_btn.setFixedWidth(52)
         self.show_btn.setCursor(Qt.PointingHandCursor)
         self.show_btn.setToolTip("Show / Hide Key")
         self.show_btn.setStyleSheet(f"""
@@ -143,7 +144,7 @@ class ApiKeyDialog(QDialog):
                 border: 1px solid {_BORDER};
                 border-radius: 6px;
                 color: {_TEXT_MUTED};
-                font-size: 13px;
+                font-size: 11px;
             }}
             QPushButton:hover {{
                 color: #ffffff;
@@ -154,7 +155,7 @@ class ApiKeyDialog(QDialog):
         row.addWidget(self.show_btn)
 
         # Paste button
-        paste_btn = QPushButton("📋 Paste")
+        paste_btn = QPushButton("Paste")
         paste_btn.setFixedHeight(32)
         paste_btn.setCursor(Qt.PointingHandCursor)
         paste_btn.setStyleSheet(f"""
@@ -253,7 +254,7 @@ class ApiKeyDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         actions_row.addWidget(cancel_btn)
 
-        self.save_btn = QPushButton("💾 Save & Activate")
+        self.save_btn = QPushButton("Save & Activate")
         self.save_btn.setFixedHeight(32)
         self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.setStyleSheet(f"""

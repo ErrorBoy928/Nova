@@ -376,7 +376,7 @@ async function startNovaWhatsApp() {
 
     // Auto-restore session from session.zip if running in Cloud (Render)
     if ((!fs.existsSync(authPath) || fs.readdirSync(authPath).length === 0) && fs.existsSync(sessionZip)) {
-        console.log("📦 Extracting session.zip into auth_info_baileys...");
+        console.log(" Extracting session.zip into auth_info_baileys...");
         try {
             const zip = new AdmZip(sessionZip);
             zip.extractAllTo(authPath, true);
@@ -403,7 +403,7 @@ async function startNovaWhatsApp() {
                     const zip = new AdmZip();
                     zip.addLocalFolder(authPath);
                     zip.writeZip(sessionZip);
-                    console.log("💾 [SESSION] session.zip updated successfully.");
+                    console.log(" [SESSION] session.zip updated successfully.");
                 }
             } catch (err) {
                 console.error("Session zip archive error:", err.message);
@@ -447,7 +447,7 @@ async function startNovaWhatsApp() {
                     const zip = new AdmZip();
                     zip.addLocalFolder(authPath);
                     zip.writeZip(sessionZip);
-                    console.log("💾 session.zip updated successfully!");
+                    console.log(" session.zip updated successfully!");
                 }
             } catch (err) {
                 console.error("Session zip save error:", err);
@@ -588,8 +588,8 @@ async function startNovaWhatsApp() {
                         saveStoppedChats();
 
                         const rep = targetJid === remoteJid
-                            ? "🤫 *Auto-responder is chat ke liye STOP kar diya gaya hai.* Baki sab chats mein auto-responder bilkul chalta rahega! (Wapas chalu karne ke liye `!start` likhein)."
-                            : `🤫 *Auto-responder number ${targetJid.split('@')[0]} ke liye STOP kar diya gaya hai.* Baki sab chats active hain!`;
+                            ? " *Auto-responder is chat ke liye STOP kar diya gaya hai.* Baki sab chats mein auto-responder bilkul chalta rahega! (Wapas chalu karne ke liye `!start` likhein)."
+                            : ` *Auto-responder number ${targetJid.split('@')[0]} ke liye STOP kar diya gaya hai.* Baki sab chats active hain!`;
 
                         await safeSendWA(remoteJid, rep, msg);
                         return;
@@ -634,17 +634,17 @@ async function startNovaWhatsApp() {
                                     `• AI Engine Models: *Llama 3.3 70B & Qwen*\n` +
                                     `• Server: *Online 24/7*\n\n` +
                                     `Commands:\n` +
-                                    `👉 \`!stop\` - Sirf is chat mein auto-responder roko\n` +
-                                    `👉 \`!start\` - Is chat mein auto-responder dobara chalao\n` +
-                                    `👉 \`!notes\` - Guests ke chhore hue messages dekho\n` +
-                                    `👉 \`!help\` - Tamam commands dekho`;
+                                    ` \`!stop\` - Sirf is chat mein auto-responder roko\n` +
+                                    ` \`!start\` - Is chat mein auto-responder dobara chalao\n` +
+                                    ` \`!notes\` - Guests ke chhore hue messages dekho\n` +
+                                    ` \`!help\` - Tamam commands dekho`;
 
                         await safeSendWA(remoteJid, rep, msg);
                         return;
                     }
 
                     // ==========================================
-                    // 🖥️ Nova AI — REMOTE PC CONTROL BRIDGE
+                    // ️ Nova AI — REMOTE PC CONTROL BRIDGE
                     // ==========================================
                     const BRIDGE_URL = "http://127.0.0.1:5050";
 
@@ -657,7 +657,7 @@ async function startNovaWhatsApp() {
                         lowerText.includes("screen dikhao") ||
                         lowerText.includes("desktop dikhao")
                     ) {
-                        await reactConfirm(msg.key, "📸");
+                        await reactConfirm(msg.key, "");
                         try {
                             const res = await fetch(`${BRIDGE_URL}/screenshot`, { signal: AbortSignal.timeout(7000) });
                             if (res.ok) {
@@ -678,7 +678,7 @@ async function startNovaWhatsApp() {
 
                     // 2. PC Actions & App Control (!pc <action>)
                     if (lowerText.startsWith("!pc ") || lowerText.startsWith(".pc ")) {
-                        await reactConfirm(msg.key, "⚡");
+                        await reactConfirm(msg.key, "");
                         const actionCmd = userText.slice(4).trim();
                         try {
                             const res = await fetch(`${BRIDGE_URL}/action`, {
@@ -702,7 +702,7 @@ async function startNovaWhatsApp() {
 
                     // 3. PC Tasks Sync (!pctasks)
                     if (lowerText === "!pctasks" || lowerText === ".pctasks" || lowerText.includes("pc tasks")) {
-                        await reactConfirm(msg.key, "📋");
+                        await reactConfirm(msg.key, "");
                         try {
                             const res = await fetch(`${BRIDGE_URL}/tasks`, { signal: AbortSignal.timeout(5000) });
                             if (res.ok) {
@@ -712,9 +712,9 @@ async function startNovaWhatsApp() {
                                     await safeSendWA(remoteJid, " *PC Task Board:* Filhal koi active task save nahi hai, mere Sir! ", msg);
                                     return;
                                 }
-                                let taskMsg = ` *PC Desktop Agent Tasks:* 📋\n\n`;
+                                let taskMsg = ` *PC Desktop Agent Tasks:* \n\n`;
                                 for (const t of tasks.slice(0, 5)) {
-                                    const statusEmoji = t.status === "completed" ? "" : "⏳";
+                                    const statusEmoji = t.status === "completed" ? "" : "";
                                     taskMsg += `${statusEmoji} *${t.title}* (Step ${t.current_step + 1}/${(t.steps || []).length})\n`;
                                 }
                                 await safeSendWA(remoteJid, taskMsg, msg);
@@ -729,12 +729,12 @@ async function startNovaWhatsApp() {
 
                     // 4. PC System Stats (!pcstats)
                     if (lowerText === "!pcstats" || lowerText === ".pcstats" || lowerText.includes("pc stats")) {
-                        await reactConfirm(msg.key, "📊");
+                        await reactConfirm(msg.key, "");
                         try {
                             const res = await fetch(`${BRIDGE_URL}/stats`, { signal: AbortSignal.timeout(5000) });
                             if (res.ok) {
                                 const data = await res.json();
-                                await safeSendWA(remoteJid, ` *PC System Stats:* 💻\n\n${data.stats || "Stats retrieved."}`, msg);
+                                await safeSendWA(remoteJid, ` *PC System Stats:* \n\n${data.stats || "Stats retrieved."}`, msg);
                                 return;
                             }
                         } catch (e) {
@@ -751,20 +751,20 @@ async function startNovaWhatsApp() {
                     ) {
                         await reactConfirm(msg.key, "");
                         const helpText = ` *Nova AI WHATSAPP COMMANDS* \n\n` +
-                                         `🛑 *Auto-Responder Control:*\n` +
+                                         ` *Auto-Responder Control:*\n` +
                                          `• \`!stop\` : Current chat mein auto-responder pause karein\n` +
                                          `• \`!stop <number>\` : Kisi specific number ko pause karein\n` +
                                          `• \`!start\` : Current chat mein auto-responder resume karein\n` +
                                          `• \`!start <number>\` : Kisi specific number ko resume karein\n\n` +
-                                         `🖥️ *Remote PC Control (Live Bridge):*\n` +
+                                         `️ *Remote PC Control (Live Bridge):*\n` +
                                          `• \`!screen\` : PC screen ka live screenshot mangwayein\n` +
                                          `• \`!pc <cmd>\` : PC par app/action chalayein (e.g. \`!pc open chrome\`)\n` +
                                          `• \`!pctasks\` : PC par save hue tasks dekhein\n` +
                                          `• \`!pcstats\` : PC CPU, RAM aur Disk usage check karein\n\n` +
-                                         `📋 *Status & Messages:*\n` +
+                                         ` *Status & Messages:*\n` +
                                          `• \`!status\` : Bot aur chat status check karein\n` +
                                          `• \`!notes\` : Guests ke aaye hue messages check karein\n\n` +
-                                         `🛡️ *Group AutoMod:*\n` +
+                                         `️ *Group AutoMod:*\n` +
                                          `• \`!guard on\` : Group mein gaaliyan delete karein\n` +
                                          `• \`!guard off\` : Group guard off karein\n\n` +
                                          `*(Har command par Nova  tick emoji react karegi!)* `;
@@ -789,7 +789,7 @@ async function startNovaWhatsApp() {
                         }
 
                         const latest = guestNotes.slice(-6);
-                        let summary = "📋 *Sir, aapke peeche yeh messages aaye hain:*\n\n";
+                        let summary = " *Sir, aapke peeche yeh messages aaye hain:*\n\n";
                         latest.forEach((note, idx) => {
                             summary += `${idx + 1}. *${note.sender}* (+${note.phone}) [${note.time}]:\n"${note.message}"\n\n`;
                         });
@@ -810,7 +810,7 @@ async function startNovaWhatsApp() {
 
                 // --- 2. CHECK IF CURRENT CHAT IS STOPPED VIA !STOP ---
                 if (stoppedChats.has(remoteJid)) {
-                    console.log(`🔇 [Chat Stopped via !stop] Message from ${senderName} (${senderPhone}) in ${remoteJid}. Nova remains silent.`);
+                    console.log(` [Chat Stopped via !stop] Message from ${senderName} (${senderPhone}) in ${remoteJid}. Nova remains silent.`);
                     
                     if (!effectiveIsOwner && !isGroup) {
                         recordGuestNote(senderName, senderPhone, userText);
@@ -823,7 +823,7 @@ async function startNovaWhatsApp() {
                 if (lastManualActivity[remoteJid]) {
                     const elapsed = Date.now() - lastManualActivity[remoteJid];
                     if (elapsed < 45 * 1000) {
-                        console.log(`👤 [Manual Conversation Active] Admin chatted ${Math.round(elapsed / 1000)}s ago in ${remoteJid}. Nova stays quiet.`);
+                        console.log(` [Manual Conversation Active] Admin chatted ${Math.round(elapsed / 1000)}s ago in ${remoteJid}. Nova stays quiet.`);
                         continue;
                     } else {
                         delete lastManualActivity[remoteJid];
@@ -846,7 +846,7 @@ async function startNovaWhatsApp() {
                     await reactConfirm(msg.key, "");
                     guardedGroups.add(remoteJid);
                     saveGuardedGroups();
-                    const reply = "Haan Admin sir! Main is group ka poora dhyan rakhungi. Koi bhi badtameezi ya galat baat bolega to uska message foran delete kar dungi! 🛡️";
+                    const reply = "Haan Admin sir! Main is group ka poora dhyan rakhungi. Koi bhi badtameezi ya galat baat bolega to uska message foran delete kar dungi! ️";
                     await safeSendWA(remoteJid, reply, msg);
                     return;
                 }
@@ -869,7 +869,7 @@ async function startNovaWhatsApp() {
                 // AUTO-MOD CHECK: Delete bad/abusive message in guarded group
                 if (isGroup && guardedGroups.has(remoteJid)) {
                     if (isBadContent(userText)) {
-                        console.log(`🛡️ [AutoMod] Bad content detected in ${remoteJid} from ${senderName}: "${userText}"`);
+                        console.log(`️ [AutoMod] Bad content detected in ${remoteJid} from ${senderName}: "${userText}"`);
                         try {
                             await sock.sendMessage(remoteJid, {
                                 delete: {
@@ -881,7 +881,7 @@ async function startNovaWhatsApp() {
                             });
 
                             const offenderJid = msg.key.participant || remoteJid;
-                            const warnText = ` @${offenderJid.split('@')[0]} Is group mein galat ya buri zuban bolna sakht mana hai! Aapka message delete kar diya gaya hai. 🛡️`;
+                            const warnText = ` @${offenderJid.split('@')[0]} Is group mein galat ya buri zuban bolna sakht mana hai! Aapka message delete kar diya gaya hai. ️`;
                             
                             await safeSendWA(remoteJid, {
                                 text: warnText,
@@ -920,7 +920,7 @@ async function startNovaWhatsApp() {
                 }
 
                 // --- 6. PROCESS AUTO-REPLY (For Private DMs, Self-Chat & Group Pings) ---
-                console.log(`💬 [WhatsApp] Processing auto-reply for ${senderName} (${senderPhone}) [Owner: ${effectiveIsOwner}]: ${userText}`);
+                console.log(` [WhatsApp] Processing auto-reply for ${senderName} (${senderPhone}) [Owner: ${effectiveIsOwner}]: ${userText}`);
 
                 try {
                     await sock.sendPresenceUpdate("composing", remoteJid);
@@ -942,5 +942,5 @@ async function startNovaWhatsApp() {
     });
 }
 
-console.log("🚀 Starting Nova WhatsApp Engine...");
+console.log(" Starting Nova WhatsApp Engine...");
 startNovaWhatsApp().catch(err => console.error("Fatal startup error:", err));

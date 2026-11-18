@@ -66,7 +66,7 @@ def _scheduler_loop():
                     result_summary = " | ".join(action_reports) if action_reports else "Task executed successfully."
 
                     # Universal Notification
-                    alert_title = f"⏰ Nova Task Scheduled Alert ({target_time})"
+                    alert_title = f"Nova Task Scheduled Alert ({target_time})"
                     alert_msg = f"Task: {prompt}\nResult: {result_summary}"
                     send_universal_notification(alert_title, alert_msg)
 

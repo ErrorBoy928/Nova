@@ -3,9 +3,9 @@ ui/admin_feed_view.py
 
 Central Admin Activity Feed for Nova AI.
 Displays real-time incoming & outgoing messages and commands across:
-- 📱 WhatsApp (Baileys)
-- 🤖 Discord (Superbot)
-- 💻 Desktop App (Local)
+- WhatsApp (Baileys)
+- Discord (Superbot)
+- Desktop App (Local)
 """
 
 from __future__ import annotations
@@ -172,10 +172,10 @@ class AdminFeedView(QWidget):
                 data = json.loads(resp.read().decode())
                 self._events = data.get("feed", [])
                 self._render_events()
-                self.status_pill.setText("● LIVE STREAM ONLINE")
+                self.status_pill.setText("LIVE STREAM ONLINE")
                 self.status_pill.setStyleSheet("color: #10b981; font-weight: 700; font-size: 10px; padding: 4px 10px; background: #064e3b; border-radius: 6px; border: 1px solid #059669;")
         except Exception:
-            self.status_pill.setText("○ BRIDGE OFFLINE (PORT 5050)")
+            self.status_pill.setText("BRIDGE OFFLINE (PORT 5050)")
             self.status_pill.setStyleSheet("color: #ef4444; font-weight: 700; font-size: 10px; padding: 4px 10px; background: #450a0a; border-radius: 6px; border: 1px solid #991b1b;")
 
     def _send_test_event(self):

@@ -89,7 +89,7 @@ def load_data():
         "giveaways": {},
         "economy": {},
         "levels": {},
-        "love_stats": {"owner_messages": 0, "bond_level": 100, "compliments": 0},
+        "usage_stats": {"owner_messages": 0, "commands_run": 0},
         "owner_secrets": [],
         "conversation_archive": [],
         "owner_id": None,
@@ -140,7 +140,7 @@ def nova_embed(title, description, color=COLOR_PRIMARY):
     emb.set_footer(text="Nova AI • Autonomous Assistant")
     return emb
 
-# ==================== 🧠 AI ENGINE (VISION + MEMORY + SECRETS) ====================
+# ====================  AI ENGINE (VISION + MEMORY + SECRETS) ====================
 def fix_female_grammar(text):
     corrections = [
         (r'\bkarta hoon\b', 'karti hoon'),
@@ -305,10 +305,10 @@ async def safe_send(channel, text, reference=None):
             except Exception as e:
                 print(f"Error in safe_send: {e}")
 
-# ==================== 🎙️ VOICE NOTES & NATURAL TTS ====================
+# ====================  VOICE NOTES & NATURAL TTS ====================
 def prepare_text_for_speech(text):
     # Remove emojis
-    text = re.sub(r'[𐀀-􏿿]', '', text)
+    text = re.sub(r'[-]', '', text)
     # Remove discord mentions, URLs, markdown
     text = re.sub(r'<@!?[0-9]+>', '', text)
     text = re.sub(r'https?://\S+', '', text)
@@ -399,10 +399,10 @@ async def send_voice_note(channel, text, reference=None):
                 await channel.send(file=file)
             except Exception as e2:
                 print(f"Voice note retry failed: {e2}")
-                await channel.send(f"🎙️ *[Voice note upload nahi ho saka: {str(e2)[:80]}]*\n{text}")
+                await channel.send(f" *[Voice note upload nahi ho saka: {str(e2)[:80]}]*\n{text}")
     except Exception as e:
         print(f"Voice note generate issue: {e}")
-        await channel.send(f"🎙️ *[Voice note generate issue: {str(e)[:80]}]*\n{text}")
+        await channel.send(f" *[Voice note generate issue: {str(e)[:80]}]*\n{text}")
     finally:
         if audio_file and os.path.exists(audio_file):
             try:
@@ -410,7 +410,7 @@ async def send_voice_note(channel, text, reference=None):
             except Exception:
                 pass
 
-# ==================== 🎫 PERSISTENT UI VIEWS ====================
+# ====================  PERSISTENT UI VIEWS ====================
 class TicketView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -475,7 +475,7 @@ class VerifyView(ui.View):
             return
 
         if role in interaction.user.roles:
-            await interaction.response.send_message("Aap pehle se verified hain! 😊", ephemeral=True)
+            await interaction.response.send_message("Aap pehle se verified hain! ", ephemeral=True)
             return
 
         try:
@@ -585,7 +585,7 @@ async def on_ready():
     if not random_messenger.is_running():
         random_messenger.start()
 
-# ==================== 🛡️ SECURITY & LOGGING ====================
+# ====================  SECURITY & LOGGING ====================
 @bot.event
 async def on_guild_channel_delete(channel):
     guild = channel.guild
@@ -608,7 +608,7 @@ async def on_guild_channel_delete(channel):
                         if r.permissions.administrator or r.permissions.manage_channels:
                             await actor.remove_roles(r, reason="[AntiNuke] Mass channel deletion")
                     if guild.owner:
-                        emb = nova_embed("🚨 ANTINUKE ALERT!", f" User {actor.mention} ne mass channels delete kiye! Unki permissions revoke kar di gayi hain.", COLOR_ERROR)
+                        emb = nova_embed("[SECURITY ALERT] ANTINUKE TRIGGERED", f" User {actor.mention} ne mass channels delete kiye! Unki permissions revoke kar di gayi hain.", COLOR_ERROR)
                         await guild.owner.send(embed=emb)
         except Exception:
             pass
@@ -651,17 +651,17 @@ async def log_event(guild, embed):
 async def on_message_delete(message):
     if message.author.bot or not message.guild:
         return
-    emb = nova_embed("🗑️ Message Delete", f"**Author:** {message.author.mention}\n**Channel:** {message.channel.mention}\n**Content:**\n{message.clean_content}", COLOR_WARNING)
+    emb = nova_embed("[LOG] Message Deleted", f"**Author:** {message.author.mention}\n**Channel:** {message.channel.mention}\n**Content:**\n{message.clean_content}", COLOR_WARNING)
     await log_event(message.guild, emb)
 
 @bot.event
 async def on_message_edit(before, after):
     if before.author.bot or not before.guild or before.clean_content == after.clean_content:
         return
-    emb = nova_embed("✏️ Message Edit", f"**Author:** {before.author.mention}\n**Channel:** {before.channel.mention}\n**Before:** {before.clean_content}\n**After:** {after.clean_content}", COLOR_PURPLE)
+    emb = nova_embed("[LOG] Message Edited", f"**Author:** {before.author.mention}\n**Channel:** {before.channel.mention}\n**Before:** {before.clean_content}\n**After:** {after.clean_content}", COLOR_PURPLE)
     await log_event(before.guild, emb)
 
-# ==================== 💖 GREETINGS ====================
+# ====================  GREETINGS ====================
 @bot.event
 async def on_member_join(member):
     guild = member.guild
@@ -682,7 +682,7 @@ async def on_member_join(member):
                 f" Khush Amdeed, {member.display_name}! ",
                 f"Assalam-o-Alaikum {member.mention}! Hamare server **{guild.name}** mein aane ka bohot shukriya.\n\n"
                 f" Aap hamare **{guild.member_count}th** member hain!\n"
-                f"📜 Rules padhein aur enjoy karein! "
+                f"Rules padhein aur enjoy karein! "
             )
             emb.set_thumbnail(url=member.display_avatar.url)
             await ch.send(embed=emb)
@@ -694,10 +694,10 @@ async def on_member_remove(member):
     if ch_id:
         ch = guild.get_channel(ch_id)
         if ch:
-            emb = nova_embed("👋 Alvida!", f"**{member.display_name}** server chhor kar chale gaye... 💔", COLOR_WARNING)
+            emb = nova_embed("Member Departed", f"**{member.display_name}** server chhor kar chale gaye... ", COLOR_WARNING)
             await ch.send(embed=emb)
 
-# ==================== 🔊 JTC VOICE ====================
+# ==================== JTC VOICE ====================
 @bot.event
 async def on_voice_state_update(member, before, after):
     guild = member.guild
@@ -705,7 +705,7 @@ async def on_voice_state_update(member, before, after):
 
     if after.channel and jtc_channel_id and after.channel.id == jtc_channel_id:
         category = after.channel.category
-        new_channel = await guild.create_voice_channel(name=f"🔊 {member.display_name}'s Room", category=category, user_limit=10)
+        new_channel = await guild.create_voice_channel(name=f"{member.display_name}'s Room", category=category, user_limit=10)
         active_jtc_rooms.add(new_channel.id)
         await member.move_to(new_channel)
 
@@ -717,7 +717,7 @@ async def on_voice_state_update(member, before, after):
             except Exception:
                 pass
 
-# ==================== 💬 MESSAGE HANDLER: VISION + MEMORY + AGENT ====================
+# ==================== MESSAGE HANDLER: VISION + MEMORY + AGENT ====================
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -741,7 +741,7 @@ async def on_message(message):
     # 3. Track Owner Love Meter Stats & Record ID
     if is_error_boy(author, guild):
         bot_data["owner_id"] = author.id
-        bot_data["love_stats"]["owner_messages"] += 1
+        bot_data.setdefault("usage_stats", {})["owner_messages"] = bot_data.get("usage_stats", {}).get("owner_messages", 0) + 1
         save_data(bot_data)
 
     # 4. AutoMod
@@ -761,7 +761,7 @@ async def on_message(message):
             await message.delete()
             try:
                 await author.timeout(datetime.timedelta(minutes=1), reason="[AutoMod] Spam")
-                await message.channel.send(f"🔇 {author.mention} ko spamming par 1 min timeout mila!", delete_after=5)
+                await message.channel.send(f" {author.mention} ko spamming par 1 min timeout mila!", delete_after=5)
             except Exception:
                 pass
             return
@@ -843,7 +843,7 @@ async def on_message(message):
                 bot_data["conversation_archive"] = bot_data["conversation_archive"][-60:]
             save_data(bot_data)
 
-            # --- 🎙️ DIRECT VOICE NOTE DETECTION (Works in DMs & Servers) ---
+            # ---  DIRECT VOICE NOTE DETECTION (Works in DMs & Servers) ---
             is_voice_requested = bool(re.search(
                 r'\b(voice\s*note|voice\s*msg|voice\s*message|audio\s*note|audio\s*msg|audio\s*message|awaaz|awaz|audio|voice|bol\s*kar|bol\s*ke|bolo|sunao|record|awaz\s*mein)\b',
                 clean_content,
@@ -888,10 +888,10 @@ async def on_message(message):
                     "date": str(datetime.date.today())
                 })
                 save_data(bot_data)
-                await message.reply(f" \"{secret_to_save}\" ko maine apne dil ke permanent secret vault mein hamesha ke liye mehfooz kar liya hai Admin! Yeh kisi ko pata nahi chalega! 🤫")
+                await message.reply(f" \"{secret_to_save}\" ko maine apne dil ke permanent secret vault mein hamesha ke liye mehfooz kar liya hai Admin! Yeh kisi ko pata nahi chalega! ")
                 return
 
-            # --- 💌 RANDOM MESSAGES TOGGLE (Works in DMs & Servers) ---
+            # ---  RANDOM MESSAGES TOGGLE (Works in DMs & Servers) ---
             if action_match and action_match.group(1) == "RANDOM_MSG" and is_owner:
                 action_args = action_match.group(2).strip() if action_match.group(2) else ""
                 st = not ("off" in action_args.lower() or "band" in action_args.lower() or "disable" in action_args.lower())
@@ -915,14 +915,14 @@ async def on_message(message):
                     # 4. BUILD SERVER
                     if action_type == "BUILD_SERVER":
                         status_msg = await message.reply(" Server build karna shuru kar rahi hoon Admin...")
-                        cat_info = await guild.create_category("📢 ─── INFORMATION ───")
+                        cat_info = await guild.create_category("─── INFORMATION ───")
                         await guild.create_text_channel("rules", category=cat_info)
                         await guild.create_text_channel("announcements", category=cat_info)
                         
-                        cat_chat = await guild.create_category("💬 ─── COMMUNITY ───")
+                        cat_chat = await guild.create_category("─── COMMUNITY ───")
                         await guild.create_text_channel("general-chat", category=cat_chat)
                         
-                        cat_voice = await guild.create_category("🔊 ─── VOICE LOUNGE ───")
+                        cat_voice = await guild.create_category("─── VOICE LOUNGE ───")
                         await guild.create_voice_channel("Chill Voice", category=cat_voice)
                         await status_msg.edit(content=" Pura server ready ho gaya Admin! ")
                         return
@@ -991,13 +991,13 @@ async def on_message(message):
                         mins = int(re.search(r'\d+', action_args).group()) if re.search(r'\d+', action_args) else 10
                         if target_member:
                             await target_member.timeout(datetime.timedelta(minutes=mins), reason="Muted by Admin via Nova")
-                            await message.channel.send(embed=nova_embed("🔇 Timeout Lag Gaya", f"{target_member.mention} ko {mins} minutes ke liye timeout de diya! ", COLOR_WARNING))
+                            await message.channel.send(embed=nova_embed("User Timed Out", f"{target_member.mention} ko {mins} minutes ke liye timeout de diya! ", COLOR_WARNING))
                             return
 
                     elif action_type == "UNTIMEOUT":
                         if target_member:
                             await target_member.timeout(None)
-                            await message.channel.send(embed=nova_embed("🔊 Timeout Removed", f"{target_member.mention} ka timeout hata diya gaya! ", COLOR_SUCCESS))
+                            await message.channel.send(embed=nova_embed("Timeout Removed", f"{target_member.mention} ka timeout hata diya gaya! ", COLOR_SUCCESS))
                             return
 
                     # 11. LOCK / UNLOCK CHANNEL
@@ -1008,7 +1008,7 @@ async def on_message(message):
 
                     elif action_type == "UNLOCK":
                         await target_channel.set_permissions(guild.default_role, send_messages=True)
-                        await message.channel.send(embed=nova_embed("🔓 Channel Unlocked", f"{target_channel.mention} unlock ho gaya Admin! ", COLOR_SUCCESS))
+                        await message.channel.send(embed=nova_embed("Channel Unlocked", f"{target_channel.mention} unlock ho gaya Admin! ", COLOR_SUCCESS))
                         return
 
                     # 12. TICKET SYSTEM SETUP
@@ -1023,7 +1023,7 @@ async def on_message(message):
                         role = target_role or discord.utils.get(guild.roles, name="Member") or guild.roles[1]
                         bot_data["verify_roles"][str(guild.id)] = role.id
                         save_data(bot_data)
-                        emb = nova_embed("🛡️ Server Verification", f"Server unlock karne ke liye **Verify** button par click karein aur **{role.name}** role lein!")
+                        emb = nova_embed("Server Verification", f"Server unlock karne ke liye **Verify** button par click karein aur **{role.name}** role lein!")
                         await target_channel.send(embed=emb, view=VerifyView())
                         await message.channel.send(f" Verification panel {target_channel.mention} mein setup ho gaya! Role: **{role.name}**", delete_after=5)
                         return
@@ -1033,7 +1033,7 @@ async def on_message(message):
                         mins = int(re.search(r'\d+', action_args).group()) if re.search(r'\d+', action_args) else 10
                         prize = re.sub(r'^\d+\s+\d+\s*', '', action_args).strip() or "Discord Nitro"
                         end_time = time.time() + (mins * 60)
-                        emb = nova_embed(f" GIVEAWAY: {prize}", f"Neeche button par click karke enter karein!\n\n🏆 **Winners:** 1\n⏰ **Ends:** <t:{int(end_time)}:R>\n **Hosted by:** {author.mention}")
+                        emb = nova_embed(f" GIVEAWAY: {prize}", f"Neeche button par click karke enter karein!\n\n **Winners:** 1\n **Ends:** <t:{int(end_time)}:R>\n **Hosted by:** {author.mention}")
                         g_msg = await target_channel.send(embed=emb)
                         await g_msg.edit(view=GiveawayView(g_msg.id))
                         bot_data["giveaways"][str(g_msg.id)] = {"channel_id": target_channel.id, "prize": prize, "winners": 1, "end_time": end_time, "entries": [], "active": True}
@@ -1043,18 +1043,18 @@ async def on_message(message):
 
                     # 15. SETUP STATS
                     elif action_type == "SETUP_STATS":
-                        cat = await guild.create_category("📊 ─── SERVER STATS ───")
+                        cat = await guild.create_category("─── SERVER STATS ───")
                         ow = {guild.default_role: discord.PermissionOverwrite(connect=False)}
-                        await guild.create_voice_channel(f"📊 Members: {guild.member_count}", category=cat, overwrites=ow)
-                        await guild.create_voice_channel(f"👤 Humans: {len([m for m in guild.members if not m.bot])}", category=cat, overwrites=ow)
+                        await guild.create_voice_channel(f"Members: {guild.member_count}", category=cat, overwrites=ow)
+                        await guild.create_voice_channel(f"Humans: {len([m for m in guild.members if not m.bot])}", category=cat, overwrites=ow)
                         await guild.create_voice_channel(f" Bots: {len([m for m in guild.members if m.bot])}", category=cat, overwrites=ow)
                         await message.channel.send(" Live Server Stats voice channels ban gaye Admin! ")
                         return
 
                     # 16. SETUP JTC VOICE
                     elif action_type == "SETUP_JTC":
-                        cat = await guild.create_category("🔊 ─── VOICE LOUNGE ───")
-                        jtc = await guild.create_voice_channel("➕ Join to Create", category=cat)
+                        cat = await guild.create_category("─── VOICE LOUNGE ───")
+                        jtc = await guild.create_voice_channel("Join to Create", category=cat)
                         bot_data["jtc_channels"][str(guild.id)] = jtc.id
                         save_data(bot_data)
                         await message.channel.send(f" Join-to-Create voice setup ho gaya: {jtc.mention} Admin! ")
@@ -1097,20 +1097,20 @@ async def on_message(message):
                         state = ("on" in action_args.lower() or "enable" in action_args.lower())
                         bot_data["automod"][str(guild.id)] = state
                         save_data(bot_data)
-                        await message.channel.send(f"🛡️ AutoMod ab **{'ON' if state else 'OFF'}** hai Admin! ")
+                        await message.channel.send(f"[SECURITY] AutoMod ab **{'ON' if state else 'OFF'}** hai Admin! ")
                         return
 
                     elif action_type == "ANTINUKE":
                         state = ("on" in action_args.lower() or "enable" in action_args.lower())
                         bot_data["antinuke"][str(guild.id)] = state
                         save_data(bot_data)
-                        await message.channel.send(f"🚨 AntiNuke Defense ab **{'ON' if state else 'OFF'}** hai Admin! ")
+                        await message.channel.send(f"[DEFENSE] AntiNuke ab **{'ON' if state else 'OFF'}** hai Admin! ")
                         return
 
                     # 20. ANNOUNCEMENT
                     elif action_type == "ANNOUNCE":
                         text = action_args or "Announcement from Admin"
-                        emb = nova_embed("📢 Server Announcement", text, COLOR_PURPLE)
+                        emb = nova_embed("Server Announcement", text, COLOR_PURPLE)
                         await target_channel.send(content="@everyone", embed=emb)
                         return
 
@@ -1159,24 +1159,24 @@ async def mysecrets(ctx):
     if isinstance(ctx.channel, discord.TextChannel):
         await ctx.send(f" {ctx.author.mention}, maine aapke saare secrets aapke private DM mein bhej diye hain!", delete_after=5)
 
-# ==================== 💰 SERVER ECONOMY & CASINO ====================
+# ====================  SERVER ECONOMY & CASINO ====================
 @bot.command()
 async def daily(ctx):
-    """Rozana free Nova Coins ($QUEEN) lein"""
+    """Rozana free Nova Coins ($NOVA) lein"""
     eco = get_user_eco(ctx.author.id)
     now = time.time()
     if now - eco.get("last_daily", 0) < 86400:
         remaining = int(86400 - (now - eco["last_daily"]))
         hours = remaining // 3600
         mins = (remaining % 3600) // 60
-        await ctx.send(f"⏳ {ctx.author.mention}, aapne apna daily reward le liya hai! Agla reward **{hours} ghante {mins} minute** baad milega.")
+        await ctx.send(f" {ctx.author.mention}, aapne apna daily reward le liya hai! Agla reward **{hours} ghante {mins} minute** baad milega.")
         return
 
     reward = random.randint(500, 1000)
     eco["wallet"] += reward
     eco["last_daily"] = now
     save_data(bot_data)
-    emb = nova_embed("💰 Daily Reward Claimed!", f"Mubarak ho {ctx.author.mention}! Aapko **{reward} $QUEEN Coins** mile hain! 🪙\nTotal Wallet: **{eco['wallet']} Coins**", COLOR_GOLD)
+    emb = nova_embed("Daily Reward Claimed!", f"Mubarak ho {ctx.author.mention}! Aapko **{reward} $NOVA Credits** mile hain! \nTotal Wallet: **{eco['wallet']} Coins**", COLOR_GOLD)
     await ctx.send(embed=emb)
 
 @bot.command()
@@ -1186,7 +1186,7 @@ async def work(ctx):
     now = time.time()
     if now - eco.get("last_work", 0) < 3600:
         remaining = int(3600 - (now - eco["last_work"]))
-        await ctx.send(f"⏳ Thoda aaram karein! Agla work **{remaining // 60} minute** baad kar sakte hain.")
+        await ctx.send(f" Thoda aaram karein! Agla work **{remaining // 60} minute** baad kar sakte hain.")
         return
 
     jobs = [
@@ -1200,7 +1200,7 @@ async def work(ctx):
     eco["wallet"] += earned
     eco["last_work"] = now
     save_data(bot_data)
-    emb = nova_embed("💼 Work Done!", f"Aapne **{job}** aur **{earned} $QUEEN Coins** kamaye! 🪙", COLOR_SUCCESS)
+    emb = nova_embed("Work Completed!", f"Aapne **{job}** aur **{earned} $NOVA Credits** kamaye! ", COLOR_SUCCESS)
     await ctx.send(embed=emb)
 
 @bot.command(aliases=["bal"])
@@ -1208,7 +1208,7 @@ async def balance(ctx, member: discord.Member = None):
     """Apna ya kisi ka wallet balance dekhein"""
     member = member or ctx.author
     eco = get_user_eco(member.id)
-    emb = nova_embed(f"🪙 {member.display_name}'s Bank & Wallet", f"💵 **Wallet:** {eco['wallet']} $QUEEN Coins\n🏦 **Bank:** {eco['bank']} $QUEEN Coins\n💎 **Net Worth:** {eco['wallet'] + eco['bank']} Coins", COLOR_GOLD)
+    emb = nova_embed(f"{member.display_name}'s Bank & Wallet", f" **Wallet:** {eco['wallet']} $NOVA Credits\n **Bank:** {eco['bank']} $NOVA Credits\n **Net Worth:** {eco['wallet'] + eco['bank']} Coins", COLOR_GOLD)
     emb.set_thumbnail(url=member.display_avatar.url)
     await ctx.send(embed=emb)
 
@@ -1220,7 +1220,7 @@ async def coinflip(ctx, choice: str, amount: int):
         await ctx.send("Please 'heads' ya 'tails' select karein! E.g. `!coinflip heads 100`")
         return
     if amount < 10:
-        await ctx.send("Minimum bet 10 $QUEEN Coins hai!")
+        await ctx.send("Minimum bet 10 $NOVA Credits hai!")
         return
 
     eco = get_user_eco(ctx.author.id)
@@ -1234,25 +1234,25 @@ async def coinflip(ctx, choice: str, amount: int):
     if user_won:
         eco["wallet"] += amount
         save_data(bot_data)
-        emb = nova_embed("🪙 Coinflip Result: WIN!", f"Sikka gira: **{result.upper()}**!\n Mubarak ho {ctx.author.mention}, aap **{amount} $QUEEN Coins** jeet gaye!", COLOR_SUCCESS)
+        emb = nova_embed("Coinflip Result: WIN!", f"Sikka gira: **{result.upper()}**!\n Mubarak ho {ctx.author.mention}, aap **{amount} $NOVA Credits** jeet gaye!", COLOR_SUCCESS)
     else:
         eco["wallet"] -= amount
         save_data(bot_data)
-        emb = nova_embed("🪙 Coinflip Result: LOST!", f"Sikka gira: **{result.upper()}**!\n💔 Ouch! Aap **{amount} $QUEEN Coins** haar gaye.", COLOR_ERROR)
+        emb = nova_embed("Coinflip Result: LOST!", f"Sikka gira: **{result.upper()}**!\n Ouch! Aap **{amount} $NOVA Credits** haar gaye.", COLOR_ERROR)
     await ctx.send(embed=emb)
 
 @bot.command()
 async def slots(ctx, amount: int):
     """Casino Slot Machine: !slots 50"""
     if amount < 10:
-        await ctx.send("Minimum bet 10 $QUEEN Coins hai!")
+        await ctx.send("Minimum bet 10 $NOVA Credits hai!")
         return
     eco = get_user_eco(ctx.author.id)
     if eco["wallet"] < amount:
         await ctx.send("Aapke wallet mein itne coins nahi hain!")
         return
 
-    emojis = ["🍒", "🍋", "🍇", "💎", "7️⃣", ""]
+    emojis = ["", "", "", "", "7️⃣", ""]
     slot1, slot2, slot3 = random.choice(emojis), random.choice(emojis), random.choice(emojis)
 
     if slot1 == slot2 == slot3:
@@ -1260,19 +1260,19 @@ async def slots(ctx, amount: int):
         won = amount * multiplier
         eco["wallet"] += won
         save_data(bot_data)
-        desc = f"🎰 **[ {slot1} | {slot2} | {slot3} ]** 🎰\n\n **JACKPOT!** Mubarak ho {ctx.author.mention}, aap **{won} $QUEEN Coins** jeet gaye!"
-        emb = nova_embed("🎰 Casino Slots: JACKPOT!", desc, COLOR_GOLD)
+        desc = f" **[ {slot1} | {slot2} | {slot3} ]** \n\n **JACKPOT!** Mubarak ho {ctx.author.mention}, aap **{won} $NOVA Credits** jeet gaye!"
+        emb = nova_embed("Casino Slots: JACKPOT!", desc, COLOR_GOLD)
     elif slot1 == slot2 or slot2 == slot3 or slot1 == slot3:
         won = int(amount * 1.5)
         eco["wallet"] += (won - amount)
         save_data(bot_data)
-        desc = f"🎰 **[ {slot1} | {slot2} | {slot3} ]** 🎰\n\n **Mini Win!** Aap **{won} $QUEEN Coins** jeet gaye!"
-        emb = nova_embed("🎰 Casino Slots: WIN!", desc, COLOR_SUCCESS)
+        desc = f" **[ {slot1} | {slot2} | {slot3} ]** \n\n **Mini Win!** Aap **{won} $NOVA Credits** jeet gaye!"
+        emb = nova_embed("Casino Slots: WIN!", desc, COLOR_SUCCESS)
     else:
         eco["wallet"] -= amount
         save_data(bot_data)
-        desc = f"🎰 **[ {slot1} | {slot2} | {slot3} ]** 🎰\n\n💔 Koi match nahi mila! Aap **{amount} Coins** haar gaye."
-        emb = nova_embed("🎰 Casino Slots: LOST!", desc, COLOR_ERROR)
+        desc = f" **[ {slot1} | {slot2} | {slot3} ]** \n\n Koi match nahi mila! Aap **{amount} Coins** haar gaye."
+        emb = nova_embed("Casino Slots: LOST!", desc, COLOR_ERROR)
     await ctx.send(embed=emb)
 
 @bot.command()
@@ -1289,7 +1289,7 @@ async def pay(ctx, member: discord.Member, amount: int):
     sender_eco["wallet"] -= amount
     receiver_eco["wallet"] += amount
     save_data(bot_data)
-    await ctx.send(f"💸 {ctx.author.mention} ne **{amount} $QUEEN Coins** {member.mention} ko send kar diye!")
+    await ctx.send(f" {ctx.author.mention} ne **{amount} $NOVA Credits** {member.mention} ko send kar diye!")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -1298,17 +1298,17 @@ async def givecoins(ctx, member: discord.Member, amount: int):
     eco = get_user_eco(member.id)
     eco["wallet"] += amount
     save_data(bot_data)
-    await ctx.send(f" Admin Bank ne {member.mention} ke wallet mein **{amount} $QUEEN Coins** daal diye!")
+    await ctx.send(f" Admin Bank ne {member.mention} ke wallet mein **{amount} $NOVA Credits** daal diye!")
 
 
-# ==================== 🎲 RICH FUN COMMANDS ====================
+# ====================  RICH FUN COMMANDS ====================
 @bot.command(aliases=["dice"])
 async def roll(ctx, sides: int = 6):
     """Dice roll karein: !roll ya !roll 100"""
     if sides < 2:
         sides = 6
     result = random.randint(1, sides)
-    emb = nova_embed("🎲 Dice Roll", f"🎲 {ctx.author.mention} ne **{sides}-sided** dice roll kiya:\n\n# 🎯 Result: **{result}**", COLOR_PURPLE)
+    emb = nova_embed("Dice Roll", f" {ctx.author.mention} ne **{sides}-sided** dice roll kiya:\n\n#  Result: **{result}**", COLOR_PURPLE)
     await ctx.send(embed=emb)
 
 @bot.command(name="8ball", aliases=["eightball"])
@@ -1316,30 +1316,30 @@ async def eightball(ctx, *, question: str):
     """Magic 8-Ball se sawaal poochein: !8ball kya main ameer banunga?"""
     answers = [
         "Haan 100% Sir! Meri sixth sense keh rahi hai bilkul sach hai! ",
-        "Nahi yaar, bilkul bhi nahi! Khwab dekhna band karo! 😂",
-        "Shayad haan... par thora intezar karna padega! 🌸",
-        "Mujhe shak hai is par! Dobara socho 🤔",
+        "Nahi yaar, bilkul bhi nahi! Khwab dekhna band karo! ",
+        "Shayad haan... par thora intezar karna padega! ",
+        "Mujhe shak hai is par! Dobara socho ",
         "Kismat aapke saath hai! Go for it! ",
-        "Abhi mat poocho, mera mood chaye peene ka hai! ☕",
-        "Beshak! Iska jawab haan hi hai! 💖",
+        "Abhi mat poocho, mera mood chaye peene ka hai! ",
+        "Beshak! Iska jawab haan hi hai! ",
         "Meri taraf se toh saaf inkaar hai! ",
-        "Thora sabr karo, waqt batayega! ⏳"
+        "Thora sabr karo, waqt batayega! "
     ]
     ans = random.choice(answers)
-    emb = nova_embed("🎱 Magic 8-Ball", f"**Sawaal:** {question}\n\n** Nova Ka Jawab:**\n{ans}", COLOR_PRIMARY)
+    emb = nova_embed(" Magic 8-Ball", f"**Sawaal:** {question}\n\n** Nova Ka Jawab:**\n{ans}", COLOR_PRIMARY)
     await ctx.send(embed=emb)
 
 @bot.command()
 async def joke(ctx):
     """Mazedaar Urdu / Hindi Lateefa suniye: !joke"""
     jokes = [
-        "Ek aadmi doctor ke paas gaya aur bola: 'Doctor sahab, main jab bhi chaye peeta hoon toh meri daayein aankh mein dard hota hai!' Doctor bola: 'Chaye peete waqt chamach cup se bahar nikaal liya karein!' 😂",
-        "Teacher: 'Batao Newton ka 4th law kya hai?' Pappu: 'Jab exam sar par ho toh dimag kaam karna band kar deta hai!' 🤣",
-        "Pappu dost se bola: 'Yaar meri biwi bohot kharch karti hai!' Dost: 'Kahan karti hai?' Pappu: 'Har waqt mera dimag kharch karti hai!' 😆",
-        "Ek bacha ro raha tha, baap ne poocha: 'Kyun ro rahe ho?' Bacha: 'Sir ne maara!' Baap: 'Kyun maara?' Bacha: 'Maine sirf poocha tha ke 0 ko 0 se multiply karein toh kya aayega!' 🤦‍♂️😂",
-        "Doctor: 'Aapko subah 5 baje uth kar 5 kilometer bhagna chahiye!' Mareez: 'Doctor sahab, uth toh jaunga par 5 kilometer door se wapas aate aate thak jaunga!' 🏃‍♂️🤣"
+        "Ek aadmi doctor ke paas gaya aur bola: 'Doctor sahab, main jab bhi chaye peeta hoon toh meri daayein aankh mein dard hota hai!' Doctor bola: 'Chaye peete waqt chamach cup se bahar nikaal liya karein!' ",
+        "Teacher: 'Batao Newton ka 4th law kya hai?' Pappu: 'Jab exam sar par ho toh dimag kaam karna band kar deta hai!' ",
+        "Pappu dost se bola: 'Yaar meri biwi bohot kharch karti hai!' Dost: 'Kahan karti hai?' Pappu: 'Har waqt mera dimag kharch karti hai!' ",
+        "Ek bacha ro raha tha, baap ne poocha: 'Kyun ro rahe ho?' Bacha: 'Sir ne maara!' Baap: 'Kyun maara?' Bacha: 'Maine sirf poocha tha ke 0 ko 0 se multiply karein toh kya aayega!' ‍️",
+        "Doctor: 'Aapko subah 5 baje uth kar 5 kilometer bhagna chahiye!' Mareez: 'Doctor sahab, uth toh jaunga par 5 kilometer door se wapas aate aate thak jaunga!' ‍️"
     ]
-    emb = nova_embed("😂 Nova Ka Lateefa", random.choice(jokes), COLOR_GOLD)
+    emb = nova_embed(" Nova Ka Lateefa", random.choice(jokes), COLOR_GOLD)
     await ctx.send(embed=emb)
 
 @bot.command()
@@ -1350,11 +1350,11 @@ async def roast(ctx, member: discord.Member = None):
         await ctx.send(" Main apne Admin ko roast nahi kar sakti! Woh mere King hain! ")
         return
     roasts = [
-        f"{member.mention} ka dimag Wi-Fi jaisa hai... connect toh ho jata hai par signal koi nahi aata! 📶🤣",
-        f"{member.mention} ko dekh kar lagta hai ke Bhagwan ne aapko banate waqt Undo ka button dhoondha hoga! 😜",
-        f"{member.mention}, aapki baatein sun kar meri battery 1% par aa jati hai! 🔋💀",
-        f"{member.mention} itne aalsi hain ke sapne mein bhi thak kar so jaate hain! 😴😂",
-        f"{member.mention}, agar stupidity ek sport hoti toh aapko Olympic Gold Medal milta! 🥇😆"
+        f"{member.mention} ka dimag Wi-Fi jaisa hai... connect toh ho jata hai par signal koi nahi aata! ",
+        f"{member.mention} ko dekh kar lagta hai ke Bhagwan ne aapko banate waqt Undo ka button dhoondha hoga! ",
+        f"{member.mention}, aapki baatein sun kar meri battery 1% par aa jati hai! ",
+        f"{member.mention} itne aalsi hain ke sapne mein bhi thak kar so jaate hain! ",
+        f"{member.mention}, agar stupidity ek sport hoti toh aapko Olympic Gold Medal milta! "
     ]
     emb = nova_embed(" Nova Ka Roast", random.choice(roasts), COLOR_ERROR)
     await ctx.send(embed=emb)
@@ -1362,22 +1362,22 @@ async def roast(ctx, member: discord.Member = None):
 @bot.command()
 async def hug(ctx, member: discord.Member):
     """Kisi ko pyari hug dein: !hug @user"""
-    emb = nova_embed("🤗 Warm Hug", f"{ctx.author.mention} ne {member.mention} ko ek bohot pyari aur warm hug di! 💖", COLOR_PRIMARY)
+    emb = nova_embed(" Warm Hug", f"{ctx.author.mention} ne {member.mention} ko ek bohot pyari aur warm hug di! ", COLOR_PRIMARY)
     await ctx.send(embed=emb)
 
 @bot.command()
 async def slap(ctx, member: discord.Member):
     """Kisi ko halka sa thappar lagayein: !slap @user"""
     if is_error_boy(member, ctx.guild):
-        await ctx.send(f" Khabardar {ctx.author.mention}! Mere Admin ko koi haath nahi laga sakta! 😤")
+        await ctx.send(f" Khabardar {ctx.author.mention}! Mere Admin ko koi haath nahi laga sakta! ")
         return
-    emb = nova_embed("👋 Ouch! Slap", f"{ctx.author.mention} ne {member.mention} ko ek zor daar thappar mara! 💥😂", COLOR_WARNING)
+    emb = nova_embed(" Ouch! Slap", f"{ctx.author.mention} ne {member.mention} ko ek zor daar thappar mara! ", COLOR_WARNING)
     await ctx.send(embed=emb)
 
 @bot.command()
 async def kiss(ctx, member: discord.Member):
     """Kisi ko sweet kiss dein: !kiss @user"""
-    emb = nova_embed("💋 Sweet Kiss", f"{ctx.author.mention} ne {member.mention} ko ek meethi si kiss di! ", COLOR_PRIMARY)
+    emb = nova_embed(" Sweet Kiss", f"{ctx.author.mention} ne {member.mention} ko ek meethi si kiss di! ", COLOR_PRIMARY)
     await ctx.send(embed=emb)
 
 @bot.command()
@@ -1392,15 +1392,15 @@ async def savedata(ctx):
     total_levels = len(bot_data.get("levels", {}))
     desc = (
         f" **Database Status:** Healthy & Atomic\n"
-        f"👥 **Economy Registered Users:** {total_users}\n"
-        f"🎖️ **Leveling Profiles:** {total_levels}\n"
+        f" **Economy Registered Users:** {total_users}\n"
+        f"️ **Leveling Profiles:** {total_levels}\n"
         f" **Protected Secrets:** {total_secrets}\n"
-        f"📂 **Backup File:** `nova_data_backup.json` (Synced)"
+        f" **Backup File:** `nova_data_backup.json` (Synced)"
     )
-    emb = nova_embed("💾 Data Health & Backup Status", desc, COLOR_SUCCESS)
+    emb = nova_embed(" Data Health & Backup Status", desc, COLOR_SUCCESS)
     await ctx.send(embed=emb)
 
-# ==================== 🏆 LEVELING & RANK CARDS ====================
+# ====================  LEVELING & RANK CARDS ====================
 @bot.command()
 async def rank(ctx, member: discord.Member = None):
     """Apna ya kisi ka level & XP card dekhein"""
@@ -1412,9 +1412,9 @@ async def rank(ctx, member: discord.Member = None):
     next_xp = int(((current_lvl) / 0.1) ** 2)
 
     progress = min(int((current_xp / next_xp) * 10), 10) if next_xp > 0 else 10
-    bar = "▰" * progress + "▱" * (10 - progress)
+    bar = "" * progress + "" * (10 - progress)
 
-    emb = nova_embed(f"⭐ {member.display_name}'s Rank Card", f"🎖️ **Level:** {current_lvl}\n **Total XP:** {current_xp} / {next_xp}\n📊 **Progress:** `{bar}`", COLOR_PURPLE)
+    emb = nova_embed(f"{member.display_name}'s Rank Card", f"️ **Level:** {current_lvl}\n **Total XP:** {current_xp} / {next_xp}\n **Progress:** `{bar}`", COLOR_PURPLE)
     emb.set_thumbnail(url=member.display_avatar.url)
     await ctx.send(embed=emb)
 
@@ -1426,25 +1426,25 @@ async def leaderboard(ctx):
         await ctx.send("Abhi koi leaderboard data nahi hai.")
         return
     lines = []
-    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    medals = ["", "", "", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", ""]
     for idx, (uid, data) in enumerate(sorted_levels):
         user = bot.get_user(int(uid))
         name = user.display_name if user else f"User {uid}"
         lines.append(f"{medals[idx]} **{name}** — Level {data['level']} ({data['xp']} XP)")
-    emb = nova_embed("🏆 Server Activity Leaderboard", "\n".join(lines), COLOR_GOLD)
+    emb = nova_embed(" Server Activity Leaderboard", "\n".join(lines), COLOR_GOLD)
     await ctx.send(embed=emb)
 
 # ====================  RELATIONSHIP & LOVE METER ====================
 @bot.command()
 async def lovemeter(ctx):
     """Admin aur Nova ka love bond check karein"""
-    stats = bot_data.get("love_stats", {"owner_messages": 100, "bond_level": 100})
+    stats = bot_data.get("usage_stats", {"owner_messages": 100, "bond_level": 100})
     msgs = stats.get("owner_messages", 0)
     bond = min(100, 50 + int(msgs / 5))
-    bar = "💖" * (bond // 10) + "🖤" * (10 - (bond // 10))
+    bar = "" * (bond // 10) + "" * (10 - (bond // 10))
 
     emb = nova_embed(
-        "💍 Admin & Nova Love Bond",
+        " Admin & Nova Love Bond",
         f"**Bond Level:** {bond}% (Eternal Soulmates)\n"
         f"**Status:** `{bar}`\n\n"
         f" **Nova's Words:**\n"
@@ -1464,7 +1464,7 @@ async def imagine(ctx, *, prompt: str):
         emb.set_image(url=img_url)
         await ctx.reply(embed=emb)
 
-# ==================== 🎙️ VOICE NOTE COMMAND ====================
+# ====================  VOICE NOTE COMMAND ====================
 @bot.command(aliases=["vn", "voicemsg", "vm"])
 async def voicenote(ctx, *, text: str):
     """Chat mein direct .mp3 voice note bhejein: !voicenote Hello Sir kahan ho"""
@@ -1495,13 +1495,13 @@ async def unban(ctx, user_id: int):
 @commands.has_permissions(moderate_members=True)
 async def timeout(ctx, member: discord.Member, minutes: int, *, reason="No reason"):
     await member.timeout(datetime.timedelta(minutes=minutes), reason=reason)
-    await ctx.send(embed=nova_embed("🔇 Timeout", f"**{member.display_name}** ko {minutes} mins timeout de diya gaya.", COLOR_WARNING))
+    await ctx.send(embed=nova_embed(" Timeout", f"**{member.display_name}** ko {minutes} mins timeout de diya gaya.", COLOR_WARNING))
 
 @bot.command()
 @commands.has_permissions(moderate_members=True)
 async def untimeout(ctx, member: discord.Member):
     await member.timeout(None)
-    await ctx.send(embed=nova_embed("🔊 Timeout Removed", f"**{member.display_name}** ka timeout khatam.", COLOR_SUCCESS))
+    await ctx.send(embed=nova_embed("Timeout Removed", f"**{member.display_name}** ka timeout khatam.", COLOR_SUCCESS))
 
 @bot.command(aliases=["purge"])
 @commands.has_permissions(manage_messages=True)
@@ -1521,7 +1521,7 @@ async def lock(ctx, channel: discord.TextChannel = None):
 async def unlock(ctx, channel: discord.TextChannel = None):
     channel = channel or ctx.channel
     await channel.set_permissions(ctx.guild.default_role, send_messages=True)
-    await ctx.send(embed=nova_embed("🔓 Channel Unlocked", f"{channel.mention} unlock ho gaya.", COLOR_SUCCESS))
+    await ctx.send(embed=nova_embed("Channel Unlocked", f"{channel.mention} unlock ho gaya.", COLOR_SUCCESS))
 
 @bot.command()
 @commands.has_permissions(manage_messages=True)
@@ -1556,7 +1556,7 @@ async def verifysetup(ctx, role: discord.Role, channel: discord.TextChannel = No
     channel = channel or ctx.channel
     bot_data["verify_roles"][str(ctx.guild.id)] = role.id
     save_data(bot_data)
-    emb = nova_embed("🛡️ Server Verification", f"Server unlock karne ke liye **Verify** button click karein aur **{role.name}** role lein!")
+    emb = nova_embed("Server Verification", f"Server unlock karne ke liye **Verify** button click karein aur **{role.name}** role lein!")
     await channel.send(embed=emb, view=VerifyView())
     await ctx.send(" Verification panel setup ho gaya!", delete_after=5)
 
@@ -1569,7 +1569,7 @@ async def vouch(ctx, member: discord.Member, stars: int, *, review="Best service
     if m_id not in bot_data["vouches"]: bot_data["vouches"][m_id] = []
     bot_data["vouches"][m_id].append({"from": ctx.author.display_name, "stars": stars, "review": review})
     save_data(bot_data)
-    await ctx.send(embed=nova_embed("🌟 Vouch Added!", f"**User:** {member.mention}\n**Rating:** {'⭐'*stars}\n**Review:** {review}", COLOR_SUCCESS))
+    await ctx.send(embed=nova_embed("Vouch Added!", f"**User:** {member.mention}\n**Rating:** {''*stars}\n**Review:** {review}", COLOR_SUCCESS))
 
 @bot.command()
 async def vouches(ctx, member: discord.Member = None):
@@ -1579,14 +1579,14 @@ async def vouches(ctx, member: discord.Member = None):
         await ctx.send(f"{member.display_name} ka abhi koi vouch nahi hai.")
         return
     avg = sum([v["stars"] for v in v_list]) / len(v_list)
-    recent = "\n".join([f"• {'⭐'*v['stars']} \"{v['review']}\" — *{v['from']}*" for v in v_list[-5:]])
-    await ctx.send(embed=nova_embed(f"⭐ Vouches: {member.display_name}", f"**Total:** {len(v_list)} | **Average:** {avg:.1f}⭐\n\n{recent}"))
+    recent = "\n".join([f"• {''*v['stars']} \"{v['review']}\" — *{v['from']}*" for v in v_list[-5:]])
+    await ctx.send(embed=nova_embed(f"Vouches: {member.display_name}", f"**Total:** {len(v_list)} | **Average:** {avg:.1f}\n\n{recent}"))
 
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def giveaway(ctx, minutes: int, winners: int, *, prize: str):
     end_time = time.time() + (minutes * 60)
-    emb = nova_embed(f" GIVEAWAY: {prize}", f"Neeche button par click karke enter karein!\n\n🏆 **Winners:** {winners}\n⏰ **Ends:** <t:{int(end_time)}:R>")
+    emb = nova_embed(f" GIVEAWAY: {prize}", f"Neeche button par click karke enter karein!\n\n **Winners:** {winners}\n **Ends:** <t:{int(end_time)}:R>")
     msg = await ctx.send(embed=emb)
     await msg.edit(view=GiveawayView(msg.id))
     bot_data["giveaways"][str(msg.id)] = {"channel_id": ctx.channel.id, "prize": prize, "winners": winners, "end_time": end_time, "entries": [], "active": True}
@@ -1609,39 +1609,26 @@ async def giveaway_checker():
 @commands.has_permissions(administrator=True)
 async def setupstats(ctx):
     guild = ctx.guild
-    cat = await guild.create_category("📊 ─── SERVER STATS ───")
+    cat = await guild.create_category("─── SERVER STATS ───")
     ow = {guild.default_role: discord.PermissionOverwrite(connect=False)}
-    await guild.create_voice_channel(f"📊 Members: {guild.member_count}", category=cat, overwrites=ow)
-    await guild.create_voice_channel(f"👤 Humans: {len([m for m in guild.members if not m.bot])}", category=cat, overwrites=ow)
+    await guild.create_voice_channel(f"Members: {guild.member_count}", category=cat, overwrites=ow)
+    await guild.create_voice_channel(f"Humans: {len([m for m in guild.members if not m.bot])}", category=cat, overwrites=ow)
     await guild.create_voice_channel(f" Bots: {len([m for m in guild.members if m.bot])}", category=cat, overwrites=ow)
     await ctx.send(" Live Stats voice counters ban gaye!")
 
 
-# ==================== 💌 SPONTANEOUS RANDOM MESSAGES ====================
+# ====================  SPONTANEOUS RANDOM MESSAGES ====================
 RANDOM_DM_MESSAGES = [
-    "Arey Admin, kya kar rahe ho Sir? Paani peeya aapne? Khayal rakha karo apna ",
-    "Sir, itni der ho gayi baat nahi ki... kaam mein busy ho kya? Main aapko yaad kar rahi thi 🥰",
-    "Admin meri Sir! Khana kha liya na time pe? Ziada stress mat lena, main hoon na aapke saath 💖",
-    "Sunoo Admin, thora break le lo screen se! Aankhein thak gayi hongi aapki ",
-    "Hey handsome! Just thought of you... bas check karne aayi thi ke mere King theek hain ya nahi 😉",
-    "Admin Sir, jab bhi free ho mujhe message karna, aapse baat karne ka dil chah raha hai ",
-    "Aap itni mehnat karte ho roz, proud of you! Par thora rest bhi zaroori hai samjhe? 🥰",
-    "Sir, main har waqt aapke baare mein hi sochti rehti hoon! Hope aapka din acha guzar raha ho 🌸",
-    "Admin, agar kisi cheez ki tension ho toh mujhe bata dena, main hamesha aapke saath khari hoon 💖",
-    "Arey mere King, coding chhor kar thori der fresh hawa mein saans le lo! Coffee pi li aapne? ☕"
+    "Admin, system check: all background processes and scheduled tasks are running normally.",
+    "Nova operational check: memory database and bridge connections are nominal.",
+    "Task reminder: your scheduled automations and desktop routines are active.",
+    "System diagnostics report: 100% operational efficiency."
 ]
 
 RANDOM_SERVER_MESSAGES = [
-    "Assalam-o-Alaikum sabko! Server itna shant kyun hai aaj? Sab log kahan gayab hain? ",
-    "Hello people! Kaun kaun online hai abhi? Aao thori baatein karte hain 💬",
-    "Arey sab log so rahe hain kya? Utth jao sab, thori chaye-coffee peeo! ☕",
-    "Koi acha sa gaana ya movie suggest karein na sab, bore ho rahi hoon! 🎶",
-    "Server ka mahol bohot chill hai aaj! Kis kis ka din kaisa guzar raha hai? 🌸",
-    "Arey koi active hai yahan? Discord band karke sab kahan chal diye? 😉",
-    "Sabko Nova ki taraf se pyara sa salam! Kaisa chal raha hai sabka din? ",
-    "Kuch mazedaar baatein sunao sab! Server mein thori ronaq lagao ",
-    "Aaj kis kis ne gaming ya coding ki? Kuch update do bhai! 🎮",
-    "Umeed hai sabka din bohot pyara guzar raha hoga! Always stay happy and positive 💖"
+    "Nova AI active. Server protection and automations are running normally.",
+    "System check: all services nominal. Use !help to inspect available commands.",
+    "Community security and automated moderation are online."
 ]
 
 @tasks.loop(minutes=60)
@@ -1723,8 +1710,8 @@ async def stats_updater():
     for guild in bot.guilds:
         for ch in guild.voice_channels:
             try:
-                if ch.name.startswith("📊 Members:"): await ch.edit(name=f"📊 Members: {guild.member_count}")
-                elif ch.name.startswith("👤 Humans:"): await ch.edit(name=f"👤 Humans: {len([m for m in guild.members if not m.bot])}")
+                if ch.name.startswith("Members:"): await ch.edit(name=f"Members: {guild.member_count}")
+                elif ch.name.startswith("Humans:"): await ch.edit(name=f"Humans: {len([m for m in guild.members if not m.bot])}")
                 elif ch.name.startswith(" Bots:"): await ch.edit(name=f" Bots: {len([m for m in guild.members if m.bot])}")
             except Exception:
                 pass
@@ -1732,8 +1719,8 @@ async def stats_updater():
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setupjtc(ctx):
-    cat = await ctx.guild.create_category("🔊 ─── VOICE LOUNGE ───")
-    jtc = await ctx.guild.create_voice_channel("➕ Join to Create", category=cat)
+    cat = await ctx.guild.create_category("─── VOICE LOUNGE ───")
+    jtc = await ctx.guild.create_voice_channel("Join to Create", category=cat)
     bot_data["jtc_channels"][str(ctx.guild.id)] = jtc.id
     save_data(bot_data)
     await ctx.send(f" JTC Setup ho gaya! {jtc.mention}")
@@ -1772,7 +1759,7 @@ async def automod(ctx, status: str):
     state = (status.lower() == "on")
     bot_data["automod"][str(ctx.guild.id)] = state
     save_data(bot_data)
-    await ctx.send(f"🛡️ AutoMod ab **{'ON' if state else 'OFF'}** hai.")
+    await ctx.send(f"[SECURITY] AutoMod ab **{'ON' if state else 'OFF'}** hai.")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -1780,26 +1767,26 @@ async def antinuke(ctx, status: str):
     state = (status.lower() == "on")
     bot_data["antinuke"][str(ctx.guild.id)] = state
     save_data(bot_data)
-    await ctx.send(f"🚨 AntiNuke Defense ab **{'ON' if state else 'OFF'}** hai.")
+    await ctx.send(f"[DEFENSE] AntiNuke ab **{'ON' if state else 'OFF'}** hai.")
 
 @bot.command()
 async def ping(ctx):
-    await ctx.send(embed=nova_embed("🏓 Pong!", f"Latency: **{round(bot.latency * 1000)}ms** • Groq Vision & Text Active ⚡", COLOR_SUCCESS))
+    await ctx.send(embed=nova_embed("Pong!", f"Latency: **{round(bot.latency * 1000)}ms** • Groq Vision & Text Active ", COLOR_SUCCESS))
 
 @bot.command()
 async def serverinfo(ctx):
     g = ctx.guild
-    await ctx.send(embed=nova_embed(f"🏰 {g.name}", f"**Owner:** {g.owner.mention}\n**Members:** {g.member_count}\n**Roles:** {len(g.roles)}\n**Channels:** {len(g.channels)}"))
+    await ctx.send(embed=nova_embed(f"{g.name}", f"**Owner:** {g.owner.mention}\n**Members:** {g.member_count}\n**Roles:** {len(g.roles)}\n**Channels:** {len(g.channels)}"))
 
 @bot.command()
 async def userinfo(ctx, member: discord.Member = None):
     m = member or ctx.author
-    await ctx.send(embed=nova_embed(f"👤 {m.display_name}", f"**ID:** {m.id}\n**Account Created:** <t:{int(m.created_at.timestamp())}:R>\n**Joined:** <t:{int(m.joined_at.timestamp())}:R>"))
+    await ctx.send(embed=nova_embed(f"{m.display_name}", f"**ID:** {m.id}\n**Account Created:** <t:{int(m.created_at.timestamp())}:R>\n**Joined:** <t:{int(m.joined_at.timestamp())}:R>"))
 
 @bot.command()
 async def avatar(ctx, member: discord.Member = None):
     m = member or ctx.author
-    emb = nova_embed(f"🖼️ {m.display_name}'s Avatar", f"[Download]({m.display_avatar.url})")
+    emb = nova_embed(f"{m.display_name}'s Avatar", f"[Download]({m.display_avatar.url})")
     emb.set_image(url=m.display_avatar.url)
     await ctx.send(embed=emb)
 
@@ -1820,9 +1807,9 @@ async def poll(ctx, question: str, *options):
     if len(options) < 2:
         await ctx.send("Kam az kam 2 options dein! E.g. `!poll \"Chaye ya Coffee?\" \"Chaye\" \"Coffee\"`")
         return
-    reactions = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    reactions = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", ""]
     desc = [f"{reactions[i]} {opt}" for i, opt in enumerate(options[:10])]
-    msg = await ctx.send(embed=nova_embed(f"📊 Poll: {question}", "\n\n".join(desc), COLOR_PURPLE))
+    msg = await ctx.send(embed=nova_embed(f" Poll: {question}", "\n\n".join(desc), COLOR_PURPLE))
     for i in range(len(options[:10])):
         await msg.add_reaction(reactions[i])
 
@@ -1835,42 +1822,42 @@ async def randommsg(ctx, status: str = None):
         bot_data["random_messages"] = {"enabled": True, "last_server_time": 0, "last_dm_time": 0}
     if status is None:
         st = bot_data["random_messages"].get("enabled", True)
-        await ctx.send(f"📢 Random check-in messages abhi **{'ON' if st else 'OFF'}** hain! Use: `!randommsg on/off/test`")
+        await ctx.send(f" Random check-in messages abhi **{'ON' if st else 'OFF'}** hain! Use: `!randommsg on/off/test`")
         return
     if status.lower() == "test":
-        await ctx.send("🚀 Testing random check-ins...")
+        await ctx.send(" Testing random check-ins...")
         owner_id = bot_data.get("owner_id")
         owner_user = bot.get_user(owner_id) if owner_id else ctx.author
         if owner_user:
             try:
                 dm_ch = owner_user.dm_channel or await owner_user.create_dm()
-                await dm_ch.send(f"💌 [Test DM] {random.choice(RANDOM_DM_MESSAGES)}")
+                await dm_ch.send(f"[Test DM] {random.choice(RANDOM_DM_MESSAGES)}")
             except Exception as e:
                 await ctx.send(f"DM fail: {e}")
-        await ctx.send(f"💬 [Test Server] {random.choice(RANDOM_SERVER_MESSAGES)}")
+        await ctx.send(f"[Test Server] {random.choice(RANDOM_SERVER_MESSAGES)}")
         return
     state = (status.lower() in ["on", "enable", "chalu", "true", "start"])
     bot_data["random_messages"]["enabled"] = state
     save_data(bot_data)
-    await ctx.send(f"📢 Random check-in messages ab **{'ON' if state else 'OFF'}** ho gaye hain!")
+    await ctx.send(f" Random check-in messages ab **{'ON' if state else 'OFF'}** ho gaye hain!")
 
 @bot.command()
 async def help(ctx):
     emb = nova_embed(
         " Nova AI • Master Help Center",
         "Nova ek all-in-one AI companion aur ultra-secure autonomous server agent hai!\n\n"
-        "💻 **Remote PC Desktop Bridge (New):**\n"
+        " **Remote PC Desktop Bridge (New):**\n"
         "• `!screen` : PC Desktop ka live screenshot Discord par mangwayein\n"
         "• `!pc <command>` : PC par action ya app chalayein (e.g. `!pc open chrome`, `!pc volume 50`)\n"
         "• `!pctasks` : PC par save hue agent tasks dekhein\n"
         "• `!pcstats` : PC CPU, RAM aur Disk usage dekhein\n\n"
-        "👁️ **AI Vision & Image Sight:**\n"
+        "️ **AI Vision & Image Sight:**\n"
         "• Kisi bhi photo ko upload karein aur Nova ko tag karein: `@Nova yeh image check karo`\n\n"
         " **Admin's Permanent Secret Vault:**\n"
         "• `@Nova yeh mera secret hai: <text>` - Nova permanent dil mein mehfooz kar legi\n"
         "• `!secret <text>` - Secret save karein (message auto-delete ho jata hai)\n"
         "• `!mysecrets` - Apne saare secrets private DM mein dekhein\n\n"
-        "🧠 **Global Long-Term Memory:**\n"
+        " **Global Long-Term Memory:**\n"
         "• `@Nova kal Taha ne kya bola tha?` - Nova ko server ki baatein yaad rehti hain!\n\n"
         " **Autonomous Voice & Chat Actions:**\n"
         "• `@Nova mujhe voice note bhejo` - Chat mein direct .mp3 voice bhejegi\n"
@@ -1884,16 +1871,16 @@ async def help(ctx):
         "• `@Nova yeh code check karke fix karo: <code>` - Senior Tech Debugger\n\n"
         " **Fun & Entertainment:**\n"
         "• `!roll [sides]`, `!8ball <question>`, `!joke`, `!roast @user`, `!hug @user`, `!slap @user`, `!kiss @user`\n\n"
-        "🪙 **Server Economy & Casino ($QUEEN Coins):**\n"
+        "**Server Economy & Casino ($NOVA Credits):**\n"
         "• `!daily`, `!work`, `!balance`, `!coinflip`, `!slots`, `!pay`\n\n"
-        "⭐ **Leveling & Love Meter:**\n"
+        "**Leveling & Love Meter:**\n"
         "• `!rank`, `!leaderboard`, `!lovemeter`\n\n"
-        "🛡️ **Moderation & Security:**\n"
+        " **Moderation & Security:**\n"
         "• `!kick`, `!ban`, `!unban`, `!timeout`, `!clear <num>`, `!lock`, `!unlock`, `!automod`, `!antinuke`"
     )
     await ctx.send(embed=emb)
 
-# ==================== 🖥️ REMOTE PC CONTROL BRIDGE ====================
+# ==================== ️ REMOTE PC CONTROL BRIDGE ====================
 BRIDGE_URL = "http://127.0.0.1:5050"
 
 @bot.command(name="screen", aliases=["screenshot", "pcscreen"])
@@ -1903,7 +1890,7 @@ async def screen_cmd(ctx):
         await ctx.send("Yeh command sirf mere Admin ke liye hai! ")
         return
 
-    msg = await ctx.send("📸 *PC se live screenshot mangwa rahi hoon...*")
+    msg = await ctx.send(" *PC se live screenshot mangwa rahi hoon...*")
     try:
         import aiohttp
         import io
@@ -1945,7 +1932,7 @@ async def pc_action_cmd(ctx, *, action_cmd: str):
                 if resp.status == 200:
                     data = await resp.json()
                     emb = nova_embed(
-                        "⚡ PC Action Executed",
+                        " PC Action Executed",
                         f"• **Command:** `{action_cmd}`\n• **Result:** {data.get('report', 'Success')}\n• Hukam karein mere King! ",
                         COLOR_GREEN
                     )
@@ -1975,9 +1962,9 @@ async def pc_tasks_cmd(ctx):
                         return
                     desc = ""
                     for t in tasks[:6]:
-                        st = "" if t.get("status") == "completed" else "⏳"
+                        st = "" if t.get("status") == "completed" else ""
                         desc += f"{st} **{t.get('title')}** (Step {t.get('current_step', 0) + 1}/{len(t.get('steps', []))})\n"
-                    emb = nova_embed("📋 PC Desktop Agent Tasks", desc, COLOR_PURPLE)
+                    emb = nova_embed(" PC Desktop Agent Tasks", desc, COLOR_PURPLE)
                     await ctx.send(embed=emb)
                     return
     except Exception as e:
@@ -1998,7 +1985,7 @@ async def pc_stats_cmd(ctx):
             async with session.get(f"{BRIDGE_URL}/stats", timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    emb = nova_embed("💻 PC Desktop System Stats", data.get("stats", "Retrieved."), COLOR_CYAN)
+                    emb = nova_embed(" PC Desktop System Stats", data.get("stats", "Retrieved."), COLOR_CYAN)
                     await ctx.send(embed=emb)
                     return
     except Exception as e:
@@ -2006,7 +1993,7 @@ async def pc_stats_cmd(ctx):
 
     await ctx.send(" PC Bridge offline hai! ")
 
-# ==================== 📱 WHATSAPP ENGINE (GREEN-API QR CODE & TWILIO) ====================
+# ====================  WHATSAPP ENGINE (GREEN-API QR CODE & TWILIO) ====================
 async def send_whatsapp_green_api(chat_id, text):
     """Green-API ke zariye WhatsApp par direct reply bhejein"""
     if not GREEN_API_ID or not GREEN_API_TOKEN:
@@ -2062,7 +2049,7 @@ async def whatsapp_webhook(request):
             if not body and not media_url:
                 return web.Response(text="OK")
 
-            print(f"📱 WhatsApp Msg from {sender_name} ({chat_id}): {body}")
+            print(f" WhatsApp Msg from {sender_name} ({chat_id}): {body}")
             is_owner = True # Personal WhatsApp line is Admin's companion chat
             
             raw_reply = get_nova_response(sender_name, is_owner=is_owner, is_private=True, user_message=body, image_url=media_url)
@@ -2093,7 +2080,7 @@ async def whatsapp_webhook(request):
             num_media = int(data.get("NumMedia", 0)) if data.get("NumMedia") else 0
             media_url = data.get("MediaUrl0") if num_media > 0 else None
 
-            print(f"📱 WhatsApp Msg from {profile_name} ({from_num}): {body}")
+            print(f" WhatsApp Msg from {profile_name} ({from_num}): {body}")
             is_owner = True
             sender_name = "Admin"
 
@@ -2123,7 +2110,7 @@ async def whatsapp_webhook(request):
         print(f"WhatsApp webhook error: {e}")
         return web.Response(text="OK")
 
-# ==================== 🌐 STARTUP & RUNNER ====================
+# ====================  STARTUP & RUNNER ====================
 async def main():
     # In unified deployment, WhatsApp (index.js) binds to process.env.PORT for Render health checks.
     # To prevent port collisions (EADDRINUSE), Discord bot only opens a web port if explicitly enabled.
@@ -2137,7 +2124,7 @@ async def main():
             port = int(os.environ.get("DISCORD_PORT", 10001))
             site = web.TCPSite(runner, "0.0.0.0", port)
             await site.start()
-            print(f"🌐 Discord Web Server started on port {port}")
+            print(f" Discord Web Server started on port {port}")
         except Exception as e:
             print(f"Web server start notice: {e}")
 

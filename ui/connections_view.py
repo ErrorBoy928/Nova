@@ -147,7 +147,7 @@ class ConnectionsView(QWidget):
         wa_owner_form = QFormLayout()
         wa_owner_row = QHBoxLayout()
         self.wa_owner_input = QLineEdit()
-        self.wa_owner_input.setPlaceholderText("Enter your WhatsApp number (e.g. +923001234567 or 03347973707)...")
+        self.wa_owner_input.setPlaceholderText("Enter your WhatsApp number (e.g. +923001234567)...")
         self.btn_save_wa_owner = QPushButton("Save Number")
         self.btn_save_wa_owner.setFixedWidth(110)
         self.btn_save_wa_owner.clicked.connect(self._save_wa_owner_number)

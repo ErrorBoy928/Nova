@@ -84,13 +84,13 @@ def research_topic(query: str, max_results: int = 4) -> str:
     if not results:
         return f"No live web results could be retrieved for '{query}'. Please check internet connection."
 
-    summary_lines = [f"🌐 **Web Research Findings for:** *{query}*\n"]
+    summary_lines = [f"**Web Research Findings for:** *{query}*\n"]
     for i, res in enumerate(results, 1):
         summary_lines.append(f"**{i}. {res.title}**")
         if res.snippet:
             summary_lines.append(f"   {res.snippet}")
         if res.url:
-            summary_lines.append(f"   🔗 [Source Link]({res.url})")
+            summary_lines.append(f"   [Source Link]({res.url})")
         summary_lines.append("")
 
     return "\n".join(summary_lines)

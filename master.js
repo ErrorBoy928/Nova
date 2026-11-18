@@ -73,7 +73,7 @@ let dcStartTime = 0;
 function runDiscord() {
     if (isTerminating) return;
     dcStartTime = Date.now();
-    console.log(`🤖 [LAUNCHER] Spawning Discord Engine (main.py) via ${pythonExecutable}...`);
+    console.log(` [LAUNCHER] Spawning Discord Engine (main.py) via ${pythonExecutable}...`);
 
     dcProcess = spawn(pythonExecutable, ["discord_bot.py"], {
         cwd: __dirname,
@@ -98,7 +98,7 @@ function runDiscord() {
             dcRestartDelay = Math.min(dcRestartDelay * 2, 180000);
         }
 
-        console.warn(`🤖 [DISCORD] Process exited after ${uptime.toFixed(1)}s (code: ${code}, signal: ${signal}). Auto-restarting in ${(dcRestartDelay / 1000).toFixed(0)}s...`);
+        console.warn(` [DISCORD] Process exited after ${uptime.toFixed(1)}s (code: ${code}, signal: ${signal}). Auto-restarting in ${(dcRestartDelay / 1000).toFixed(0)}s...`);
         setTimeout(runDiscord, dcRestartDelay);
     });
 }
@@ -112,11 +112,11 @@ function runDesktopAssistant() {
     const fs = require("fs");
     const desktopPath = path.join("E:", "Nova_AI", "discord_bot.py");
     if (!fs.existsSync(desktopPath)) {
-        console.warn(`💻 [DESKTOP] App file not found at ${desktopPath}, skipping desktop launch.`);
+        console.warn(` [DESKTOP] App file not found at ${desktopPath}, skipping desktop launch.`);
         return;
     }
 
-    console.log(`💻 [LAUNCHER] Spawning Nova Desktop Assistant (${desktopPath})...`);
+    console.log(` [LAUNCHER] Spawning Nova Desktop Assistant (${desktopPath})...`);
     desktopProcess = spawn(pythonExecutable, [desktopPath], {
         cwd: path.dirname(desktopPath),
         stdio: "inherit",
@@ -129,7 +129,7 @@ function runDesktopAssistant() {
 
     desktopProcess.on("exit", (code) => {
         desktopProcess = null;
-        console.log(`💻 [DESKTOP] Process exited (code: ${code}).`);
+        console.log(` [DESKTOP] Process exited (code: ${code}).`);
     });
 }
 

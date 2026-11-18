@@ -179,7 +179,7 @@ class SettingsView(QWidget):
         form_p.addRow("Your Name (Optional):", self.user_name_input)
 
         self.user_phone_input = QLineEdit()
-        self.user_phone_input.setPlaceholderText("e.g. +923001234567 or 03347973707 (for WhatsApp owner alerts)")
+        self.user_phone_input.setPlaceholderText("e.g. +923001234567 (for WhatsApp owner alerts)")
         form_p.addRow("Mobile Number (Optional):", self.user_phone_input)
 
         self.discord_owner_input = QLineEdit()

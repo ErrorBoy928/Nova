@@ -70,7 +70,7 @@ def _send_whatsapp_notification(title: str, message: str):
 def _send_discord_notification(title: str, message: str):
     """Sends notification to Discord bot channel/DM."""
     try:
-        text = f"🔔 **Nova AI Notification**\n**{title}**\n{message}"
+        text = f"**Nova AI Notification**\n**{title}**\n{message}"
         req = urllib.request.Request(
             "http://127.0.0.1:5051/notify",
             data=json.dumps({"message": text}).encode("utf-8"),

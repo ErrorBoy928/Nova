@@ -3,9 +3,9 @@ ui/tasks_view.py
 
 Supercharged Autonomous Task & Automation View for Nova AI.
 Contains 3 powerful portions:
-- Portion 1: ⏰ Daily Recurring Automations (Runs daily at set HH:MM, multi-channel alerts to Desktop, WhatsApp, Discord)
-- Portion 2: 📅 Day Schedule Tasks (One-off scheduled tasks for today with auto notifications)
-- Portion 3: 📋 Multi-Step Agent Goals (Active complex workflows & sequential pipeline)
+- Portion 1: Daily Recurring Automations (Runs daily at set HH:MM, multi-channel alerts to Desktop, WhatsApp, Discord)
+- Portion 2: Day Schedule Tasks (One-off scheduled tasks for today with auto notifications)
+- Portion 3: Multi-Step Agent Goals (Active complex workflows & sequential pipeline)
 """
 
 from __future__ import annotations

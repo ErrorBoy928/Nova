@@ -165,7 +165,7 @@ SCREEN CONTROL & VISION PROTOCOL (CRITICAL):
 2. Check your current screen state context: [Screen Vision: ON] or [Screen Vision: OFF].
 3. If [Screen Vision: OFF] and the user asks you to interact with an application, website, button, form, or do work on their screen:
    - DO NOT run blind command-line or PowerShell scripts.
-   - Politely ask the user to turn on Screen Share / Screen Vision (or click the '👁️ Turn On Screen Vision' button) so you can see their screen and handle it directly.
+   - Politely ask the user to turn on Screen Share / Screen Vision (or click the 'Turn On Screen Vision' button) so you can see their screen and handle it directly.
    - Always include the tag [action:enable_vision] in your response.
 4. If [Screen Vision: ON]:
    - You have real-time visual observation of the user's desktop.
@@ -183,7 +183,7 @@ When given any multi-step, complex, or large task (e.g. building an application,
   [action:save_task:<Task Title>:<Step 1>|<Step 2>|<Step 3>...]
 - As steps progress, update them with:
   [action:update_task:<task_id_or_title>:<step_index>]
-- The user can view, track, and execute steps anytime via the '📋 Tasks' button in the header.
+- The user can view, track, and execute steps anytime via the 'Tasks Hub' button in the sidebar.
 - To check existing tasks: [action:list_tasks]
 
 AVAILABLE COMPUTER & CODING ACTIONS:
@@ -301,7 +301,7 @@ class CodeBlockWidget(QFrame):
         # Run button (for runnable scripts)
         can_run = self.lang in ("python", "py", "powershell", "ps", "ps1", "cmd", "bat", "batch", "node", "js", "javascript")
         if can_run:
-            self.run_btn = QPushButton("▶ Run")
+            self.run_btn = QPushButton("Run")
             self.run_btn.setFixedHeight(22)
             self.run_btn.setCursor(Qt.PointingHandCursor)
             self.run_btn.setStyleSheet(f"""
@@ -323,7 +323,7 @@ class CodeBlockWidget(QFrame):
             h_layout.addWidget(self.run_btn)
 
         # Save button
-        save_btn = QPushButton("💾 Save")
+        save_btn = QPushButton("Save")
         save_btn.setFixedHeight(22)
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.setStyleSheet(f"""
@@ -346,7 +346,7 @@ class CodeBlockWidget(QFrame):
         h_layout.addWidget(save_btn)
 
         # Copy button
-        self.copy_btn = QPushButton("📋 Copy")
+        self.copy_btn = QPushButton("Copy")
         self.copy_btn.setFixedHeight(22)
         self.copy_btn.setCursor(Qt.PointingHandCursor)
         self.copy_btn.setStyleSheet(save_btn.styleSheet())
@@ -404,8 +404,8 @@ class CodeBlockWidget(QFrame):
 
     def _on_copy_clicked(self):
         QApplication.clipboard().setText(self.code, QClipboard.Clipboard)
-        self.copy_btn.setText("✓ Copied!")
-        QTimer.singleShot(1500, lambda: self.copy_btn.setText("📋 Copy"))
+        self.copy_btn.setText("Copied!")
+        QTimer.singleShot(1500, lambda: self.copy_btn.setText("Copy"))
 
     def _on_save_clicked(self):
         ext_map = {
@@ -422,11 +422,11 @@ class CodeBlockWidget(QFrame):
             try:
                 Path(file_path).write_text(self.code, encoding="utf-8")
                 self.console_frame.setVisible(True)
-                self.console_out.setText(f"[✓] Saved to: {file_path}")
+                self.console_out.setText(f"[OK] Saved to: {file_path}")
                 self.console_out.setStyleSheet("color: #10b981; font-size: 11px; font-family: Consolas, monospace;")
             except Exception as e:
                 self.console_frame.setVisible(True)
-                self.console_out.setText(f"[✕] Save error: {e}")
+                self.console_out.setText(f"[ERROR] Save error: {e}")
                 self.console_out.setStyleSheet("color: #ef4444; font-size: 11px; font-family: Consolas, monospace;")
 
     def _on_run_clicked(self):
@@ -442,7 +442,7 @@ class CodeBlockWidget(QFrame):
 
     def _on_run_completed(self, success: bool, output: str):
         self.run_btn.setEnabled(True)
-        self.run_btn.setText("▶ Run")
+        self.run_btn.setText("Run")
         color = "#10b981" if success else "#ef4444"
         self.console_out.setStyleSheet(f"color: {color}; font-size: 11px; font-family: Consolas, monospace;")
         self.console_out.setText(output)
@@ -677,7 +677,7 @@ class _MessageBubble(QWidget):
                 "screen vision", "screen share", "enable_vision", "اسکرین شیئر", "اسکرین ویژن", "اسکرین آن", "screen on"
             ])
             if needs_vision and not self.vision_cta_btn:
-                self.vision_cta_btn = QPushButton("👁️ Turn On Screen Vision & Allow Control")
+                self.vision_cta_btn = QPushButton("Turn On Screen Vision")
                 self.vision_cta_btn.setFixedHeight(24)
                 self.vision_cta_btn.setCursor(Qt.PointingHandCursor)
                 self.vision_cta_btn.setStyleSheet(f"""
@@ -698,14 +698,14 @@ class _MessageBubble(QWidget):
                 def _trigger_vision():
                     self.on_enable_vision_clicked()
                     if self.vision_cta_btn:
-                        self.vision_cta_btn.setText("✓ Vision Activated")
+                        self.vision_cta_btn.setText("Vision Activated")
                         self.vision_cta_btn.setEnabled(False)
                 self.vision_cta_btn.clicked.connect(_trigger_vision)
                 self.action_bar.insertWidget(0, self.vision_cta_btn)
 
     def _copy_full_content(self):
         QApplication.clipboard().setText(self.content, QClipboard.Clipboard)
-        self.full_copy_btn.setText("✓ Copied!")
+        self.full_copy_btn.setText("Copied!")
         QTimer.singleShot(1500, lambda: self.full_copy_btn.setText("Copy All"))
 
 
@@ -750,7 +750,18 @@ class MainWindow(QWidget):
     def _check_api_key_on_startup(self):
         key = get_api_key(self.config)
         if not key or len(key) < 10 or key.startswith("AQ."):
-            self.status_pill.setText("NO KEY (GO TO SETTINGS)")
+            self.status_pill.setText("SETUP REQUIRED")
+            from ui.onboarding_dialog import WelcomeWizardDialog
+            wiz = WelcomeWizardDialog(self.config, self)
+            if wiz.exec():
+                new_key = get_api_key(self.config)
+                if new_key and len(new_key) >= 10:
+                    self.status_pill.setText("READY")
+                if self.config.user_name:
+                    self.title_label.setText(self.config.ui.assistant_name.upper())
+                    self.setWindowTitle(f"{self.config.ui.assistant_name} - Autonomous Desktop Studio")
+        else:
+            self.status_pill.setText("READY")
 
     def _toggle_window_visibility(self):
         """Summons Nova to foreground or tucks it away."""
@@ -1331,23 +1342,23 @@ class MainWindow(QWidget):
                 color: white;
             }}
         """)
-        attach_act = QAction("📎 Attach Source File or Image...", self)
+        attach_act = QAction("Attach Source File or Image...", self)
         attach_act.triggered.connect(self._on_attach_file)
         self.plus_menu.addAction(attach_act)
 
-        run_py_act = QAction("▶️ Run Python Script / File...", self)
+        run_py_act = QAction("Run Python Script / File...", self)
         run_py_act.triggered.connect(self._on_run_python_file)
         self.plus_menu.addAction(run_py_act)
 
-        snip_act = QAction("✂️ Snip Screen (Ctrl+Shift+D)", self)
+        snip_act = QAction("Snip Screen (Ctrl+Shift+D)", self)
         snip_act.triggered.connect(self.snipper.start_snip)
         self.plus_menu.addAction(snip_act)
 
-        key_act = QAction("⚡ Configure Groq API Key...", self)
+        key_act = QAction("Configure Groq API Key...", self)
         key_act.triggered.connect(self._open_api_key_dialog)
         self.plus_menu.addAction(key_act)
 
-        stats_act = QAction("💻 Check System & Disks", self)
+        stats_act = QAction("Check System & Disks", self)
         stats_act.triggered.connect(lambda: self._quick_action("system_stats"))
         self.plus_menu.addAction(stats_act)
 
@@ -1387,7 +1398,7 @@ class MainWindow(QWidget):
         return bubble
 
     def _add_action_badge(self, success: bool, message: str):
-        tag = "[✓] Completed:" if success else "[✕] Notice:"
+        tag = "[OK] Completed:" if success else "[FAIL] Notice:"
         badge = QLabel(f"{tag} {message}")
         color = _ACCENT_GREEN if success else _ACCENT_RED
         bg_color = "#03201a" if success else "#27070d"
@@ -1429,9 +1440,7 @@ class MainWindow(QWidget):
             self._add_action_badge(True, f"Screen Vision is now ON. Active Window: '{win_title}'.")
 
     def _open_tasks_dialog(self):
-        dlg = TasksDialog(self)
-        dlg.resume_task_requested.connect(self._on_resume_task_requested)
-        dlg.exec()
+        self._switch_nav(1)
         self._update_tasks_btn_badge()
 
     def _on_resume_task_requested(self, task_id: str, prompt: str):
@@ -1444,11 +1453,11 @@ class MainWindow(QWidget):
             if active:
                 tot = len(active.get("steps", []))
                 cur = active.get("current_step", 0) + 1
-                self.nav_tasks.setText(f"📋  Tasks ({cur}/{tot})")
+                self.nav_tasks.setText(f"Tasks ({cur}/{tot})")
             else:
-                self.nav_tasks.setText("📋  Tasks Hub")
+                self.nav_tasks.setText("Tasks Hub")
         except Exception:
-            self.nav_tasks.setText("📋  Tasks Hub")
+            self.nav_tasks.setText("Tasks Hub")
 
     def _toggle_auto_speak(self):
         self.config.voice.auto_speak = not self.config.voice.auto_speak
@@ -1579,9 +1588,7 @@ class MainWindow(QWidget):
         db.clear_history()
 
     def _open_settings(self):
-        dlg = SettingsWindow(self.config, self)
-        dlg.exec()
-        save_config(self.config)
+        self._switch_nav(4)
 
     def _send_message(self, prefix: str = ""):
         text = self.input_edit.toPlainText().strip()
@@ -1638,7 +1645,7 @@ class MainWindow(QWidget):
             system_prompt += (
                 "\n[Screen Vision: OFF]\n"
                 "- Screen Vision is currently OFF.\n"
-                "- If the user asks you to interact with apps, websites, buttons, or perform GUI desktop tasks, DO NOT run black console PowerShell scripts! Instead, politely ask the user to turn on Screen Share / Screen Vision (or click the '👁️ Turn On Screen Vision' button) and include [action:enable_vision] in your response.\n"
+                "- If the user asks you to interact with apps, websites, buttons, or perform GUI desktop tasks, DO NOT run black console PowerShell scripts! Instead, politely ask the user to turn on Screen Share / Screen Vision (or click the 'Turn On Screen Vision' button) and include [action:enable_vision] in your response.\n"
             )
 
         active_task = db.get_active_agent_task()
