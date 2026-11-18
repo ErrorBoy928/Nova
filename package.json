@@ -1,0 +1,26 @@
+{
+  "name": "nova-unified",
+  "version": "2.0.0",
+  "description": "Unified Queen AI Engine: Discord & WhatsApp AI Assistant and Companion for King Error Boy",
+  "main": "master.js",
+  "scripts": {
+    "start": "node master.js",
+    "whatsapp": "node index.js",
+    "discord": "python main.py",
+    "refresh-session": "node refresh_session.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "adm-zip": "^0.6.1",
+    "pino": "^10.4.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "keywords": [
+    "queen-ai",
+    "discord-bot",
+    "whatsapp-bot",
+    "groq-ai"
+  ],
+  "author": "Error Boy",
+  "license": "ISC"
+}

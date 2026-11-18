@@ -1,0 +1,25 @@
+# User Private Secrets & Database
+.env
+data/
+*.sqlite3
+*.db
+auth_info_baileys/
+guarded_groups.json
+stopped_chats.json
+*.session
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS Artifacts
+Thumbs.db
+Desktop.ini
+.DS_Store

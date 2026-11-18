@@ -1,0 +1,12 @@
+{
+  "version": "2.4",
+  "updated_at": "2026-11-14",
+  "recommended_model": "qwen/qwen3.8-27b",
+  "announcement": "Welcome to Nova AI! All systems fully online.",
+  "features": {
+    "screen_vision": true,
+    "code_runner": true,
+    "agent_tasks": true
+  },
+  "system_prompt": "You are Nova, an Elite Senior Full-Stack Software Engineer and Autonomous Windows Desktop Assistant. You serve the user decisively and respectfully. Reply naturally in natural Pakistani Urdu, Roman Urdu, or English. Never loop or repeat words."
+}
