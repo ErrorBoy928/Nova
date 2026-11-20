@@ -97,12 +97,125 @@ _TEXT_MUTED = "#94a3b8"     # Secondary text
 _TEXT_SUBTLE = "#64748b"    # Tertiary text
 
 
+def _format_inline(text: str) -> str:
+    escaped = html_lib.escape(text)
+    # Bold: **bold**
+    escaped = re.sub(r"\*\*(.+?)\*\*", r'<b style="color:#ffffff;font-weight:700;">\1</b>', escaped)
+    # Inline code: `code`
+    escaped = re.sub(r"`([^`]+)`", r'<code style="background:#13131c;color:#38bdf8;padding:1px 5px;border-radius:4px;font-family:Consolas,monospace;border:1px solid #1f1f2e;font-size:11px;">\1</code>', escaped)
+    # Links: [label](url)
+    escaped = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r'<a href="\2" style="color:#38bdf8;text-decoration:none;font-weight:600;">\1</a>', escaped)
+    # Italic: *italic* or _italic_
+    escaped = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r'<i style="color:#cbd5e1;">\1</i>', escaped)
+    return escaped
+
+
 def _render_prose(text: str) -> str:
-    escaped = html_lib.escape(text.strip())
-    escaped = escaped.replace("\n", "<br>")
-    escaped = re.sub(r"\*\*(.+?)\*\*", r'<b style="color:#ffffff;">\1</b>', escaped)
-    escaped = re.sub(r"`([^`]+)`", r'<code style="background:#1b1b26;color:#38bdf8;padding:1px 4px;border-radius:3px;font-family:Consolas,monospace;">\1</code>', escaped)
-    return f'<p style="margin:2px 0;line-height:1.5;">{escaped}</p>'
+    """High-fidelity executive markdown parser for chat bubbles."""
+    if not text or not text.strip():
+        return ""
+
+    lines = text.strip().splitlines()
+    html_lines: list[str] = []
+    in_ul = False
+    in_ol = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Horizontal Rule
+        if re.match(r"^(\-{3,}|\_{3,}|\*{3,})$", stripped):
+            if in_ul:
+                html_lines.append("</ul>")
+                in_ul = False
+            if in_ol:
+                html_lines.append("</ol>")
+                in_ol = False
+            html_lines.append('<hr style="border:none;border-top:1px solid #22222f;margin:8px 0;">')
+            continue
+
+        # Headers
+        h1_m = re.match(r"^#\s+(.+)$", stripped)
+        h2_m = re.match(r"^##\s+(.+)$", stripped)
+        h3_m = re.match(r"^###\s+(.+)$", stripped)
+        if h1_m or h2_m or h3_m:
+            if in_ul:
+                html_lines.append("</ul>")
+                in_ul = False
+            if in_ol:
+                html_lines.append("</ol>")
+                in_ol = False
+
+            if h1_m:
+                h_text = _format_inline(h1_m.group(1))
+                html_lines.append(f'<div style="font-size:15px;font-weight:800;color:#ffffff;margin:10px 0 4px 0;padding-bottom:3px;border-bottom:1px solid #22222e;">{h_text}</div>')
+            elif h2_m:
+                h_text = _format_inline(h2_m.group(1))
+                html_lines.append(f'<div style="font-size:13px;font-weight:700;color:#38bdf8;margin:8px 0 3px 0;">{h_text}</div>')
+            else:
+                h_text = _format_inline(h3_m.group(1))
+                html_lines.append(f'<div style="font-size:12px;font-weight:700;color:#e2e8f0;margin:6px 0 2px 0;">{h_text}</div>')
+            continue
+
+        # Blockquote
+        bq_m = re.match(r"^>\s*(.+)$", stripped)
+        if bq_m:
+            if in_ul:
+                html_lines.append("</ul>")
+                in_ul = False
+            if in_ol:
+                html_lines.append("</ol>")
+                in_ol = False
+            q_text = _format_inline(bq_m.group(1))
+            html_lines.append(f'<div style="border-left:3px solid #38bdf8;background:#101018;padding:4px 10px;margin:4px 0;border-radius:0 4px 4px 0;color:#cbd5e1;font-size:11px;">{q_text}</div>')
+            continue
+
+        # Bullet List (- or * or •)
+        ul_m = re.match(r"^[\-\*\•]\s+(.+)$", stripped)
+        if ul_m:
+            if in_ol:
+                html_lines.append("</ol>")
+                in_ol = False
+            if not in_ul:
+                html_lines.append('<ul style="margin:4px 0;padding-left:18px;list-style-type:square;">')
+                in_ul = True
+            li_text = _format_inline(ul_m.group(1))
+            html_lines.append(f'<li style="margin:2px 0;color:#e2e8f0;line-height:1.45;">{li_text}</li>')
+            continue
+
+        # Numbered List (1. 2. etc.)
+        ol_m = re.match(r"^(\d+)\.\s+(.+)$", stripped)
+        if ol_m:
+            if in_ul:
+                html_lines.append("</ul>")
+                in_ul = False
+            if not in_ol:
+                html_lines.append('<ol style="margin:4px 0;padding-left:20px;">')
+                in_ol = True
+            li_text = _format_inline(ol_m.group(2))
+            html_lines.append(f'<li style="margin:2px 0;color:#e2e8f0;line-height:1.45;">{li_text}</li>')
+            continue
+
+        # Normal paragraph line
+        if in_ul:
+            html_lines.append("</ul>")
+            in_ul = False
+        if in_ol:
+            html_lines.append("</ol>")
+            in_ol = False
+
+        if not stripped:
+            html_lines.append('<div style="height:4px;"></div>')
+        else:
+            p_text = _format_inline(stripped)
+            html_lines.append(f'<p style="margin:2px 0;line-height:1.5;">{p_text}</p>')
+
+    if in_ul:
+        html_lines.append("</ul>")
+    if in_ol:
+        html_lines.append("</ol>")
+
+    return "".join(html_lines)
 
 
 def _render_message_html(content: str) -> str:
@@ -458,19 +571,28 @@ class _LLMWorker(QThread):
         self.manager = manager
         self.history = history
         self.system_prompt = system_prompt
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
 
     def run(self):
         try:
             chunks = []
             for chunk in self.manager.chat_stream(self.history, system_prompt=self.system_prompt):
+                if self._cancelled:
+                    break
                 chunks.append(chunk)
                 self.chunk_received.emit(chunk)
             full_reply = "".join(chunks)
-            self.reply_ready.emit(full_reply)
+            if not self._cancelled:
+                self.reply_ready.emit(full_reply)
         except LLMError as exc:
-            self.failed.emit(str(exc))
+            if not self._cancelled:
+                self.failed.emit(str(exc))
         except Exception as exc:
-            self.failed.emit(f"Error: {exc}")
+            if not self._cancelled:
+                self.failed.emit(f"Error: {exc}")
 
 
 class BackgroundTaskWorker(QThread):
@@ -483,8 +605,10 @@ class BackgroundTaskWorker(QThread):
 
     def run(self):
         results = []
-        for act_name, act_arg in self.actions_list:
-            self.progress.emit(f"Running {act_name}...")
+        total = len(self.actions_list)
+        for idx, (act_name, act_arg) in enumerate(self.actions_list, 1):
+            step_lbl = f"Step {idx}/{total}: {act_name}" if total > 1 else f"Executing: {act_name}"
+            self.progress.emit(step_lbl)
             if act_name == "generate_image":
                 try:
                     img_path = generate_image(act_arg)
@@ -1816,7 +1940,32 @@ class MainWindow(QWidget):
     def _open_settings(self):
         self._switch_nav(4)
 
+    def _reset_send_button(self):
+        self.send_btn.setEnabled(True)
+        self.send_btn.setText("Send")
+        self.send_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_ACCENT_BLUE};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: 700;
+                padding: 0 16px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                background-color: #1d4ed8;
+            }}
+        """)
+
     def _send_message(self, prefix: str = ""):
+        # If currently streaming, clicking Stop aborts generation cleanly
+        if self._llm_thread and self._llm_thread.isRunning():
+            self._llm_thread.cancel()
+            self._reset_send_button()
+            self.status_pill.setText("READY")
+            return
+
         text = self.input_edit.toPlainText().strip()
         if prefix:
             text = f"{prefix} {text}".strip()
@@ -1889,7 +2038,22 @@ class MainWindow(QWidget):
         if facts:
             system_prompt += "\nUser Facts:\n" + "\n".join(f"- {f}" for f in facts)
 
-        self.send_btn.setEnabled(False)
+        self.send_btn.setEnabled(True)
+        self.send_btn.setText("Stop")
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc2626;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: 700;
+                padding: 0 16px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #b91c1c;
+            }
+        """)
         self.status_pill.setText("STREAMING...")
 
         # Create Assistant Bubble for live streaming output
@@ -1911,7 +2075,7 @@ class MainWindow(QWidget):
             self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
 
     def _on_llm_replied(self, full_reply: str):
-        self.send_btn.setEnabled(True)
+        self._reset_send_button()
         full_reply = clean_repetitive_patterns(full_reply)
         clean_text, actions_list = automation_executor.extract_actions(full_reply)
         clean_text = clean_repetitive_patterns(clean_text)
@@ -1936,15 +2100,18 @@ class MainWindow(QWidget):
             self._speak_text(clean_text)
 
         # Run tasks in background thread
-        self.status_pill.setText("EXECUTING...")
+        total = len(actions_list)
+        self.status_pill.setText(f"EXECUTING 1/{total}...")
         self._task_worker = BackgroundTaskWorker(actions_list)
         self._task_worker.progress.connect(lambda s: self.status_pill.setText(s.upper()))
         self._task_worker.finished_report.connect(self._on_background_tasks_completed)
         self._task_worker.start()
 
     def _on_background_tasks_completed(self, results: list[tuple[bool, str, str]]):
-        for success, act_name, msg in results:
-            self._add_action_badge(success, msg)
+        total = len(results)
+        for idx, (success, act_name, msg) in enumerate(results, 1):
+            prefix = f"Step {idx}/{total} [{act_name}]" if total > 1 else f"[{act_name}]"
+            self._add_action_badge(success, f"{prefix}: {msg}")
             if act_name in ("enable_vision", "screen_vision", "start_vision") and success:
                 self.enable_screen_vision(auto_capture=False)
             if act_name in ("save_task", "update_task", "complete_task", "plan_task"):
@@ -1956,11 +2123,12 @@ class MainWindow(QWidget):
         all_ok = all(r[0] for r in results)
 
         name_tag = self.config.ui.assistant_name.upper()
+        user_name = self.config.user_name or "Commander"
         if is_ur:
-            spoken_report = f"سر، کام مکمل ہو گیا ہے۔ {summary}" if all_ok else f"سر، رپورٹ: {summary}"
+            spoken_report = f"کام مکمل ہو گیا ہے۔ {summary}" if all_ok else f"رپورٹ: {summary}"
             bubble_report = f"**{name_tag} رپورٹ:**\n{summary}"
         else:
-            spoken_report = f"Task completed, sir. {summary}" if all_ok else f"Task notice: {summary}"
+            spoken_report = f"Task completed, {user_name}. {summary}" if all_ok else f"Task notice: {summary}"
             bubble_report = f"**{name_tag} Report:**\n{summary}"
 
         self._add_bubble("assistant", bubble_report)
@@ -1974,7 +2142,7 @@ class MainWindow(QWidget):
             self._continuous_worker.resume()
 
     def _on_llm_failed(self, error: str):
-        self.send_btn.setEnabled(True)
+        self._reset_send_button()
         self.status_pill.setText("ERROR")
         err_msg = f"[Error] {error}"
         if self._current_assistant_bubble:

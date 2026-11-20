@@ -8,6 +8,7 @@ requiring ZERO external API keys.
 
 from __future__ import annotations
 
+import html as html_lib
 import re
 import urllib.parse
 import urllib.request
@@ -15,6 +16,17 @@ from dataclasses import dataclass
 from utils.logger import get_logger
 
 log = get_logger(__name__)
+
+
+def _clean_url(url: str) -> str:
+    url = html_lib.unescape(url.strip())
+    if "uddg=" in url:
+        m = re.search(r"uddg=([^&]+)", url)
+        if m:
+            return urllib.parse.unquote(m.group(1))
+    if url.startswith("//"):
+        return "https:" + url
+    return url
 
 
 @dataclass
@@ -54,12 +66,7 @@ def search_web(query: str, max_results: int = 5) -> list[SearchResult]:
             title = re.sub(r'<[^>]+>', '', raw_title.group(1)).strip() if raw_title else "Web Result"
 
             raw_url = re.search(r'<a class="result__url"[^>]*href="([^"]+)"', b)
-            res_url = raw_url.group(1).strip() if raw_url else ""
-            if "uddg=" in res_url:
-                # Decode DuckDuckGo redirect URL
-                uddg = re.search(r'uddg=([^&]+)', res_url)
-                if uddg:
-                    res_url = urllib.parse.unquote(uddg.group(1))
+            res_url = _clean_url(raw_url.group(1)) if raw_url else ""
 
             snippet = re.sub(r'<[^>]+>', '', s_match.group(1)).strip() if s_match else ""
 
@@ -70,7 +77,7 @@ def search_web(query: str, max_results: int = 5) -> list[SearchResult]:
             # Fallback simple search
             matches = re.findall(r'<a class="result__url"[^>]*href="([^"]+)".*?<a class="result__snippet"[^>]*>(.*?)</a>', html, re.DOTALL)
             for u, s in matches[:max_results]:
-                results.append(SearchResult(title=query, url=u.strip(), snippet=re.sub(r'<[^>]+>', '', s).strip()))
+                results.append(SearchResult(title=query, url=_clean_url(u), snippet=re.sub(r'<[^>]+>', '', s).strip()))
 
     except Exception as exc:
         log.warning("DuckDuckGo search failed for '{}': {}", query, exc)
