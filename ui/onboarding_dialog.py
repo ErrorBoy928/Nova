@@ -11,8 +11,9 @@ Saves settings to config, updates .env, and seamlessly transitions to the main s
 
 from __future__ import annotations
 
+import urllib.request
 import webbrowser
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -25,6 +26,38 @@ from PySide6.QtWidgets import (
 )
 
 from config.settings_schema import AppConfig, save_config
+
+
+class _KeyVerifyWorker(QThread):
+    finished_check = Signal(bool, str)
+
+    def __init__(self, key: str):
+        super().__init__()
+        self.key = key
+
+    def run(self):
+        try:
+            req = urllib.request.Request(
+                "https://api.groq.com/openai/v1/models",
+                headers={
+                    "Authorization": f"Bearer {self.key}",
+                    "User-Agent": "NovaAI/1.0"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    self.finished_check.emit(True, "Key Verified: High-speed Groq access confirmed.")
+                    return
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                self.finished_check.emit(False, "Authentication Failed: Invalid Groq API key.")
+                return
+            self.finished_check.emit(False, f"HTTP Error {e.code}: Check network or key.")
+            return
+        except Exception as e:
+            self.finished_check.emit(False, f"Verification error: {str(e)[:40]}")
+            return
+        self.finished_check.emit(False, "Could not verify key. Please verify manually.")
 
 
 class WelcomeWizardDialog(QDialog):
@@ -126,9 +159,31 @@ class WelcomeWizardDialog(QDialog):
             }
         """)
         self.btn_show_key.clicked.connect(self._toggle_key_visibility)
+
+        self.btn_test_key = QPushButton("Test Key")
+        self.btn_test_key.setFixedWidth(68)
+        self.btn_test_key.setStyleSheet("""
+            QPushButton {
+                background-color: #064e3b;
+                color: #6ee7b7;
+                border: 1px solid #059669;
+            }
+            QPushButton:hover {
+                background-color: #047857;
+                color: #ffffff;
+            }
+        """)
+        self.btn_test_key.clicked.connect(self._on_test_key_clicked)
+
         key_box.addWidget(self.key_input)
         key_box.addWidget(self.btn_show_key)
+        key_box.addWidget(self.btn_test_key)
         form.addRow("Groq API Key:", key_box)
+
+        # Status label for key verification
+        self.key_status_lbl = QLabel("")
+        self.key_status_lbl.setStyleSheet("font-size: 10px; font-weight: 600; padding-left: 2px;")
+        form.addRow("", self.key_status_lbl)
 
         # 3. Mobile Number (Optional)
         self.phone_input = QLineEdit()
@@ -218,6 +273,29 @@ class WelcomeWizardDialog(QDialog):
         else:
             self.key_input.setEchoMode(QLineEdit.Password)
             self.btn_show_key.setText("Show")
+
+    def _on_test_key_clicked(self):
+        key = self.key_input.text().strip().strip('"\'')
+        if not key:
+            self.key_status_lbl.setText("Please enter your Groq API key first.")
+            self.key_status_lbl.setStyleSheet("color: #f59e0b; font-size: 10px; font-weight: 600;")
+            return
+
+        self.btn_test_key.setEnabled(False)
+        self.btn_test_key.setText("Checking...")
+        self.key_status_lbl.setText("Verifying with Groq API...")
+        self.key_status_lbl.setStyleSheet("color: #38bdf8; font-size: 10px; font-weight: 600;")
+
+        self._verify_worker = _KeyVerifyWorker(key)
+        self._verify_worker.finished_check.connect(self._on_key_verified)
+        self._verify_worker.start()
+
+    def _on_key_verified(self, success: bool, message: str):
+        self.btn_test_key.setEnabled(True)
+        self.btn_test_key.setText("Test Key")
+        color = "#10b981" if success else "#ef4444"
+        self.key_status_lbl.setText(message)
+        self.key_status_lbl.setStyleSheet(f"color: {color}; font-size: 10px; font-weight: 600;")
 
     def _save_and_start(self):
         name = self.name_input.text().strip()

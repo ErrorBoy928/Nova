@@ -361,13 +361,14 @@ class TasksView(QWidget):
         h.setSpacing(10)
 
         # Time Badge
-        time_badge = QLabel(f"{t.get('scheduled_time', '00:00')}")
+        sched_time = t.get("scheduled_time") or t.get("target_time") or "00:00"
+        time_badge = QLabel(f"{sched_time}")
         time_badge.setStyleSheet(f"background: #082f49; color: {_ACCENT_CYAN}; font-weight: 700; font-size: 10px; padding: 3px 8px; border-radius: 4px;")
         h.addWidget(time_badge)
 
         info_box = QVBoxLayout()
         info_box.setSpacing(2)
-        lbl_title = QLabel(t.get("title", ""))
+        lbl_title = QLabel(t.get("title") or t.get("prompt")[:40] or "Scheduled Task")
         lbl_title.setStyleSheet("font-weight: 700; font-size: 12px; color: #ffffff;")
         lbl_prompt = QLabel(f"Prompt: {t.get('prompt', '')}")
         lbl_prompt.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 10px;")

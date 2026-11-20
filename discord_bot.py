@@ -1347,7 +1347,7 @@ async def roast(ctx, member: discord.Member = None):
     """Playful roast karein: !roast @user"""
     member = member or ctx.author
     if is_error_boy(member, ctx.guild):
-        await ctx.send(" Main apne Admin ko roast nahi kar sakti! Woh mere King hain! ")
+        await ctx.send("Administrative immunity active. Cannot roast the administrator.")
         return
     roasts = [
         f"{member.mention} ka dimag Wi-Fi jaisa hai... connect toh ho jata hai par signal koi nahi aata! ",
@@ -1901,8 +1901,8 @@ async def screen_cmd(ctx):
                     win_title = resp.headers.get("X-Window-Title", "Desktop")
                     file = discord.File(io.BytesIO(img_bytes), filename="pc_screen.jpg")
                     emb = nova_embed(
-                        " Live PC Desktop View",
-                        f"• **Active Window:** `{win_title}`\n• **Bridge:** `127.0.0.1:5050`\n• Hukam karein mere King! ",
+                        "Live PC Desktop View",
+                        f"- **Active Window:** `{win_title}`\n- **Bridge:** `127.0.0.1:5050`\n- **Status:** Ready",
                         COLOR_CYAN
                     )
                     emb.set_image(url="attachment://pc_screen.jpg")
@@ -1912,13 +1912,13 @@ async def screen_cmd(ctx):
     except Exception as e:
         print("Discord PC Screenshot error:", e)
 
-    await msg.edit(content=" *Arey mere Sir,* aapka PC Desktop Bridge offline hai. Please PC par Nova Desktop open karein! ")
+    await msg.edit(content="PC Desktop Bridge is offline (Port 5050). Please verify Nova Desktop is running.")
 
 @bot.command(name="pc")
 async def pc_action_cmd(ctx, *, action_cmd: str):
     """PC Desktop par koi bhi action ya app chalayein"""
     if not is_error_boy(ctx.author, ctx.guild):
-        await ctx.send("Yeh command sirf mere Admin ke liye hai! ")
+        await ctx.send("This command is restricted to the Administrator.")
         return
 
     try:
@@ -1932,8 +1932,8 @@ async def pc_action_cmd(ctx, *, action_cmd: str):
                 if resp.status == 200:
                     data = await resp.json()
                     emb = nova_embed(
-                        " PC Action Executed",
-                        f"• **Command:** `{action_cmd}`\n• **Result:** {data.get('report', 'Success')}\n• Hukam karein mere King! ",
+                        "PC Action Executed",
+                        f"- **Command:** `{action_cmd}`\n- **Result:** {data.get('report', 'Success')}",
                         COLOR_GREEN
                     )
                     await ctx.send(embed=emb)
@@ -1941,7 +1941,7 @@ async def pc_action_cmd(ctx, *, action_cmd: str):
     except Exception as e:
         print("Discord PC Action error:", e)
 
-    await ctx.send(" *Arey Sir,* PC Bridge se connect nahi ho saka. PC Desktop open karein! ")
+    await ctx.send("Could not connect to PC Bridge. Please ensure Nova Desktop is running.")
 
 @bot.command(name="pctasks")
 async def pc_tasks_cmd(ctx):

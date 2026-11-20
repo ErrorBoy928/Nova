@@ -582,6 +582,10 @@ class SettingsView(QWidget):
         parent = self.parent()
         if parent and hasattr(parent, "status_pill"):
             parent.status_pill.setText("READY")
+        if parent and hasattr(parent, "model_badge"):
+            parent.model_badge.setText(f"ENGINE: {self.config.llm.provider.upper()} ({self.config.llm.model})")
+        if parent and hasattr(parent, "hero_widget") and parent.hero_widget:
+            parent.hero_widget.update_user_name(self.config.user_name)
         if parent and hasattr(parent, "setWindowTitle"):
             parent.setWindowTitle(f"{self.config.ui.assistant_name} - Autonomous Desktop Studio")
 

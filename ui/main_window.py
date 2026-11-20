@@ -709,6 +709,140 @@ class _MessageBubble(QWidget):
         QTimer.singleShot(1500, lambda: self.full_copy_btn.setText("Copy All"))
 
 
+class ChatHeroWidget(QFrame):
+    """Modern executive hero greeting and quick-action capability card for empty chat state."""
+
+    def __init__(self, user_name: str = "", on_action=None):
+        super().__init__()
+        self.user_name = user_name or "Commander"
+        self.on_action = on_action
+        self._build_ui()
+
+    def update_user_name(self, name: str):
+        self.user_name = name or "Commander"
+        if hasattr(self, "greeting_lbl"):
+            self.greeting_lbl.setText(f"Welcome, {self.user_name}")
+
+    def _build_ui(self):
+        self.setStyleSheet("background-color: transparent;")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 20, 14, 14)
+        layout.setSpacing(16)
+        layout.setAlignment(Qt.AlignCenter)
+
+        # Central Card Container
+        hero_card = QFrame()
+        hero_card.setMaximumWidth(720)
+        hero_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: #0d0d14;
+                border: 1px solid {_BORDER};
+                border-radius: 12px;
+            }}
+        """)
+        card_vbox = QVBoxLayout(hero_card)
+        card_vbox.setContentsMargins(24, 22, 24, 22)
+        card_vbox.setSpacing(14)
+
+        # Header with Logo & Brand
+        hdr_row = QHBoxLayout()
+        hdr_row.setSpacing(10)
+
+        logo = QLabel("N")
+        logo.setFixedSize(36, 36)
+        logo.setAlignment(Qt.AlignCenter)
+        logo.setStyleSheet("""
+            background: #0284c7;
+            color: #ffffff;
+            font-weight: 900;
+            font-size: 18px;
+            border-radius: 8px;
+        """)
+        hdr_row.addWidget(logo)
+
+        hdr_text_box = QVBoxLayout()
+        hdr_text_box.setSpacing(1)
+        self.greeting_lbl = QLabel(f"Welcome, {self.user_name}")
+        self.greeting_lbl.setStyleSheet("color: #ffffff; font-size: 16px; font-weight: 800; letter-spacing: 0.3px;")
+        sub_title = QLabel("NOVA AUTONOMOUS AI • DESKTOP & MULTI-CHANNEL SUITE")
+        sub_title.setStyleSheet(f"color: {_ACCENT_CYAN}; font-size: 9px; font-weight: 800; letter-spacing: 1px;")
+        hdr_text_box.addWidget(self.greeting_lbl)
+        hdr_text_box.addWidget(sub_title)
+        hdr_row.addLayout(hdr_text_box)
+        hdr_row.addStretch()
+
+        badge_box = QHBoxLayout()
+        badge_box.setSpacing(6)
+        for b_text, b_color in [("GROQ READY", "#10b981"), ("OBSERVER ON", "#38bdf8"), ("CHANNELS STANDBY", "#a855f7")]:
+            b_lbl = QLabel(b_text)
+            b_lbl.setStyleSheet(f"background: #11111a; border: 1px solid #222230; color: {b_color}; font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 4px;")
+            badge_box.addWidget(b_lbl)
+        hdr_row.addLayout(badge_box)
+
+        card_vbox.addLayout(hdr_row)
+
+        desc = QLabel(
+            "Nova is your autonomous executive co-pilot. She can write and execute code in any language, "
+            "inspect and manipulate active desktop windows, autonomously research the web, "
+            "and synchronize tasks across WhatsApp, Discord, and scheduled background workers."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color: #94a3b8; font-size: 11px; line-height: 1.5;")
+        card_vbox.addWidget(desc)
+
+        # Action Cards Section
+        act_title = QLabel("QUICK CAPABILITIES:")
+        act_title.setStyleSheet("color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: 0.8px;")
+        card_vbox.addWidget(act_title)
+
+        grid = QHBoxLayout()
+        grid.setSpacing(10)
+
+        actions_data = [
+            ("System Health", "CPU, RAM & Disks", "system_stats", True),
+            ("Deep Research", "Autonomous Web Intel", "Perform a deep web research on latest AI agent advancements and generate a structured summary.", False),
+            ("Code Architect", "Write Python Utilities", "Write a modular Python script with robust error handling and CLI arguments.", False),
+            ("Screen Vision", "Inspect Desktop Display", "Analyze my active screen and summarize what is currently visible.", False),
+        ]
+
+        for title, subtitle, prompt, is_instant in actions_data:
+            btn = QPushButton()
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #12121a;
+                    border: 1px solid {_BORDER};
+                    border-radius: 8px;
+                    padding: 10px;
+                    text-align: left;
+                }}
+                QPushButton:hover {{
+                    background-color: #1a1a26;
+                    border-color: {_ACCENT_CYAN};
+                }}
+            """)
+            btn_layout = QVBoxLayout(btn)
+            btn_layout.setContentsMargins(0, 0, 0, 0)
+            btn_layout.setSpacing(2)
+
+            t_lbl = QLabel(title)
+            t_lbl.setStyleSheet("color: #ffffff; font-size: 11px; font-weight: 700;")
+            s_lbl = QLabel(subtitle)
+            s_lbl.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 9px;")
+            btn_layout.addWidget(t_lbl)
+            btn_layout.addWidget(s_lbl)
+
+            btn.clicked.connect(lambda _, p=prompt, i=is_instant: self._handle_click(p, i))
+            grid.addWidget(btn, 1)
+
+        card_vbox.addLayout(grid)
+        layout.addWidget(hero_card)
+
+    def _handle_click(self, prompt: str, is_instant: bool):
+        if self.on_action:
+            self.on_action(prompt, is_instant)
+
+
 class MainWindow(QWidget):
     def __init__(self, config: AppConfig, llm_manager: LLMManager):
         super().__init__()
@@ -729,6 +863,7 @@ class MainWindow(QWidget):
 
         self._current_assistant_bubble: _MessageBubble | None = None
         self._stream_text: str = ""
+        self.hero_widget: ChatHeroWidget | None = None
 
         # Global Hotkey Thread (Ctrl+Shift+D for Snip, Ctrl+Shift+N to Toggle Nova)
         self.hotkey_thread = GlobalHotkeyThread()
@@ -749,6 +884,11 @@ class MainWindow(QWidget):
 
     def _check_api_key_on_startup(self):
         key = get_api_key(self.config)
+        if hasattr(self, "model_badge"):
+            self.model_badge.setText(f"ENGINE: {self.config.llm.provider.upper()} ({self.config.llm.model})")
+        if self.hero_widget and self.config.user_name:
+            self.hero_widget.update_user_name(self.config.user_name)
+
         if not key or len(key) < 10 or key.startswith("AQ."):
             self.status_pill.setText("SETUP REQUIRED")
             from ui.onboarding_dialog import WelcomeWizardDialog
@@ -757,11 +897,21 @@ class MainWindow(QWidget):
                 new_key = get_api_key(self.config)
                 if new_key and len(new_key) >= 10:
                     self.status_pill.setText("READY")
+                if hasattr(self, "model_badge"):
+                    self.model_badge.setText(f"ENGINE: {self.config.llm.provider.upper()} ({self.config.llm.model})")
                 if self.config.user_name:
                     self.title_label.setText(self.config.ui.assistant_name.upper())
                     self.setWindowTitle(f"{self.config.ui.assistant_name} - Autonomous Desktop Studio")
+                    if self.hero_widget:
+                        self.hero_widget.update_user_name(self.config.user_name)
         else:
             self.status_pill.setText("READY")
+
+    def _on_hero_action(self, prompt: str, is_instant: bool):
+        if is_instant and prompt == "system_stats":
+            self._quick_action("system_stats")
+        else:
+            self._send_quick_prompt(prompt)
 
     def _toggle_window_visibility(self):
         """Summons Nova to foreground or tucks it away."""
@@ -947,6 +1097,20 @@ class MainWindow(QWidget):
         top_bar.addWidget(self.view_title)
         top_bar.addStretch()
 
+        self.model_badge = QLabel(f"ENGINE: {self.config.llm.provider.upper()} ({self.config.llm.model})")
+        self.model_badge.setStyleSheet("""
+            color: #38bdf8;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            padding: 3px 10px;
+            border-radius: 9px;
+            background: #0f172a;
+            border: 1px solid #1e3a5f;
+            font-family: Consolas, monospace;
+        """)
+        top_bar.addWidget(self.model_badge)
+
         self.status_pill = QLabel("READY")
         self.status_pill.setStyleSheet("""
             color: #38bdf8;
@@ -1026,6 +1190,10 @@ class MainWindow(QWidget):
         self.message_layout = QVBoxLayout(self.message_container)
         self.message_layout.setContentsMargins(0, 0, 0, 0)
         self.message_layout.setSpacing(6)
+
+        # Hero greeting card
+        self.hero_widget = ChatHeroWidget(self.config.user_name, on_action=self._on_hero_action)
+        self.message_layout.addWidget(self.hero_widget)
         self.message_layout.addStretch()
         self.scroll.setWidget(self.message_container)
         chat_vbox.addWidget(self.scroll, 1)
@@ -1043,6 +1211,48 @@ class MainWindow(QWidget):
             padding: 4px 10px;
         """)
         chat_vbox.addWidget(self.attachment_preview)
+
+        # Quick Command Action Strip
+        action_strip = QFrame()
+        action_strip.setStyleSheet("background: transparent; border: none;")
+        strip_layout = QHBoxLayout(action_strip)
+        strip_layout.setContentsMargins(2, 0, 2, 0)
+        strip_layout.setSpacing(6)
+
+        strip_pills = [
+            ("Deep Research", lambda: self._send_quick_prompt("[action:web_search:] ")),
+            ("Run Code", lambda: self._send_quick_prompt("[action:run_code:python:] ")),
+            ("Screen Vision", lambda: self._send_quick_prompt("Analyze active screen and ")),
+            ("Daily Briefing", lambda: self._send_quick_prompt("Provide my daily executive briefing and system health overview.")),
+            ("System Health", lambda: self._quick_action("system_stats")),
+            ("Clean Temp", lambda: self._quick_action("clear_temp")),
+        ]
+
+        for pill_label, pill_callback in strip_pills:
+            p_btn = QPushButton(pill_label)
+            p_btn.setCursor(Qt.PointingHandCursor)
+            p_btn.setFixedHeight(22)
+            p_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #0d0d16;
+                    color: #94a3b8;
+                    border: 1px solid {_BORDER};
+                    border-radius: 11px;
+                    padding: 0 10px;
+                    font-size: 10px;
+                    font-weight: 600;
+                }}
+                QPushButton:hover {{
+                    background-color: #1a1a28;
+                    color: {_ACCENT_CYAN};
+                    border-color: {_ACCENT_CYAN};
+                }}
+            """)
+            p_btn.clicked.connect(pill_callback)
+            strip_layout.addWidget(p_btn)
+
+        strip_layout.addStretch()
+        chat_vbox.addWidget(action_strip)
 
         # Input Card
         input_card = QFrame()
@@ -1260,12 +1470,19 @@ class MainWindow(QWidget):
             b.setStyleSheet(self._nav_btn_style(active=(i == index)))
 
     def _clear_conversation(self):
-        while self.message_layout.count() > 1:
-            item = self.message_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        # Remove all message bubbles except hero widget and stretch
+        for i in reversed(range(self.message_layout.count())):
+            item = self.message_layout.itemAt(i)
+            if item and item.widget() and item.widget() != self.hero_widget:
+                w = item.widget()
+                self.message_layout.removeWidget(w)
+                w.deleteLater()
         self.llm_manager.clear_history()
         self._show_welcome_message()
+
+    def _show_welcome_message(self):
+        if self.hero_widget:
+            self.hero_widget.setVisible(True)
 
     def _open_api_key_dialog(self):
         self._switch_nav(4)
@@ -1383,10 +1600,19 @@ class MainWindow(QWidget):
         self.plus_menu.exec(pos)
 
     def _load_history(self):
-        for msg in db.get_recent_history(limit=30):
-            self._add_bubble(msg["role"], msg["content"])
+        recent = db.get_recent_history(limit=30)
+        if recent:
+            if self.hero_widget:
+                self.hero_widget.setVisible(False)
+            for msg in recent:
+                self._add_bubble(msg["role"], msg["content"])
+        else:
+            if self.hero_widget:
+                self.hero_widget.setVisible(True)
 
     def _add_bubble(self, role: str, content: str = "") -> _MessageBubble:
+        if self.hero_widget:
+            self.hero_widget.setVisible(False)
         bubble = _MessageBubble(
             role,
             content,

@@ -665,14 +665,14 @@ async function startNovaWhatsApp() {
                                 const winTitle = res.headers.get("X-Window-Title") || "Desktop";
                                 await sock.sendMessage(remoteJid, {
                                     image: buffer,
-                                    caption: ` *Live PC Desktop View, mere King!* \n• Active Window: *${winTitle}*\n• Status: *Bridge Online (Port 5050)*`
+                                    caption: `Live PC Desktop View\n- Active Window: *${winTitle}*\n- Status: Bridge Online (Port 5050)`
                                 }, { quoted: msg });
                                 return;
                             }
                         } catch (e) {
                             console.error("WhatsApp Bridge Screenshot error:", e.message);
                         }
-                        await safeSendWA(remoteJid, " *Arey mere Sir sir,* aapka PC Assistant (Desktop Bridge) abhi offline hai ya start nahi hua. Please PC par Nova Desktop open karein! ", msg);
+                        await safeSendWA(remoteJid, "Desktop Bridge offline (Port 5050). Please verify Nova Desktop application is running.", msg);
                         return;
                     }
 
@@ -689,14 +689,14 @@ async function startNovaWhatsApp() {
                             });
                             if (res.ok) {
                                 const data = await res.json();
-                                const rep = ` *PC Action Executed!* \n• Command: \`${actionCmd}\`\n• Result: ${data.report || "Success"}\n• Hukam karein mere King! `;
+                                const rep = `PC Action Executed\n- Command: \`${actionCmd}\`\n- Result: ${data.report || "Success"}`;
                                 await safeSendWA(remoteJid, rep, msg);
                                 return;
                             }
                         } catch (e) {
                             console.error("WhatsApp Bridge Action error:", e.message);
                         }
-                        await safeSendWA(remoteJid, ` *Arey Sir,* PC Bridge se connect nahi ho saka. Kya PC par Nova Desktop chal rahi hai? `, msg);
+                        await safeSendWA(remoteJid, `Could not connect to PC Bridge. Please ensure Nova Desktop is running.`, msg);
                         return;
                     }
 

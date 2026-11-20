@@ -86,6 +86,10 @@ def init_db() -> None:
     """Create tables if they don't exist yet. Safe to call on every startup."""
     with _connection() as conn:
         conn.executescript(SCHEMA)
+        try:
+            conn.execute("ALTER TABLE scheduled_tasks ADD COLUMN title TEXT DEFAULT ''")
+        except Exception:
+            pass
     log.info("Memory database ready at {}", DB_PATH)
 
 
@@ -279,33 +283,47 @@ def get_all_agent_tasks(limit: int = 30) -> list[dict]:
 def save_scheduled_task(
     task_type: str,
     prompt: str,
-    target_time: str,
+    target_time: str = "",
+    title: str = "",
     notify_wa: bool = True,
     notify_dc: bool = True,
     notify_app: bool = True,
+    notify_channels: str = "",
+    scheduled_time: str = "",
     task_id: str | None = None
 ) -> dict:
-    """Saves a daily recurring or one-off scheduled task."""
+    """Saves a daily recurring or one-off scheduled task with universal compatibility."""
+    final_time = (target_time or scheduled_time or "00:00").strip()
+    if notify_channels:
+        nc = notify_channels.lower()
+        notify_wa = "whatsapp" in nc
+        notify_dc = "discord" in nc
+        notify_app = "desktop" in nc or "pc" in nc
+    final_title = (title or prompt[:40]).strip()
     tid = task_id or f"sched_{int(datetime.now().timestamp())}_{abs(hash(prompt)) % 10000}"
     now = datetime.now().isoformat(timespec="seconds")
     with _connection() as conn:
         conn.execute(
-            """INSERT INTO scheduled_tasks (id, task_type, prompt, target_time, status, notify_wa, notify_dc, notify_app, created_at)
-               VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
+            """INSERT INTO scheduled_tasks (id, task_type, prompt, target_time, title, status, notify_wa, notify_dc, notify_app, created_at)
+               VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                    prompt = excluded.prompt,
                    target_time = excluded.target_time,
+                   title = excluded.title,
                    notify_wa = excluded.notify_wa,
                    notify_dc = excluded.notify_dc,
                    notify_app = excluded.notify_app
             """,
-            (tid, task_type, prompt.strip(), target_time.strip(), int(notify_wa), int(notify_dc), int(notify_app), now)
+            (tid, task_type, prompt.strip(), final_time, final_title, int(notify_wa), int(notify_dc), int(notify_app), now)
         )
     return {
         "id": tid,
         "task_type": task_type,
+        "title": final_title,
         "prompt": prompt.strip(),
-        "target_time": target_time.strip(),
+        "target_time": final_time,
+        "scheduled_time": final_time,
+        "notify_channels": f"{'whatsapp,' if notify_wa else ''}{'discord,' if notify_dc else ''}{'desktop' if notify_app else ''}".strip(','),
         "status": "active",
         "created_at": now
     }
@@ -324,16 +342,29 @@ def get_scheduled_tasks(task_type: str | None = None) -> list[dict]:
             ).fetchall()
         tasks = []
         for r in rows:
+            keys = r.keys()
+            t_title = r["title"] if "title" in keys and r["title"] else r["prompt"][:40]
+            n_wa = bool(r["notify_wa"]) if "notify_wa" in keys else True
+            n_dc = bool(r["notify_dc"]) if "notify_dc" in keys else True
+            n_app = bool(r["notify_app"]) if "notify_app" in keys else True
+            ch_list = []
+            if n_wa: ch_list.append("whatsapp")
+            if n_dc: ch_list.append("discord")
+            if n_app: ch_list.append("desktop")
+
             tasks.append({
                 "id": r["id"],
                 "task_type": r["task_type"],
+                "title": t_title,
                 "prompt": r["prompt"],
                 "target_time": r["target_time"],
+                "scheduled_time": r["target_time"],
                 "last_run": r["last_run"],
                 "status": r["status"],
-                "notify_wa": bool(r["notify_wa"]),
-                "notify_dc": bool(r["notify_dc"]),
-                "notify_app": bool(r["notify_app"]),
+                "notify_wa": n_wa,
+                "notify_dc": n_dc,
+                "notify_app": n_app,
+                "notify_channels": ",".join(ch_list),
                 "created_at": r["created_at"],
             })
         return tasks

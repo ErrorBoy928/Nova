@@ -1376,5 +1376,56 @@ def action_notify(title: str, msg: str) -> ActionResult:
         return False, f"Notification failed: {exc}"
 
 
+def action_schedule_daily(arg: str) -> ActionResult:
+    """Schedules a daily recurring task. Format: 'HH:MM:task_prompt'."""
+    try:
+        parts = arg.split(":", 2)
+        if len(parts) < 3:
+            return False, "Usage format: HH:MM:task_prompt (e.g. 09:30:Check morning news and email)"
+        hh = parts[0].strip().zfill(2)
+        mm = parts[1].strip().zfill(2)
+        time_str = f"{hh}:{mm}"
+        prompt = parts[2].strip()
+        import memory.database as db
+        db.save_scheduled_task(
+            task_type="daily",
+            prompt=prompt,
+            target_time=time_str,
+            title=prompt[:40],
+            notify_wa=True,
+            notify_dc=True,
+            notify_app=True
+        )
+        return True, f"Daily recurring task scheduled for {time_str}: '{prompt}'"
+    except Exception as exc:
+        return False, f"Failed to schedule daily task: {exc}"
+
+
+def action_schedule_once(arg: str) -> ActionResult:
+    """Schedules a one-off task for today. Format: 'HH:MM:task_prompt'."""
+    try:
+        parts = arg.split(":", 2)
+        if len(parts) < 3:
+            return False, "Usage format: HH:MM:task_prompt (e.g. 15:00:Generate project summary)"
+        hh = parts[0].strip().zfill(2)
+        mm = parts[1].strip().zfill(2)
+        time_str = f"{hh}:{mm}"
+        prompt = parts[2].strip()
+        import memory.database as db
+        db.save_scheduled_task(
+            task_type="day_schedule",
+            prompt=prompt,
+            target_time=time_str,
+            title=prompt[:40],
+            notify_wa=True,
+            notify_dc=True,
+            notify_app=True
+        )
+        return True, f"One-off task scheduled for today at {time_str}: '{prompt}'"
+    except Exception as exc:
+        return False, f"Failed to schedule one-off task: {exc}"
+
+
+
 
 

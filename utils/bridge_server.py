@@ -195,7 +195,7 @@ def start_bridge_server(port: int = PORT) -> bool:
 
     try:
         _server = ThreadingHTTPServer((HOST, port), BridgeHandler)
-        _server_thread = threading.Thread(target=_server.serve_forever, daemon=True, name="QueenBridgeServer")
+        _server_thread = threading.Thread(target=_server.serve_forever, daemon=True, name="NovaBridgeServer")
         _server_thread.start()
         log.info("Nova AI Desktop Bridge started on http://{}:{}", HOST, port)
         return True

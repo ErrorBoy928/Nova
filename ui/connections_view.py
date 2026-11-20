@@ -51,6 +51,24 @@ class ConnectionsView(QWidget):
         self._build_ui()
         self._refresh_connection_states()
 
+        # Seamless auto-polling timer for pairing and status transitions
+        self._poll_timer = QTimer(self)
+        self._poll_timer.setInterval(4500)
+        self._poll_timer.timeout.connect(self._auto_check_status)
+        self._poll_timer.start()
+
+    def _auto_check_status(self):
+        """Silently verifies if WhatsApp was paired or credentials changed."""
+        has_auth = _AUTH_DIR.exists() and any(_AUTH_DIR.glob("*.json"))
+        is_ui_connected = (self.wa_status_lbl.text() == "Connected")
+
+        if has_auth and not is_ui_connected:
+            self._refresh_connection_states()
+        elif not has_auth and is_ui_connected:
+            self._refresh_connection_states()
+        elif self.wa_status_lbl.text() == "Scan QR Code" and self.isVisible():
+            self._fetch_whatsapp_qr(silent=True)
+
     def _apply_theme(self):
         self.setStyleSheet("""
             QWidget {
@@ -406,9 +424,10 @@ class ConnectionsView(QWidget):
         self._refresh_connection_states()
         QMessageBox.information(self, "Saved", f"WhatsApp owner mobile number saved successfully:\n{num or '(Cleared)'}")
 
-    def _fetch_whatsapp_qr(self):
-        self.qr_img_lbl.setText("Requesting pairing code from local bridge...")
-        self.qr_img_lbl.setStyleSheet("color: #38bdf8; font-size: 11px; font-weight: 600;")
+    def _fetch_whatsapp_qr(self, silent: bool = False):
+        if not silent:
+            self.qr_img_lbl.setText("Requesting pairing code from local bridge...")
+            self.qr_img_lbl.setStyleSheet("color: #38bdf8; font-size: 11px; font-weight: 600;")
         try:
             req = urllib.request.Request("http://127.0.0.1:3000/qr", headers={"User-Agent": "NovaUI"})
             with urllib.request.urlopen(req, timeout=2) as response:
@@ -423,8 +442,9 @@ class ConnectionsView(QWidget):
         except Exception:
             pass
 
-        self.qr_img_lbl.setText("WhatsApp Bridge Offline (Port 3000).\nRun 'node index.js' to start the local bridge.")
-        self.qr_img_lbl.setStyleSheet("color: #ef4444; font-size: 11px; font-weight: 600; line-height: 1.4;")
+        if not silent:
+            self.qr_img_lbl.setText("WhatsApp Bridge Offline (Port 3000).\nRun 'node index.js' to start the local bridge.")
+            self.qr_img_lbl.setStyleSheet("color: #ef4444; font-size: 11px; font-weight: 600; line-height: 1.4;")
 
     def _disconnect_whatsapp(self):
         reply = QMessageBox.question(

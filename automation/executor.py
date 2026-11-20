@@ -202,6 +202,10 @@ def run_action(name: str, arg: str) -> tuple[bool, str]:
         t = parts[0].strip() if len(parts) > 1 else "Nova AI Alert"
         m = parts[1].strip() if len(parts) > 1 else arg
         return actions.action_notify(t, m)
+    elif name in ("schedule_daily", "daily_task", "add_daily"):
+        return actions.action_schedule_daily(arg)
+    elif name in ("schedule_once", "schedule_task", "add_schedule"):
+        return actions.action_schedule_once(arg)
     else:
         log.warning("Unknown action requested: {}", name)
         # Fallback: try opening as an application or executing command
