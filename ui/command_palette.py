@@ -55,6 +55,7 @@ class CommandPaletteDialog(QDialog):
             ("open_artifacts", "Code Artifacts & Scripts Drawer (Ctrl+B)", "Inspect, copy, and run all session scripts", "CODE"),
             ("open_terminal", "Quick PowerShell Terminal Runner (Ctrl+T)", "Run shell commands, git operations, and system probes", "TOOL"),
             ("open_git", "Git Workspace Manager (Ctrl+G)", "Inspect repository status, diffs, commits, and push", "TOOL"),
+            ("super_agent", "Launch Autonomous Super Agent (/super)", "Base44-grade multi-step planning, coding & verification loop", "AGENT"),
             ("show_shortcuts", "Keyboard Shortcuts Reference (F1)", "View complete cheat sheet of keys, shortcuts, and commands", "HELP"),
         ]
 

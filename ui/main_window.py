@@ -976,6 +976,103 @@ class _ExecutionPlanWidget(QFrame):
         self.pbar.setStyleSheet(f"QProgressBar {{ background: #161622; border-radius: 1px; }} QProgressBar::chunk {{ background: {color}; border-radius: 1px; }}")
 
 
+class _SuperAgentFeedWidget(QFrame):
+    """
+    Real-time Autonomous Super Agent ReAct HUD Widget.
+    Displays live Thought stream, active actions, auto-correction loop, and completion status.
+    """
+    def __init__(self, goal: str, max_iterations: int = 8, parent=None):
+        super().__init__(parent)
+        self.goal = goal
+        self.max_iterations = max_iterations
+        self._start_time = time.time()
+        self.setObjectName("superAgentFeed")
+        self.setStyleSheet("""
+            QFrame#superAgentFeed {
+                background-color: #070712;
+                border: 1px solid #4338ca;
+                border-radius: 10px;
+                margin: 4px 6px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(8)
+
+        # Header
+        hdr = QHBoxLayout()
+        pill = QLabel("SUPERAGENT")
+        pill.setStyleSheet("background: #4f46e5; color: #ffffff; font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 4px; font-family: Consolas, monospace;")
+        hdr.addWidget(pill)
+
+        title = QLabel(f"AUTONOMOUS ReAct EXECUTION (Max {max_iterations} Iterations)")
+        title.setStyleSheet("color: #e0e7ff; font-size: 11px; font-weight: 700; letter-spacing: 0.6px;")
+        hdr.addWidget(title)
+        hdr.addStretch()
+
+        self.iter_lbl = QLabel("Iteration 1/8")
+        self.iter_lbl.setStyleSheet("color: #a5b4fc; font-size: 10px; font-weight: 700; font-family: Consolas, monospace;")
+        hdr.addWidget(self.iter_lbl)
+        layout.addLayout(hdr)
+
+        # Progress bar
+        self.pbar = QProgressBar()
+        self.pbar.setFixedHeight(3)
+        self.pbar.setTextVisible(False)
+        self.pbar.setRange(0, max_iterations)
+        self.pbar.setValue(1)
+        self.pbar.setStyleSheet("QProgressBar { background: #161622; border-radius: 1px; } QProgressBar::chunk { background: #6366f1; border-radius: 1px; }")
+        layout.addWidget(self.pbar)
+
+        # Active Thought Box
+        self.thought_box = QLabel("Initializing autonomous loop and analyzing objective...")
+        self.thought_box.setWordWrap(True)
+        self.thought_box.setStyleSheet("background: #0f1026; color: #cbd5e1; border: 1px solid #282b52; border-radius: 6px; padding: 6px 10px; font-size: 11px; font-family: Consolas, monospace;")
+        layout.addWidget(self.thought_box)
+
+        # Actions Container
+        self.actions_layout = QVBoxLayout()
+        self.actions_layout.setSpacing(4)
+        layout.addLayout(self.actions_layout)
+
+    def set_thought(self, iteration: int, thought: str):
+        self.iter_lbl.setText(f"Iteration {iteration}/{self.max_iterations}")
+        self.pbar.setValue(iteration)
+        self.thought_box.setText(f"Thought: {thought}")
+
+    def add_action_result(self, iteration: int, act_name: str, success: bool, output: str):
+        row = QHBoxLayout()
+        row.setSpacing(6)
+
+        tag = QLabel("DONE" if success else "FAIL")
+        tag.setFixedWidth(52)
+        tag.setAlignment(Qt.AlignCenter)
+        tag_bg = "#064e3b" if success else "#450a0a"
+        tag_color = "#6ee7b7" if success else "#fca5a5"
+        tag_border = "#059669" if success else "#991b1b"
+        tag.setStyleSheet(f"background: {tag_bg}; color: {tag_color}; font-size: 9px; font-weight: 800; padding: 2px; border-radius: 4px; border: 1px solid {tag_border}; font-family: Consolas, monospace;")
+        row.addWidget(tag)
+
+        clean_out = output.splitlines()[0][:70] if output else "Executed"
+        desc = QLabel(f"[{act_name}] {clean_out}")
+        desc.setStyleSheet("color: #94a3b8; font-size: 10px; font-family: Consolas, monospace;")
+        row.addWidget(desc)
+        row.addStretch()
+
+        self.actions_layout.addLayout(row)
+
+    def finalize(self, all_ok: bool, summary: str):
+        elapsed = round(time.time() - self._start_time, 2)
+        status_txt = "Goal Achieved" if all_ok else "Finished"
+        self.iter_lbl.setText(f"{status_txt} ({elapsed}s)")
+        color = "#10b981" if all_ok else "#f59e0b"
+        self.iter_lbl.setStyleSheet(f"color: {color}; font-size: 10px; font-weight: 800; font-family: Consolas, monospace;")
+        self.pbar.setValue(self.max_iterations)
+        self.pbar.setStyleSheet(f"QProgressBar {{ background: #161622; border-radius: 1px; }} QProgressBar::chunk {{ background: {color}; border-radius: 1px; }}")
+        self.thought_box.setText(f"Summary: {summary[:120]}")
+
+
 class BackgroundTaskWorker(QThread):
     progress = Signal(str)
     step_completed = Signal(int, bool, str, str)  # (step_idx, success, act_name, msg)
@@ -1644,7 +1741,7 @@ class MainWindow(QWidget):
 
     def _find_mode_index(self, name: str) -> int:
         name_lower = name.strip().lower()
-        mode_keys = ["engineer", "research", "sysadmin", "general"]
+        mode_keys = ["engineer", "research", "sysadmin", "superagent", "general"]
         for idx, key in enumerate(mode_keys):
             if name_lower in key or key in name_lower:
                 return idx
@@ -1846,8 +1943,108 @@ class MainWindow(QWidget):
         self.input_edit.setFocus()
         self.show_toast("Terminal output handed off to Nova", "INFO")
 
+    def _launch_super_agent(self, goal: str):
+        if hasattr(self, "_super_agent_worker") and self._super_agent_worker and self._super_agent_worker.isRunning():
+            self._super_agent_worker.cancel()
+            self.show_toast("Previous SuperAgent execution cancelled", "SYSTEM")
+
+        from ai.super_agent import SuperAgentWorker
+        self.status_pill.setText("SUPERAGENT RUNNING...")
+        self.status_pill.setStyleSheet("""
+            color: #a5b4fc;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.6px;
+            padding: 3px 10px;
+            border-radius: 9px;
+            background: #1e1b4b;
+            border: 1px solid #4338ca;
+        """)
+
+        # Insert live SuperAgent visual HUD into chat
+        self._super_agent_feed = _SuperAgentFeedWidget(goal, max_iterations=8)
+        self.message_layout.insertWidget(self.message_layout.count() - 1, self._super_agent_feed)
+        self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
+        # Update Send button to Stop
+        self.send_btn.setEnabled(True)
+        self.send_btn.setText("Stop")
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc2626;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: 700;
+                padding: 0 16px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #b91c1c;
+            }
+        """)
+
+        self._super_agent_worker = SuperAgentWorker(goal, self.config, self.llm_manager, max_iterations=8)
+
+        def on_iteration(it, thought):
+            self.status_pill.setText(f"SUPERAGENT STEP {it}/8...")
+            if hasattr(self, "_super_agent_feed") and self._super_agent_feed:
+                self._super_agent_feed.set_thought(it, thought)
+                self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
+        def on_action_done(it, act_name, success, out):
+            if hasattr(self, "_super_agent_feed") and self._super_agent_feed:
+                self._super_agent_feed.add_action_result(it, act_name, success, out)
+                self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
+        def on_finished(all_ok, summary, total_steps, elapsed):
+            self._reset_send_button()
+            mode = getattr(self, "_operating_mode", "ENGINEER")
+            if mode == "SUPERAGENT":
+                self.status_pill.setText("SUPERAGENT READY")
+                self.status_pill.setStyleSheet("""
+                    color: #a5b4fc;
+                    font-size: 9px;
+                    font-weight: 800;
+                    letter-spacing: 0.6px;
+                    padding: 3px 10px;
+                    border-radius: 9px;
+                    background: #1e1b4b;
+                    border: 1px solid #4338ca;
+                """)
+            else:
+                self.status_pill.setText("READY")
+                self.status_pill.setStyleSheet("""
+                    color: #38bdf8;
+                    font-size: 9px;
+                    font-weight: 800;
+                    letter-spacing: 0.6px;
+                    padding: 3px 10px;
+                    border-radius: 9px;
+                    background: #111118;
+                    border: 1px solid #272735;
+                """)
+            if hasattr(self, "_super_agent_feed") and self._super_agent_feed:
+                self._super_agent_feed.finalize(all_ok, summary)
+
+            now_str = datetime.now().strftime("%I:%M %p")
+            deliverable_text = f"**Autonomous SuperAgent Deliverable ({total_steps} actions in {elapsed:.1f}s):**\n\n{summary}"
+            b = self._add_bubble("assistant", deliverable_text)
+            b.set_meta(now_str, elapsed, self.config.llm.model)
+            cur_sid = getattr(self, "_active_session_id", "default")
+            db.add_message("assistant", deliverable_text, session_id=cur_sid)
+            self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
+            if self.config.voice.auto_speak:
+                self._speak_text(summary[:200])
+
+        self._super_agent_worker.iteration_started.connect(on_iteration)
+        self._super_agent_worker.action_completed.connect(on_action_done)
+        self._super_agent_worker.agent_finished.connect(on_finished)
+        self._super_agent_worker.start()
+
     def _on_mode_changed(self, index: int):
-        mode_keys = ["ENGINEER", "RESEARCH", "SYSADMIN", "GENERAL"]
+        mode_keys = ["ENGINEER", "RESEARCH", "SYSADMIN", "SUPERAGENT", "GENERAL"]
         if 0 <= index < len(mode_keys):
             self._operating_mode = mode_keys[index]
             if hasattr(self, "mode_combo") and self.mode_combo.currentIndex() != index:
@@ -1858,8 +2055,33 @@ class MainWindow(QWidget):
                 "ENGINEER": "Senior Software Architect",
                 "RESEARCH": "Deep Research Analyst",
                 "SYSADMIN": "Windows System Administrator",
+                "SUPERAGENT": "Autonomous Base44 SuperAgent",
                 "GENERAL": "Executive General Assistant",
             }
+            if self._operating_mode == "SUPERAGENT":
+                self.status_pill.setText("SUPERAGENT READY")
+                self.status_pill.setStyleSheet("""
+                    color: #a5b4fc;
+                    font-size: 9px;
+                    font-weight: 800;
+                    letter-spacing: 0.6px;
+                    padding: 3px 10px;
+                    border-radius: 9px;
+                    background: #1e1b4b;
+                    border: 1px solid #4338ca;
+                """)
+            else:
+                self.status_pill.setText("READY")
+                self.status_pill.setStyleSheet("""
+                    color: #38bdf8;
+                    font-size: 9px;
+                    font-weight: 800;
+                    letter-spacing: 0.6px;
+                    padding: 3px 10px;
+                    border-radius: 9px;
+                    background: #111118;
+                    border: 1px solid #272735;
+                """)
             self.show_toast(f"Mode: {mode_names[self._operating_mode]}", "SYSTEM")
 
     def _register_code_artifact(self, lang: str, code: str):
@@ -1936,6 +2158,8 @@ class MainWindow(QWidget):
             self._open_terminal_runner()
         elif cmd_id == "open_git":
             self._open_git_manager()
+        elif cmd_id == "super_agent":
+            self._send_quick_prompt("/super ")
         elif cmd_id == "show_shortcuts":
             self._show_shortcuts_dialog()
         elif cmd_id == "custom_prompt":
@@ -2510,6 +2734,7 @@ class MainWindow(QWidget):
             ("ENGINEER", "Mode: Engineer"),
             ("RESEARCH", "Mode: Research"),
             ("SYSADMIN", "Mode: SysAdmin"),
+            ("SUPERAGENT", "Mode: SuperAgent"),
             ("GENERAL", "Mode: General"),
         ]
         for m_id, m_label in mode_choices:
@@ -3419,11 +3644,17 @@ class MainWindow(QWidget):
         """)
 
     def _send_message(self, prefix: str = ""):
-        # If currently streaming, clicking Stop aborts generation cleanly
+        # If currently streaming or SuperAgent running, clicking Stop aborts cleanly
         if self._llm_thread and self._llm_thread.isRunning():
             self._llm_thread.cancel()
             self._reset_send_button()
             self.status_pill.setText("READY")
+            return
+        if hasattr(self, "_super_agent_worker") and self._super_agent_worker and self._super_agent_worker.isRunning():
+            self._super_agent_worker.cancel()
+            self._reset_send_button()
+            self.status_pill.setText("READY")
+            self.show_toast("SuperAgent stopped by user", "SYSTEM")
             return
 
         text = self.input_edit.toPlainText().strip()
@@ -3506,7 +3737,7 @@ class MainWindow(QWidget):
                     if idx >= 0:
                         self._on_mode_changed(idx)
                     else:
-                        self.show_toast(f"Mode not found: {arg}. Available: engineer, research, sysadmin, general", "WARNING")
+                        self.show_toast(f"Mode not found: {arg}. Available: engineer, research, sysadmin, superagent, general", "WARNING")
                 else:
                     self.show_toast(f"Active Mode: {self._operating_mode}", "SYSTEM")
                 return
@@ -3544,9 +3775,20 @@ class MainWindow(QWidget):
                 self._open_git_manager()
                 return
 
+            if cmd in ("/super", "/agent"):
+                if arg:
+                    self._add_bubble("user", text)
+                    cur_sid = getattr(self, "_active_session_id", "default")
+                    db.add_message("user", text, session_id=cur_sid)
+                    self._launch_super_agent(arg)
+                else:
+                    self.show_toast("Usage: /super <goal to accomplish>", "WARNING")
+                return
+
             if cmd == "/help":
                 help_text = (
                     f"**Nova AI Studio — Quick Command Reference:**\n\n"
+                    f"- `/super <goal>` — Launch Autonomous Base44-grade SuperAgent Loop.\n"
                     f"- `/new` — Start a fresh, isolated chat session (`Ctrl+N`).\n"
                     f"- `/sessions` — List all active and archived conversation threads.\n"
                     f"- `/attach` — Attach code, logs, data or image context (`Ctrl+O`).\n"
@@ -3555,7 +3797,7 @@ class MainWindow(QWidget):
                     f"- `/export` — Save conversation logs to a clean Markdown (.md) or HTML file.\n"
                     f"- `/palette` — Open the Spotlight Command Palette (`Ctrl+K`).\n"
                     f"- `/term` — Launch Quick Embedded PowerShell Console (`Ctrl+T`).\n"
-                    f"- `/mode <name>` — Switch Persona (`engineer`, `research`, `sysadmin`, `general`).\n"
+                    f"- `/mode <name>` — Switch Persona (`engineer`, `research`, `sysadmin`, `superagent`, `general`).\n"
                     f"- `/prompts` — Open Prompt & Workflow Library (`Ctrl+P`).\n"
                     f"- `/artifacts` — Open Code Artifacts & Script Drawer (`Ctrl+B`).\n"
                     f"- `/sys` — Display instant Win32 CPU, RAM & engine telemetry.\n"
@@ -3591,6 +3833,17 @@ class MainWindow(QWidget):
             if not self._prompt_history or self._prompt_history[-1] != text:
                 self._prompt_history.append(text)
         self._prompt_history_idx = -1
+
+        # Autonomous SuperAgent Mode dispatch
+        if getattr(self, "_operating_mode", "ENGINEER") == "SUPERAGENT" and not text.startswith("/"):
+            bubble_text = text or "[Attached Screen Context]"
+            if image_path_to_send:
+                bubble_text = f"{bubble_text}\n[Image: {image_path_to_send}]"
+            self._add_bubble("user", bubble_text)
+            cur_sid = getattr(self, "_active_session_id", "default")
+            db.add_message("user", bubble_text, session_id=cur_sid)
+            self._launch_super_agent(text)
+            return
 
         # Add User bubble
         bubble_text = text or "[Attached Screen Context]"
@@ -3673,6 +3926,13 @@ class MainWindow(QWidget):
                 "\n[Operating Mode: Executive General Assistant]\n"
                 "- Deliver articulate, direct, and highly actionable answers with zero fluff.\n"
                 "- Keep explanations crisp and prioritize user efficiency.\n"
+            )
+        elif mode == "SUPERAGENT":
+            system_prompt += (
+                "\n[Operating Mode: Autonomous Base44 SuperAgent]\n"
+                "- You are an autonomous AI software engineer, sysadmin, and digital execution engine.\n"
+                "- Decompose goals into clear milestone steps, execute actions directly, inspect observations, and self-correct.\n"
+                "- Emphasize end-to-end task completion, zero fluff, and proactive problem solving.\n"
             )
 
         self.send_btn.setEnabled(True)

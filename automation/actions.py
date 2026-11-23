@@ -621,6 +621,98 @@ def search_files(query: str, drive: str = "E:") -> ActionResult:
         return False, f"Search failed: {exc}"
 
 
+def edit_file_block(payload: str) -> ActionResult:
+    """Replaces a target block with replacement content in a file.
+    Format: filepath:::target:::replacement
+    """
+    try:
+        parts = payload.split(":::")
+        if len(parts) < 3:
+            return False, "Invalid edit_file_block format. Expected: path:::target:::replacement"
+        path_str, target, replacement = parts[0].strip(), parts[1], parts[2]
+        p = Path(os.path.expandvars(path_str))
+        if not p.is_absolute():
+            p_desk = Path.home() / "Desktop" / p
+            p = p_desk if p_desk.exists() else p
+        if not p.exists():
+            return False, f"File not found: {p}"
+        content = p.read_text(encoding="utf-8")
+        if target not in content:
+            return False, f"Target string not found in {p.name}."
+        new_content = content.replace(target, replacement, 1)
+        p.write_text(new_content, encoding="utf-8")
+        return True, f"Successfully edited {p.name}."
+    except Exception as exc:
+        return False, f"Could not edit file: {exc}"
+
+
+def search_code(payload: str) -> ActionResult:
+    """Searches for a string inside code files within a directory.
+    Format: query:::directory (default dir is E:\\Nova_AI)
+    """
+    try:
+        if ":::" in payload:
+            parts = payload.split(":::", 1)
+            query, base_dir = parts[0].strip(), parts[1].strip()
+        else:
+            query, base_dir = payload.strip(), "E:\\Nova_AI"
+        p_base = Path(os.path.expandvars(base_dir))
+        if not p_base.exists():
+            p_base = Path("E:\\Nova_AI")
+        matches = []
+        ignored = {".git", "__pycache__", "venv", "node_modules", "data"}
+        for root, dirs, files in os.walk(p_base):
+            dirs[:] = [d for d in dirs if d not in ignored]
+            for f in files:
+                if f.endswith((".py", ".js", ".ts", ".json", ".md", ".txt", ".bat", ".ps1", ".html", ".css", ".yaml", ".yml")):
+                    fp = Path(root) / f
+                    try:
+                        content = fp.read_text(encoding="utf-8", errors="ignore")
+                        if query.lower() in content.lower():
+                            for idx, line in enumerate(content.splitlines(), 1):
+                                if query.lower() in line.lower():
+                                    rel = fp.relative_to(p_base)
+                                    matches.append(f"{rel}:{idx}: {line.strip()[:60]}")
+                                    break
+                    except Exception:
+                        pass
+                if len(matches) >= 12:
+                    break
+            if len(matches) >= 12:
+                break
+        if not matches:
+            return True, f"No code matches found for '{query}' in {p_base}."
+        return True, f"Found {len(matches)} matches for '{query}':\n" + "\n".join(f"- {m}" for m in matches)
+    except Exception as exc:
+        return False, f"Code search error: {exc}"
+
+
+def fetch_webpage_text(url: str) -> ActionResult:
+    """Fetches text content from a public webpage and strips HTML tags."""
+    import urllib.request
+    from urllib.parse import urlparse
+    try:
+        url = url.strip()
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+        parsed = urlparse(url)
+        if not parsed.netloc:
+            return False, "Invalid URL specified."
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Nova-AI/3.0"}
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            raw_html = resp.read().decode("utf-8", errors="replace")
+        clean = re.sub(r"<(script|style).*?>.*?</\1>", "", raw_html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", " ", clean)
+        text = re.sub(r"\s+", " ", text).strip()
+        preview = text[:2500] + ("\n...(truncated)" if len(text) > 2500 else "")
+        return True, f"Webpage Content ({parsed.netloc}):\n{preview}"
+    except Exception as exc:
+        return False, f"Could not fetch webpage: {exc}"
+
+
 def zip_item(path_str: str) -> ActionResult:
     """Creates a zip archive of a file or folder (defaults to Desktop if relative)."""
     import zipfile
