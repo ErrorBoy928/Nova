@@ -1,0 +1,1 @@
+2026-11-14 10:15:28.960 | WARNING  | utils.remote_sync:sync_cloud_config:132 - Cloud sync skipped (offline or remote unreachable): HTTP Error 404: Not Found

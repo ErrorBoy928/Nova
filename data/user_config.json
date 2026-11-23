@@ -1,0 +1,41 @@
+{
+  "llm": {
+    "provider": "groq",
+    "model": "qwen/qwen3.8-27b",
+    "api_key_env_var": "GROQ_API_KEY",
+    "api_key": "",
+    "license_key": "",
+    "openai_base_url": "",
+    "ollama_base_url": "http://localhost:11434",
+    "lmstudio_base_url": "http://localhost:1234/v1",
+    "temperature": 0.6,
+    "max_tokens": 4096,
+    "critical_thinking": false
+  },
+  "voice": {
+    "enabled": true,
+    "auto_speak": true,
+    "tts_voice_en": "en-US-AriaNeural",
+    "tts_voice_ur": "ur-PK-UzmaNeural",
+    "speech_rate": "+0%",
+    "volume": "+0%",
+    "stt_language": "auto",
+    "wake_word_enabled": false,
+    "wake_word": "Nova"
+  },
+  "ui": {
+    "theme": "dark",
+    "assistant_name": "Nova",
+    "always_on_top": true,
+    "window_opacity": 1.0,
+    "start_width": 500,
+    "start_height": 700,
+    "screen_observing": false
+  },
+  "safety": {
+    "confirm_before_destructive": false,
+    "recheck_decisions": false
+  },
+  "user_name": null,
+  "language": "auto"
+}

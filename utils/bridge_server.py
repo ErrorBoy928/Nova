@@ -1,7 +1,7 @@
 """
 utils/bridge_server.py
 
-Embedded Local HTTP Bridge Server for Nova AI Ecosystem.
+Embedded Local HTTP Bridge Server for Queen AI Ecosystem.
 Runs on 127.0.0.1:5050 in a daemon thread.
 Enables WhatsApp (index.js) and Discord (main.py) to:
 - Capture live desktop screenshots (/screenshot)
@@ -60,7 +60,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._send_json({
                 "status": "online",
                 "service": "Nova AI Desktop Bridge",
-                "owner": "Admin",
+                "owner": "Error Boy",
                 "version": "2.0-master",
                 "port": PORT
             })
@@ -195,12 +195,12 @@ def start_bridge_server(port: int = PORT) -> bool:
 
     try:
         _server = ThreadingHTTPServer((HOST, port), BridgeHandler)
-        _server_thread = threading.Thread(target=_server.serve_forever, daemon=True, name="NovaBridgeServer")
+        _server_thread = threading.Thread(target=_server.serve_forever, daemon=True, name="QueenBridgeServer")
         _server_thread.start()
         log.info("Nova AI Desktop Bridge started on http://{}:{}", HOST, port)
         return True
     except Exception as exc:
-        log.warning("Could not start Nova Desktop Bridge on port {}: {}", port, exc)
+        log.warning("Could not start Queen Desktop Bridge on port {}: {}", port, exc)
         return False
 
 

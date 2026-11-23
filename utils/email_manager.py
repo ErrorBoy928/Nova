@@ -74,7 +74,7 @@ def check_recent_emails(
         msg_ids = messages[0].split()
         recent_ids = msg_ids[-limit:]
 
-        lines = [f"**Recent Emails for {user_email}:**\n"]
+        lines = [f"📧 **Recent Emails for {user_email}:**\n"]
         for mid in reversed(recent_ids):
             res, data = mail.fetch(mid, "(RFC822)")
             if res != "OK":

@@ -195,7 +195,7 @@ class LLMManager:
         api_key = get_api_key(self.config)
         if not api_key:
             raise LLMError(
-                "No Groq API key found. Please open Settings to enter your free key from console.groq.com."
+                "No Groq API key found. Please click '⚡ Groq Key' in the header to enter your free key from console.groq.com."
             )
         api_key = api_key.strip().strip('"\'')
         base_url = "https://api.groq.com/openai/v1"

@@ -60,7 +60,7 @@ class ApiKeyDialog(QDialog):
         self._verify_worker: _KeyVerificationWorker | None = None
         self._tested_working_model: str = ""
 
-        self.setWindowTitle("Groq API Key Setup - Nova AI")
+        self.setWindowTitle("⚡ Groq API Key Setup - Nova AI")
         self.setFixedWidth(520)
         self.setStyleSheet(f"""
             QDialog {{
@@ -79,13 +79,13 @@ class ApiKeyDialog(QDialog):
         title_box = QVBoxLayout()
         title_box.setSpacing(4)
 
-        title_lbl = QLabel("Groq API Key (High-Speed Engine)")
+        title_lbl = QLabel("⚡ Groq API Key (Ultra-Fast AI)")
         title_lbl.setStyleSheet(f"font-size: 16px; font-weight: 800; color: {_TEXT_MAIN}; letter-spacing: 0.5px;")
         title_box.addWidget(title_lbl)
 
         sub_lbl = QLabel(
             "Powered by Groq LPUs for extreme speed (300-500 tokens/sec).\n"
-            "Runs Qwen 3.8 and Llama 3.3 with near-instant streaming and zero lag."
+            "Runs Llama 3.1 8B Instant & Llama 3.3 with near-instant streaming and zero lag."
         )
         sub_lbl.setStyleSheet(f"font-size: 11px; color: {_TEXT_MUTED}; line-height: 1.4;")
         title_box.addWidget(sub_lbl)
@@ -133,9 +133,8 @@ class ApiKeyDialog(QDialog):
         row.addWidget(self.key_edit, 1)
 
         # Toggle Show / Hide Password
-        self.show_btn = QPushButton("Show")
-        self.show_btn.setFixedHeight(32)
-        self.show_btn.setFixedWidth(52)
+        self.show_btn = QPushButton("👁")
+        self.show_btn.setFixedSize(32, 32)
         self.show_btn.setCursor(Qt.PointingHandCursor)
         self.show_btn.setToolTip("Show / Hide Key")
         self.show_btn.setStyleSheet(f"""
@@ -144,7 +143,7 @@ class ApiKeyDialog(QDialog):
                 border: 1px solid {_BORDER};
                 border-radius: 6px;
                 color: {_TEXT_MUTED};
-                font-size: 11px;
+                font-size: 13px;
             }}
             QPushButton:hover {{
                 color: #ffffff;
@@ -155,7 +154,7 @@ class ApiKeyDialog(QDialog):
         row.addWidget(self.show_btn)
 
         # Paste button
-        paste_btn = QPushButton("Paste")
+        paste_btn = QPushButton("📋 Paste")
         paste_btn.setFixedHeight(32)
         paste_btn.setCursor(Qt.PointingHandCursor)
         paste_btn.setStyleSheet(f"""
@@ -189,7 +188,7 @@ class ApiKeyDialog(QDialog):
         actions_row = QHBoxLayout()
         actions_row.setSpacing(8)
 
-        get_key_btn = QPushButton("Get Free Groq Key")
+        get_key_btn = QPushButton("🌐 Get Free Groq Key")
         get_key_btn.setFixedHeight(32)
         get_key_btn.setCursor(Qt.PointingHandCursor)
         get_key_btn.setStyleSheet(f"""
@@ -210,7 +209,7 @@ class ApiKeyDialog(QDialog):
         get_key_btn.clicked.connect(lambda: webbrowser.open("https://console.groq.com/keys"))
         actions_row.addWidget(get_key_btn)
 
-        self.test_btn = QPushButton("Test Key")
+        self.test_btn = QPushButton("⚡ Test Key")
         self.test_btn.setFixedHeight(32)
         self.test_btn.setCursor(Qt.PointingHandCursor)
         self.test_btn.setStyleSheet(f"""
@@ -254,7 +253,7 @@ class ApiKeyDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         actions_row.addWidget(cancel_btn)
 
-        self.save_btn = QPushButton("Save & Activate")
+        self.save_btn = QPushButton("💾 Save & Activate")
         self.save_btn.setFixedHeight(32)
         self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.setStyleSheet(f"""
@@ -279,16 +278,16 @@ class ApiKeyDialog(QDialog):
     def _toggle_echo_mode(self):
         if self.key_edit.echoMode() == QLineEdit.Password:
             self.key_edit.setEchoMode(QLineEdit.Normal)
-            self.show_btn.setText("Hide")
+            self.show_btn.setText("🔒")
         else:
             self.key_edit.setEchoMode(QLineEdit.Password)
-            self.show_btn.setText("Show")
+            self.show_btn.setText("👁")
 
     def _paste_clipboard(self):
         clip = QApplication.clipboard().text().strip()
         if clip:
             self.key_edit.setText(clip)
-            self._set_status("Pasted key from clipboard. Click 'Test Key' to verify.", _TEXT_MUTED)
+            self._set_status("Pasted key from clipboard. Click '⚡ Test Key' to verify.", _TEXT_MUTED)
 
     def _set_status(self, text: str, color: str):
         self.status_lbl.setText(text)
@@ -311,9 +310,9 @@ class ApiKeyDialog(QDialog):
         self.test_btn.setEnabled(True)
         if is_valid:
             self._tested_working_model = model
-            self._set_status(f"[OK] {message}", _ACCENT_GREEN)
+            self._set_status(f"[✓] {message}", _ACCENT_GREEN)
         else:
-            self._set_status(f"[ERROR] {message}", _ACCENT_RED)
+            self._set_status(f"[✕] {message}", _ACCENT_RED)
 
     def _save_and_activate(self):
         key = self.key_edit.text().strip().strip('"\'')
@@ -328,7 +327,7 @@ class ApiKeyDialog(QDialog):
         if self._tested_working_model:
             self.config.llm.model = self._tested_working_model
         else:
-            self.config.llm.model = "qwen/qwen3.8-27b"
+            self.config.llm.model = "llama-3.1-8b-instant"
         save_config(self.config)
 
         # 2. Update .env file
