@@ -1498,6 +1498,8 @@ class MainWindow(QWidget):
         self._is_force_quitting = False
         self._setup_tray_icon()
 
+        self._operating_mode = "ENGINEER"
+
         # Keyboard Shortcuts
         self.cmd_k_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
         self.cmd_k_shortcut.activated.connect(self._open_command_palette)
@@ -1510,6 +1512,9 @@ class MainWindow(QWidget):
 
         self.cmd_artifacts_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
         self.cmd_artifacts_shortcut.activated.connect(self._open_artifacts_drawer)
+
+        self.cmd_terminal_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
+        self.cmd_terminal_shortcut.activated.connect(self._open_terminal_runner)
 
         self.cmd_help_shortcut = QShortcut(QKeySequence("F1"), self)
         self.cmd_help_shortcut.activated.connect(self._show_shortcuts_dialog)
@@ -1615,6 +1620,14 @@ class MainWindow(QWidget):
                 return i
         return -1
 
+    def _find_mode_index(self, name: str) -> int:
+        name_lower = name.strip().lower()
+        mode_keys = ["engineer", "research", "sysadmin", "general"]
+        for idx, key in enumerate(mode_keys):
+            if name_lower in key or key in name_lower:
+                return idx
+        return -1
+
     def _on_top_model_changed(self, index: int):
         if index < 0 or index >= self.model_combo.count():
             return
@@ -1717,8 +1730,9 @@ class MainWindow(QWidget):
         shortcuts = [
             ("Ctrl + K", "Spotlight Command Palette (Actions & Navigation)"),
             ("Ctrl + P", "Prompt & Automation Library (Templates & Workflows)"),
-            ("Ctrl + F", "Find in Chat Conversation"),
             ("Ctrl + B", "Code Artifacts & Scripts Drawer"),
+            ("Ctrl + T", "Quick Embedded PowerShell Terminal"),
+            ("Ctrl + F", "Find in Chat Conversation"),
             ("Ctrl + Shift + D", "Desktop Screen Snip & Vision OCR"),
             ("Ctrl + Shift + N", "Summon Nova AI from System Tray"),
             ("Enter", "Send Message / Prompt"),
@@ -1774,6 +1788,41 @@ class MainWindow(QWidget):
             dlg.exec()
         except Exception as e:
             self.show_toast(f"Artifacts Drawer notice: {e}", "WARNING")
+
+    def _open_terminal_runner(self):
+        try:
+            from ui.quick_terminal_dialog import QuickTerminalDialog
+            dlg = QuickTerminalDialog("E:\\Nova_AI", self)
+            dlg.analyze_requested.connect(self._on_terminal_analyze)
+            dlg.exec()
+        except Exception as e:
+            self.show_toast(f"Terminal notice: {e}", "WARNING")
+
+    def _on_terminal_analyze(self, cmd: str, output: str):
+        prompt = (
+            f"Analyze this terminal command output for `{cmd}`:\n"
+            f"```\n{output[:1600]}\n```\n"
+            f"Please explain the execution results, identify any issues or warnings, and recommend next actions."
+        )
+        self.input_edit.setText(prompt)
+        self.input_edit.setFocus()
+        self.show_toast("Terminal output handed off to Nova", "INFO")
+
+    def _on_mode_changed(self, index: int):
+        mode_keys = ["ENGINEER", "RESEARCH", "SYSADMIN", "GENERAL"]
+        if 0 <= index < len(mode_keys):
+            self._operating_mode = mode_keys[index]
+            if hasattr(self, "mode_combo") and self.mode_combo.currentIndex() != index:
+                self.mode_combo.blockSignals(True)
+                self.mode_combo.setCurrentIndex(index)
+                self.mode_combo.blockSignals(False)
+            mode_names = {
+                "ENGINEER": "Senior Software Architect",
+                "RESEARCH": "Deep Research Analyst",
+                "SYSADMIN": "Windows System Administrator",
+                "GENERAL": "Executive General Assistant",
+            }
+            self.show_toast(f"Mode: {mode_names[self._operating_mode]}", "SYSTEM")
 
     def _register_code_artifact(self, lang: str, code: str):
         lines = code.splitlines()
@@ -1841,6 +1890,8 @@ class MainWindow(QWidget):
             self._open_prompt_library()
         elif cmd_id == "open_artifacts":
             self._open_artifacts_drawer()
+        elif cmd_id == "open_terminal":
+            self._open_terminal_runner()
         elif cmd_id == "show_shortcuts":
             self._show_shortcuts_dialog()
         elif cmd_id == "custom_prompt":
@@ -2318,6 +2369,51 @@ class MainWindow(QWidget):
         self.model_badge = self.model_combo
         top_bar.addWidget(self.model_combo)
 
+        # Persona Operating Mode Switcher Dropdown
+        self.mode_combo = QComboBox()
+        self.mode_combo.setCursor(Qt.PointingHandCursor)
+        self.mode_combo.setFixedHeight(26)
+        self.mode_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #0f172a;
+                color: #38bdf8;
+                border: 1px solid #1e3a5f;
+                border-radius: 6px;
+                padding: 2px 10px;
+                font-size: 10px;
+                font-weight: 700;
+                font-family: Consolas, monospace;
+            }
+            QComboBox:hover {
+                border-color: #38bdf8;
+                background-color: #16243d;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 14px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #090d16;
+                color: #e2e8f0;
+                border: 1px solid #1e3a5f;
+                selection-background-color: #0284c7;
+                selection-color: #ffffff;
+                outline: none;
+                padding: 4px;
+            }
+        """)
+        mode_choices = [
+            ("ENGINEER", "Mode: Engineer"),
+            ("RESEARCH", "Mode: Research"),
+            ("SYSADMIN", "Mode: SysAdmin"),
+            ("GENERAL", "Mode: General"),
+        ]
+        for m_id, m_label in mode_choices:
+            self.mode_combo.addItem(m_label, m_id)
+        self.mode_combo.setCurrentIndex(0)
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        top_bar.addWidget(self.mode_combo)
+
         self.status_pill = QLabel("READY")
         self.status_pill.setStyleSheet("""
             color: #38bdf8;
@@ -2423,6 +2519,15 @@ class MainWindow(QWidget):
         self.artifacts_btn.setStyleSheet(find_btn.styleSheet())
         self.artifacts_btn.clicked.connect(self._open_artifacts_drawer)
         top_bar.addWidget(self.artifacts_btn)
+
+        # Quick PowerShell Terminal Button (Ctrl+T)
+        terminal_btn = QPushButton("Terminal")
+        terminal_btn.setToolTip("Quick PowerShell Terminal Runner (Ctrl+T)")
+        terminal_btn.setCursor(Qt.PointingHandCursor)
+        terminal_btn.setFixedHeight(24)
+        terminal_btn.setStyleSheet(find_btn.styleSheet())
+        terminal_btn.clicked.connect(self._open_terminal_runner)
+        top_bar.addWidget(terminal_btn)
 
         main_vbox.addLayout(top_bar)
 
@@ -3193,17 +3298,47 @@ class MainWindow(QWidget):
                     self.show_toast(f"Active Model: {self.config.llm.model}", "MODEL")
                 return
 
+            if cmd in ("/term", "/terminal"):
+                self._open_terminal_runner()
+                return
+
+            if cmd == "/mode":
+                if arg:
+                    idx = self._find_mode_index(arg)
+                    if idx >= 0:
+                        self._on_mode_changed(idx)
+                    else:
+                        self.show_toast(f"Mode not found: {arg}. Available: engineer, research, sysadmin, general", "WARNING")
+                else:
+                    self.show_toast(f"Active Mode: {self._operating_mode}", "SYSTEM")
+                return
+
+            if cmd in ("/prompts", "/templates"):
+                self._open_prompt_library()
+                return
+
+            if cmd in ("/artifacts", "/scripts"):
+                self._open_artifacts_drawer()
+                return
+
             if cmd == "/help":
                 help_text = (
                     f"**Nova AI Studio — Quick Command Reference:**\n\n"
                     f"- `/clear` — Wipe active conversation and reset context memory.\n"
                     f"- `/export` — Save conversation logs to a clean Markdown (.md) file.\n"
                     f"- `/palette` — Open the Spotlight Command Palette (`Ctrl+K`).\n"
+                    f"- `/term` — Launch Quick Embedded PowerShell Console (`Ctrl+T`).\n"
+                    f"- `/mode <name>` — Switch Persona (`engineer`, `research`, `sysadmin`, `general`).\n"
+                    f"- `/prompts` — Open Prompt & Workflow Library (`Ctrl+P`).\n"
+                    f"- `/artifacts` — Open Code Artifacts & Script Drawer (`Ctrl+B`).\n"
                     f"- `/sys` — Display instant Win32 CPU, RAM & engine telemetry.\n"
                     f"- `/model <name>` — Switch the active LLM inference engine.\n"
                     f"- `/task <prompt>` — Dispatch an autonomous background task.\n"
                     f"- `/research <query>` — Trigger comprehensive online web research.\n"
                     f"- `Ctrl+K` — Open Command Palette anywhere.\n"
+                    f"- `Ctrl+T` — Quick Terminal Runner.\n"
+                    f"- `Ctrl+P` — Prompt Library.\n"
+                    f"- `Ctrl+B` — Artifacts Drawer.\n"
                     f"- `Ctrl+Shift+N` — Restore Nova AI from Windows System Tray."
                 )
                 self._add_bubble("user", text)
@@ -3271,6 +3406,36 @@ class MainWindow(QWidget):
         facts = db.get_all_facts()
         if facts:
             system_prompt += "\nUser Facts:\n" + "\n".join(f"- {f}" for f in facts)
+
+        # Operating Persona Steering
+        mode = getattr(self, "_operating_mode", "ENGINEER")
+        if mode == "ENGINEER":
+            system_prompt += (
+                "\n[Operating Mode: Senior Software Engineer & Architect]\n"
+                "- Write modular, production-grade, typed code with robust architecture.\n"
+                "- Include docstrings, error handling, parameter validation, and runnable CLI entrypoints.\n"
+                "- Prioritize performance, security, clean code, and zero emojis.\n"
+            )
+        elif mode == "RESEARCH":
+            system_prompt += (
+                "\n[Operating Mode: Deep Research & Intelligence Analyst]\n"
+                "- Provide comprehensive, fact-dense, structured analyses with citations and source references.\n"
+                "- Compare trade-offs, state-of-the-art benchmarks, and clear executive takeaways.\n"
+                "- Structure insights with bulleted executive summaries and technical deep dives.\n"
+            )
+        elif mode == "SYSADMIN":
+            system_prompt += (
+                "\n[Operating Mode: Windows Systems & Infrastructure Administrator]\n"
+                "- Provide robust PowerShell 5.1/7.x and batch scripts executed strictly with CREATE_NO_WINDOW.\n"
+                "- Include parameter validation, error trapping ($ErrorActionPreference = 'Stop'), and path checks.\n"
+                "- Focus on Windows health, diagnostics, networking, services, and system security.\n"
+            )
+        elif mode == "GENERAL":
+            system_prompt += (
+                "\n[Operating Mode: Executive General Assistant]\n"
+                "- Deliver articulate, direct, and highly actionable answers with zero fluff.\n"
+                "- Keep explanations crisp and prioritize user efficiency.\n"
+            )
 
         self.send_btn.setEnabled(True)
         self.send_btn.setText("Stop")
