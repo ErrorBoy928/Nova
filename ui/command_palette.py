@@ -49,6 +49,7 @@ class CommandPaletteDialog(QDialog):
             ("export_chat", "Export Chat History", "Save conversation log to a clean Markdown (.md) file", "CHAT"),
             ("clear_chat", "Clear Conversation History", "Reset active chat memory and start a fresh session", "CHAT"),
             ("find_chat", "Find in Conversation (Ctrl+F)", "Search keywords across message bubbles with instant highlights", "CHAT"),
+            ("open_prompts", "Prompt & Automation Library (Ctrl+P)", "Browse curated code, system, and research templates", "NAV"),
             ("show_shortcuts", "Keyboard Shortcuts Reference (F1)", "View complete cheat sheet of keys, shortcuts, and commands", "HELP"),
         ]
 

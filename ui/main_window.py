@@ -830,8 +830,155 @@ class _LLMWorker(QThread):
                 self.failed.emit(f"Error: {exc}")
 
 
+def _generate_chat_html(recent: list[dict], model_name: str) -> str:
+    now_str = datetime.now().strftime("%B %d, %Y - %I:%M %p")
+    items_html = []
+    for msg in recent:
+        is_user = msg.get("role") == "user"
+        sender = "Commander" if is_user else "Nova AI Assistant"
+        bg_col = "#111827" if is_user else "#0f172a"
+        border_col = "#1f2937" if is_user else "#1e3a8a"
+        badge_col = "#38bdf8" if not is_user else "#94a3b8"
+        raw_content = msg.get("content", "")
+        formatted = html_lib.escape(raw_content)
+        formatted = re.sub(r"```(\w+)?\n?(.*?)```", r'<pre style="background:#090d16;padding:12px;border-radius:6px;border:1px solid #1e293b;overflow-x:auto;color:#38bdf8;font-family:Consolas,monospace;font-size:12px;"><code>\2</code></pre>', formatted, flags=re.DOTALL)
+        formatted = re.sub(r"`([^`]+)`", r'<code style="background:#1e293b;color:#38bdf8;padding:2px 5px;border-radius:4px;font-family:Consolas,monospace;font-size:11px;">\1</code>', formatted)
+        formatted = formatted.replace("\n", "<br>")
+
+        items_html.append(f"""
+        <div style="margin-bottom:16px;background:{bg_col};border:1px solid {border_col};border-radius:10px;padding:14px 18px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{badge_col};"></span>
+                <span style="font-weight:700;font-size:12px;color:{badge_col};letter-spacing:0.5px;">{sender.upper()}</span>
+            </div>
+            <div style="color:#e2e8f0;font-size:13px;line-height:1.6;">{formatted}</div>
+        </div>
+        """)
+
+    body_content = "\n".join(items_html)
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nova AI - Executive Conversation Log</title>
+<style>
+  body {{ background-color: #06060a; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 30px; display: flex; justify-content: center; }}
+  .container {{ max-width: 860px; width: 100%; }}
+  .header {{ border-bottom: 1px solid #1e293b; padding-bottom: 20px; margin-bottom: 24px; }}
+  .title {{ font-size: 20px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; margin: 0; }}
+  .meta {{ color: #94a3b8; font-size: 11px; margin-top: 6px; font-family: Consolas, monospace; }}
+  @media print {{ body {{ background: #fff; color: #000; }} }}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title">NOVA AI — AUTONOMOUS CONVERSATION LOG</div>
+    <div class="meta">Generated: {now_str} • Model Engine: {model_name} • Total Records: {len(recent)}</div>
+  </div>
+  {body_content}
+</div>
+</body>
+</html>"""
+
+
+class _ExecutionPlanWidget(QFrame):
+    """
+    Unified Autonomous Execution Pipeline Card.
+    Displays live step-by-step progress with status badges, elapsed time, and completion report.
+    """
+    def __init__(self, steps: list[tuple[str, str]], parent=None):
+        super().__init__(parent)
+        self.steps = steps
+        self._start_time = time.time()
+        self.setObjectName("executionPlanWidget")
+        self.setStyleSheet("""
+            QFrame#executionPlanWidget {
+                background-color: #0c0c14;
+                border: 1px solid #1e293b;
+                border-radius: 10px;
+                margin: 4px 6px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(10)
+
+        # Header
+        hdr = QHBoxLayout()
+        pill = QLabel("PLAN")
+        pill.setStyleSheet("background: #0284c7; color: #ffffff; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; font-family: Consolas, monospace;")
+        hdr.addWidget(pill)
+
+        title = QLabel(f"AUTONOMOUS AGENT PIPELINE ({len(steps)} Steps)")
+        title.setStyleSheet("color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 0.6px;")
+        hdr.addWidget(title)
+        hdr.addStretch()
+
+        self.time_lbl = QLabel("Executing...")
+        self.time_lbl.setStyleSheet("color: #38bdf8; font-size: 10px; font-family: Consolas, monospace;")
+        hdr.addWidget(self.time_lbl)
+        layout.addLayout(hdr)
+
+        # Progress bar
+        self.pbar = QProgressBar()
+        self.pbar.setFixedHeight(3)
+        self.pbar.setTextVisible(False)
+        self.pbar.setRange(0, len(steps))
+        self.pbar.setValue(0)
+        self.pbar.setStyleSheet("QProgressBar { background: #161622; border-radius: 1px; } QProgressBar::chunk { background: #0284c7; border-radius: 1px; }")
+        layout.addWidget(self.pbar)
+
+        # Step rows
+        self.row_labels: list[tuple[QLabel, QLabel]] = []
+        for idx, (act_name, arg) in enumerate(steps, 1):
+            row = QHBoxLayout()
+            row.setSpacing(8)
+
+            badge = QLabel("PENDING")
+            badge.setFixedWidth(64)
+            badge.setAlignment(Qt.AlignCenter)
+            badge.setStyleSheet("background: #181824; color: #64748b; font-size: 9px; font-weight: 700; padding: 2px 4px; border-radius: 4px; border: 1px solid #242436;")
+            row.addWidget(badge)
+
+            short_arg = (arg[:60] + "...") if len(arg) > 60 else arg
+            step_text = f"Step {idx}: [{act_name}] {short_arg}" if short_arg else f"Step {idx}: [{act_name}]"
+            step_lbl = QLabel(step_text)
+            step_lbl.setStyleSheet("color: #cbd5e1; font-size: 11px;")
+            row.addWidget(step_lbl)
+            row.addStretch()
+
+            layout.addLayout(row)
+            self.row_labels.append((badge, step_lbl))
+
+    def mark_step_result(self, step_idx: int, success: bool, msg: str):
+        if 0 <= step_idx < len(self.row_labels):
+            badge, lbl = self.row_labels[step_idx]
+            if success:
+                badge.setText("DONE")
+                badge.setStyleSheet("background: #064e3b; color: #6ee7b7; font-size: 9px; font-weight: 800; padding: 2px 4px; border-radius: 4px; border: 1px solid #059669;")
+            else:
+                badge.setText("FAILED")
+                badge.setStyleSheet("background: #450a0a; color: #fca5a5; font-size: 9px; font-weight: 800; padding: 2px 4px; border-radius: 4px; border: 1px solid #991b1b;")
+            if msg:
+                clean_msg = msg.splitlines()[0] if msg else ""
+                lbl.setText(f"{lbl.text().split(' -> ')[0]} -> {clean_msg[:65]}")
+            self.pbar.setValue(step_idx + 1)
+
+    def finalize(self, all_ok: bool):
+        elapsed = round(time.time() - self._start_time, 2)
+        status_txt = "Completed" if all_ok else "Finished with warnings"
+        self.time_lbl.setText(f"{status_txt} in {elapsed}s")
+        color = "#10b981" if all_ok else "#f59e0b"
+        self.time_lbl.setStyleSheet(f"color: {color}; font-size: 10px; font-weight: 700; font-family: Consolas, monospace;")
+        self.pbar.setStyleSheet(f"QProgressBar {{ background: #161622; border-radius: 1px; }} QProgressBar::chunk {{ background: {color}; border-radius: 1px; }}")
+
+
 class BackgroundTaskWorker(QThread):
     progress = Signal(str)
+    step_completed = Signal(int, bool, str, str)  # (step_idx, success, act_name, msg)
     finished_report = Signal(list)  # list of tuples (success: bool, act_name: str, msg: str)
 
     def __init__(self, actions_list: list[tuple[str, str]]):
@@ -841,18 +988,20 @@ class BackgroundTaskWorker(QThread):
     def run(self):
         results = []
         total = len(self.actions_list)
-        for idx, (act_name, act_arg) in enumerate(self.actions_list, 1):
-            step_lbl = f"Step {idx}/{total}: {act_name}" if total > 1 else f"Executing: {act_name}"
+        for idx, (act_name, act_arg) in enumerate(self.actions_list):
+            step_lbl = f"Step {idx+1}/{total}: {act_name}" if total > 1 else f"Executing: {act_name}"
             self.progress.emit(step_lbl)
             if act_name == "generate_image":
                 try:
                     img_path = generate_image(act_arg)
-                    results.append((True, act_name, f"Image generated: {img_path}"))
+                    res = (True, act_name, f"Image generated: {img_path}")
                 except Exception as e:
-                    results.append((False, act_name, f"Image error: {e}"))
+                    res = (False, act_name, f"Image error: {e}")
             else:
                 success, msg = automation_executor.run_action(act_name, act_arg)
-                results.append((success, act_name, msg))
+                res = (success, act_name, msg)
+            results.append(res)
+            self.step_completed.emit(idx, res[0], res[1], res[2])
         self.finished_report.emit(results)
 
 
@@ -1257,6 +1406,7 @@ class MainWindow(QWidget):
         self.hero_widget: ChatHeroWidget | None = None
         self._search_matches: list[_MessageBubble] = []
         self._search_idx: int = -1
+        self._current_plan_widget: _ExecutionPlanWidget | None = None
 
         # Global Hotkey Thread (Ctrl+Shift+D for Snip, Ctrl+Shift+N to Toggle Nova)
         self.hotkey_thread = GlobalHotkeyThread()
@@ -1279,6 +1429,9 @@ class MainWindow(QWidget):
 
         self.cmd_find_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         self.cmd_find_shortcut.activated.connect(self._toggle_search_bar)
+
+        self.cmd_prompt_shortcut = QShortcut(QKeySequence("Ctrl+P"), self)
+        self.cmd_prompt_shortcut.activated.connect(self._open_prompt_library)
 
         self.cmd_help_shortcut = QShortcut(QKeySequence("F1"), self)
         self.cmd_help_shortcut.activated.connect(self._show_shortcuts_dialog)
@@ -1485,6 +1638,7 @@ class MainWindow(QWidget):
 
         shortcuts = [
             ("Ctrl + K", "Spotlight Command Palette (Actions & Navigation)"),
+            ("Ctrl + P", "Prompt & Automation Library (Templates & Workflows)"),
             ("Ctrl + F", "Find in Chat Conversation"),
             ("Ctrl + Shift + D", "Desktop Screen Snip & Vision OCR"),
             ("Ctrl + Shift + N", "Summon Nova AI from System Tray"),
@@ -1519,6 +1673,20 @@ class MainWindow(QWidget):
         d_layout.addWidget(btn_close)
 
         dlg.exec()
+
+    def _open_prompt_library(self):
+        try:
+            from ui.prompt_library import PromptLibraryDialog
+            dlg = PromptLibraryDialog(self)
+            dlg.prompt_selected.connect(self._on_prompt_selected)
+            dlg.exec()
+        except Exception as e:
+            self.show_toast(f"Prompt Library notice: {e}", "WARNING")
+
+    def _on_prompt_selected(self, prompt: str):
+        self.input_edit.setText(prompt)
+        self.input_edit.setFocus()
+        self.show_toast("Prompt template loaded into chat", "INFO")
 
     def _open_command_palette(self):
         palette = CommandPaletteDialog(self)
@@ -1562,6 +1730,8 @@ class MainWindow(QWidget):
             self._clear_conversation()
         elif cmd_id == "find_chat":
             self._toggle_search_bar()
+        elif cmd_id == "open_prompts":
+            self._open_prompt_library()
         elif cmd_id == "show_shortcuts":
             self._show_shortcuts_dialog()
         elif cmd_id == "custom_prompt":
@@ -1574,27 +1744,32 @@ class MainWindow(QWidget):
             return
 
         now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_name = f"Nova_Chat_{now_str}.md"
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export Conversation Log", default_name, "Markdown (*.md);;Text File (*.txt)"
+        default_name = f"Nova_Chat_{now_str}.html"
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self, "Export Conversation Log", default_name, "Interactive HTML Document (*.html);;Markdown Log (*.md);;Text File (*.txt)"
         )
         if file_path:
             try:
-                lines = [
-                    "# Nova AI - Autonomous Conversation Log",
-                    f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                    f"Model Engine: {self.config.llm.model}",
-                    "",
-                    "---",
-                    ""
-                ]
-                for msg in recent:
-                    role_title = "User" if msg["role"] == "user" else "Nova AI Assistant"
-                    lines.append(f"### {role_title}\n")
-                    lines.append(f"{msg['content']}\n")
-                    lines.append("---\n")
-                Path(file_path).write_text("\n".join(lines), encoding="utf-8")
-                self.show_toast(f"Exported to {Path(file_path).name}", "EXPORT")
+                p = Path(file_path)
+                if p.suffix.lower() == ".html" or "HTML" in selected_filter:
+                    html_content = _generate_chat_html(recent, self.config.llm.model)
+                    p.write_text(html_content, encoding="utf-8")
+                else:
+                    lines = [
+                        "# Nova AI - Autonomous Conversation Log",
+                        f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                        f"Model Engine: {self.config.llm.model}",
+                        "",
+                        "---",
+                        ""
+                    ]
+                    for msg in recent:
+                        role_title = "User" if msg["role"] == "user" else "Nova AI Assistant"
+                        lines.append(f"### {role_title}\n")
+                        lines.append(f"{msg['content']}\n")
+                        lines.append("---\n")
+                    p.write_text("\n".join(lines), encoding="utf-8")
+                self.show_toast(f"Exported to {p.name}", "EXPORT")
             except Exception as e:
                 self.show_toast(f"Export failed: {e}", "ERROR")
 
@@ -2122,6 +2297,15 @@ class MainWindow(QWidget):
         help_btn.clicked.connect(self._show_shortcuts_dialog)
         top_bar.addWidget(help_btn)
 
+        # Prompts Library Button (Ctrl+P)
+        prompts_btn = QPushButton("Prompts")
+        prompts_btn.setToolTip("Prompt & Automation Library (Ctrl+P)")
+        prompts_btn.setCursor(Qt.PointingHandCursor)
+        prompts_btn.setFixedHeight(24)
+        prompts_btn.setStyleSheet(find_btn.styleSheet())
+        prompts_btn.clicked.connect(self._open_prompt_library)
+        top_bar.addWidget(prompts_btn)
+
         main_vbox.addLayout(top_bar)
 
         # Stacked Pages
@@ -2180,6 +2364,7 @@ class MainWindow(QWidget):
         strip_layout.setSpacing(6)
 
         strip_pills = [
+            ("Prompts Library", self._open_prompt_library),
             ("Deep Research", lambda: self._send_quick_prompt("[action:web_search:] ")),
             ("Run Code", lambda: self._send_quick_prompt("[action:run_code:python:] ")),
             ("Screen Vision", lambda: self._send_quick_prompt("Analyze active screen and ")),
@@ -3015,19 +3200,30 @@ class MainWindow(QWidget):
         if self.config.voice.auto_speak and clean_text:
             self._speak_text(clean_text)
 
-        # Run tasks in background thread
+        # Run tasks in background thread with live visual execution pipeline
         total = len(actions_list)
         self.status_pill.setText(f"EXECUTING 1/{total}...")
+        self._current_plan_widget = _ExecutionPlanWidget(actions_list)
+        self.message_layout.insertWidget(self.message_layout.count() - 1, self._current_plan_widget)
+        self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
         self._task_worker = BackgroundTaskWorker(actions_list)
         self._task_worker.progress.connect(lambda s: self.status_pill.setText(s.upper()))
+        self._task_worker.step_completed.connect(self._on_background_step_done)
         self._task_worker.finished_report.connect(self._on_background_tasks_completed)
         self._task_worker.start()
 
+    def _on_background_step_done(self, idx: int, success: bool, act_name: str, msg: str):
+        if hasattr(self, "_current_plan_widget") and self._current_plan_widget:
+            self._current_plan_widget.mark_step_result(idx, success, msg)
+            self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
     def _on_background_tasks_completed(self, results: list[tuple[bool, str, str]]):
+        if hasattr(self, "_current_plan_widget") and self._current_plan_widget:
+            self._current_plan_widget.finalize(all(r[0] for r in results))
+
         total = len(results)
         for idx, (success, act_name, msg) in enumerate(results, 1):
-            prefix = f"Step {idx}/{total} [{act_name}]" if total > 1 else f"[{act_name}]"
-            self._add_action_badge(success, f"{prefix}: {msg}")
             if act_name in ("enable_vision", "screen_vision", "start_vision") and success:
                 self.enable_screen_vision(auto_capture=False)
             if act_name in ("save_task", "update_task", "complete_task", "plan_task"):
