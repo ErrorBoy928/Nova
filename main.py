@@ -18,17 +18,26 @@ concurrent.futures.ThreadPoolExecutor = ThreadPoolExecutor
 import asyncio.base_events
 asyncio.base_events.concurrent.futures.ThreadPoolExecutor = ThreadPoolExecutor
 
+import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+# Ensure project root is always the first lookup in sys.path
+_base_dir = Path(__file__).resolve().parent
+if str(_base_dir) not in sys.path:
+    sys.path.insert(0, str(_base_dir))
+try:
+    os.chdir(_base_dir)
+except Exception:
+    pass
 
 # Load .env from project root
-_base_dir = Path(__file__).resolve().parent
 load_dotenv(_base_dir / ".env")
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QMessageBox
 
 from ai.llm_manager import LLMManager
 from config.settings_schema import load_config, save_config
@@ -154,14 +163,32 @@ class AssistantApp:
 
 
 def main() -> int:
-    app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
-    app.setApplicationName("AI Desktop Assistant")
+    try:
+        app = QApplication(sys.argv)
+        app.setQuitOnLastWindowClosed(False)
+        app.setApplicationName("AI Desktop Assistant")
 
-    assistant = AssistantApp()
-    assistant.start()
+        assistant = AssistantApp()
+        assistant.start()
 
-    return app.exec()
+        return app.exec()
+    except Exception as e:
+        import traceback
+        err_msg = traceback.format_exc()
+        try:
+            crash_file = _base_dir / "crash_log.txt"
+            crash_file.write_text(err_msg, encoding="utf-8")
+        except Exception:
+            pass
+        try:
+            QMessageBox.critical(
+                None,
+                "Nova AI Fatal Startup Error",
+                f"Failed to launch Nova AI:\n\n{str(e)}\n\nCheck crash_log.txt for full traceback details.",
+            )
+        except Exception:
+            print(err_msg, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
