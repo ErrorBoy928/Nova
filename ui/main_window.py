@@ -17,20 +17,37 @@ from __future__ import annotations
 
 import html as html_lib
 import re
+import ctypes
+from datetime import datetime
 from pathlib import Path
+import time
 
 from PySide6.QtCore import QPoint, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QClipboard, QIcon, QKeyEvent
+from PySide6.QtGui import (
+    QAction,
+    QClipboard,
+    QColor,
+    QIcon,
+    QKeyEvent,
+    QKeySequence,
+    QPainter,
+    QPixmap,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QMenu,
+    QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QStackedWidget,
+    QSystemTrayIcon,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -40,6 +57,7 @@ from ui.tasks_view import TasksView
 from ui.connections_view import ConnectionsView
 from ui.admin_feed_view import AdminFeedView
 from ui.settings_view import SettingsView
+from ui.command_palette import CommandPaletteDialog
 
 from ai.image_gen import generate_image
 from ai.llm_manager import ChatMessage, LLMError, LLMManager, clean_repetitive_patterns
@@ -95,6 +113,122 @@ _ACCENT_RED = "#ef4444"     # Ruby alert
 _TEXT_MAIN = "#f8fafc"      # Primary text
 _TEXT_MUTED = "#94a3b8"     # Secondary text
 _TEXT_SUBTLE = "#64748b"    # Tertiary text
+
+
+class _MEMORYSTATUSEX(ctypes.Structure):
+    _fields_ = [
+        ("dwLength", ctypes.c_ulong),
+        ("dwMemoryLoad", ctypes.c_ulong),
+        ("ullTotalPhys", ctypes.c_ulonglong),
+        ("ullAvailPhys", ctypes.c_ulonglong),
+        ("ullTotalPageFile", ctypes.c_ulonglong),
+        ("ullAvailPageFile", ctypes.c_ulonglong),
+        ("ullTotalVirtual", ctypes.c_ulonglong),
+        ("ullAvailVirtual", ctypes.c_ulonglong),
+        ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
+    ]
+
+
+class _FILETIME(ctypes.Structure):
+    _fields_ = [("dwLowDateTime", ctypes.c_ulong), ("dwHighDateTime", ctypes.c_ulong)]
+
+
+_prev_idle = 0
+_prev_kernel = 0
+_prev_user = 0
+
+
+def _get_live_telemetry() -> tuple[int, int, float, float]:
+    """Returns (cpu_pct, ram_pct, used_ram_gb, total_ram_gb) in 0.1ms using Win32 API."""
+    global _prev_idle, _prev_kernel, _prev_user
+    stat = _MEMORYSTATUSEX()
+    stat.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+    ram_pct = int(stat.dwMemoryLoad)
+    total_ram_gb = round(stat.ullTotalPhys / (1024**3), 1)
+    used_ram_gb = round((stat.ullTotalPhys - stat.ullAvailPhys) / (1024**3), 1)
+
+    idle, kernel, user = _FILETIME(), _FILETIME(), _FILETIME()
+    ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user))
+    i = (idle.dwHighDateTime << 32) | idle.dwLowDateTime
+    k = (kernel.dwHighDateTime << 32) | kernel.dwLowDateTime
+    u = (user.dwHighDateTime << 32) | user.dwLowDateTime
+
+    cpu_pct = 0
+    if _prev_kernel > 0:
+        di = i - _prev_idle
+        dk = k - _prev_kernel
+        du = u - _prev_user
+        total = dk + du
+        if total > 0:
+            cpu_pct = int(((total - di) * 100) / total)
+            cpu_pct = max(min(cpu_pct, 100), 0)
+
+    _prev_idle, _prev_kernel, _prev_user = i, k, u
+    return cpu_pct, ram_pct, used_ram_gb, total_ram_gb
+
+
+class NovaToast(QFrame):
+    """
+    Sleek executive HUD floating notification overlay.
+    Appears smoothly at top-right of MainWindow and auto-dismisses.
+    """
+    def __init__(self, parent: QWidget, text: str, tag: str = "INFO", duration_ms: int = 2600):
+        super().__init__(parent)
+        self.setObjectName("novaToast")
+
+        tag_colors = {
+            "SUCCESS": ("#10b981", "#059669"),
+            "MODEL": ("#0ea5e9", "#0284c7"),
+            "SYSTEM": ("#8b5cf6", "#7c3aed"),
+            "EXPORT": ("#38bdf8", "#0284c7"),
+            "COPIED": ("#10b981", "#059669"),
+            "WARNING": ("#f59e0b", "#d97706"),
+            "ERROR": ("#f43f5e", "#e11d48"),
+            "INFO": ("#94a3b8", "#64748b"),
+        }
+        accent, border_c = tag_colors.get(tag.upper(), tag_colors["INFO"])
+
+        self.setStyleSheet(f"""
+            QFrame#novaToast {{
+                background-color: #111118;
+                border: 1px solid {border_c};
+                border-radius: 8px;
+            }}
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 7, 14, 7)
+        layout.setSpacing(9)
+
+        tag_lbl = QLabel(tag.upper())
+        tag_lbl.setStyleSheet(f"""
+            QLabel {{
+                background-color: rgba(255, 255, 255, 0.06);
+                color: {accent};
+                font-size: 9px;
+                font-weight: 800;
+                font-family: Consolas, monospace;
+                padding: 2px 6px;
+                border-radius: 4px;
+                border: 1px solid {accent}40;
+            }}
+        """)
+        layout.addWidget(tag_lbl)
+
+        msg_lbl = QLabel(text)
+        msg_lbl.setStyleSheet("color: #f1f5f9; font-size: 11px; font-weight: 500;")
+        layout.addWidget(msg_lbl)
+
+        self.adjustSize()
+
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._dismiss)
+        self._timer.start(duration_ms)
+
+    def _dismiss(self):
+        self.deleteLater()
 
 
 def _format_inline(text: str) -> str:
@@ -563,7 +697,7 @@ class CodeBlockWidget(QFrame):
 
 class _LLMWorker(QThread):
     chunk_received = Signal(str)
-    reply_ready = Signal(str)
+    reply_ready = Signal(str, float)
     failed = Signal(str)
 
     def __init__(self, manager: LLMManager, history: list[ChatMessage], system_prompt: str):
@@ -577,6 +711,7 @@ class _LLMWorker(QThread):
         self._cancelled = True
 
     def run(self):
+        start_time = time.time()
         try:
             chunks = []
             for chunk in self.manager.chat_stream(self.history, system_prompt=self.system_prompt):
@@ -585,8 +720,9 @@ class _LLMWorker(QThread):
                 chunks.append(chunk)
                 self.chunk_received.emit(chunk)
             full_reply = "".join(chunks)
+            elapsed = time.time() - start_time
             if not self._cancelled:
-                self.reply_ready.emit(full_reply)
+                self.reply_ready.emit(full_reply, elapsed)
         except LLMError as exc:
             if not self._cancelled:
                 self.failed.emit(str(exc))
@@ -732,6 +868,9 @@ class _MessageBubble(QWidget):
                 self.action_bar.addWidget(self.listen_btn)
 
             self.action_bar.addStretch()
+            self.meta_lbl = QLabel("")
+            self.meta_lbl.setStyleSheet("color: #475569; font-size: 9px; font-weight: 600; font-family: Consolas, monospace;")
+            self.action_bar.addWidget(self.meta_lbl)
             self.card_layout.addLayout(self.action_bar)
 
         if self.is_user:
@@ -743,6 +882,16 @@ class _MessageBubble(QWidget):
 
         if content:
             self.finalize_content(content)
+
+    def set_meta(self, time_str: str, latency_sec: float = 0.0, model_name: str = ""):
+        parts = [time_str]
+        if latency_sec > 0:
+            parts.append(f"{latency_sec:.1f}s")
+        if model_name:
+            short_model = model_name.split("/")[-1]
+            parts.append(short_model)
+        if hasattr(self, "meta_lbl"):
+            self.meta_lbl.setText(" • ".join(parts))
 
     def update_stream_text(self, text: str):
         """Called dynamically as tokens arrive in real-time."""
@@ -1000,6 +1149,21 @@ class MainWindow(QWidget):
         self._load_history()
         self._update_tasks_btn_badge()
 
+        # System Tray Integration
+        self._is_force_quitting = False
+        self._setup_tray_icon()
+
+        # Command Palette Shortcut (Ctrl+K)
+        self.cmd_k_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+        self.cmd_k_shortcut.activated.connect(self._open_command_palette)
+
+        # Telemetry Polling Timer (smooth 2.5s interval)
+        self._telemetry_timer = QTimer(self)
+        self._telemetry_timer.setInterval(2500)
+        self._telemetry_timer.timeout.connect(self._update_telemetry)
+        self._telemetry_timer.start()
+        QTimer.singleShot(300, self._update_telemetry)
+
         # Start non-blocking Desktop-Hybrid cloud sync in background
         remote_sync.start_background_sync(self.config, delay_sec=1.2)
 
@@ -1008,8 +1172,13 @@ class MainWindow(QWidget):
 
     def _check_api_key_on_startup(self):
         key = get_api_key(self.config)
-        if hasattr(self, "model_badge"):
-            self.model_badge.setText(f"ENGINE: {self.config.llm.provider.upper()} ({self.config.llm.model})")
+        if hasattr(self, "model_combo"):
+            for i in range(self.model_combo.count()):
+                if self.model_combo.itemData(i) == self.config.llm.model:
+                    self.model_combo.blockSignals(True)
+                    self.model_combo.setCurrentIndex(i)
+                    self.model_combo.blockSignals(False)
+                    break
         if self.hero_widget and self.config.user_name:
             self.hero_widget.update_user_name(self.config.user_name)
 
@@ -1021,8 +1190,13 @@ class MainWindow(QWidget):
                 new_key = get_api_key(self.config)
                 if new_key and len(new_key) >= 10:
                     self.status_pill.setText("READY")
-                if hasattr(self, "model_badge"):
-                    self.model_badge.setText(f"ENGINE: {self.config.llm.provider.upper()} ({self.config.llm.model})")
+                if hasattr(self, "model_combo"):
+                    for i in range(self.model_combo.count()):
+                        if self.model_combo.itemData(i) == self.config.llm.model:
+                            self.model_combo.blockSignals(True)
+                            self.model_combo.setCurrentIndex(i)
+                            self.model_combo.blockSignals(False)
+                            break
                 if self.config.user_name:
                     self.title_label.setText(self.config.ui.assistant_name.upper())
                     self.setWindowTitle(f"{self.config.ui.assistant_name} - Autonomous Desktop Studio")
@@ -1030,6 +1204,256 @@ class MainWindow(QWidget):
                         self.hero_widget.update_user_name(self.config.user_name)
         else:
             self.status_pill.setText("READY")
+
+    def _update_telemetry(self):
+        if not self.isVisible():
+            return
+        try:
+            cpu_pct, ram_pct, used_gb, total_gb = _get_live_telemetry()
+            self.cpu_lbl.setText(f"CPU: {cpu_pct}%")
+            self.cpu_bar.setValue(cpu_pct)
+            cpu_color = "#ef4444" if cpu_pct > 80 else "#38bdf8"
+            self.cpu_bar.setStyleSheet(f"QProgressBar {{ background: #1a1a26; border-radius: 1px; }} QProgressBar::chunk {{ background: {cpu_color}; border-radius: 1px; }}")
+
+            self.ram_lbl.setText(f"RAM: {ram_pct}% ({used_gb}G)")
+            self.ram_bar.setValue(ram_pct)
+            ram_color = "#ef4444" if ram_pct > 85 else "#10b981"
+            self.ram_bar.setStyleSheet(f"QProgressBar {{ background: #1a1a26; border-radius: 1px; }} QProgressBar::chunk {{ background: {ram_color}; border-radius: 1px; }}")
+        except Exception:
+            pass
+
+    def show_toast(self, text: str, tag: str = "INFO", duration_ms: int = 2600):
+        """Displays a floating HUD toast banner in the top-right corner."""
+        try:
+            if hasattr(self, "_active_toast") and self._active_toast:
+                try:
+                    self._active_toast.deleteLater()
+                except Exception:
+                    pass
+            toast = NovaToast(self, text, tag, duration_ms)
+            toast.show()
+            t_width = toast.sizeHint().width()
+            t_height = toast.sizeHint().height()
+            toast.setGeometry(self.width() - t_width - 24, 18, t_width, t_height)
+            toast.raise_()
+            self._active_toast = toast
+        except Exception:
+            pass
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "_active_toast") and self._active_toast:
+            try:
+                t_width = self._active_toast.width()
+                self._active_toast.move(self.width() - t_width - 24, 18)
+            except Exception:
+                pass
+
+    def _find_model_index(self, name: str) -> int:
+        name_lower = name.strip().lower()
+        for i in range(self.model_combo.count()):
+            m_id = (self.model_combo.itemData(i) or "").lower()
+            text = self.model_combo.itemText(i).lower()
+            if name_lower in m_id or name_lower in text:
+                return i
+        return -1
+
+    def _on_top_model_changed(self, index: int):
+        if index < 0 or index >= self.model_combo.count():
+            return
+        m_id = self.model_combo.itemData(index)
+        if m_id and m_id != self.config.llm.model:
+            self.config.llm.model = m_id
+            save_config(self.config)
+            self.status_pill.setText("ENGINE SWITCHED")
+            short_name = m_id.split("/")[-1]
+            self.show_toast(f"Engine switched: {short_name}", "MODEL")
+            QTimer.singleShot(1500, lambda: self.status_pill.setText("READY"))
+
+    def _open_command_palette(self):
+        palette = CommandPaletteDialog(self)
+        palette.action_triggered.connect(self._handle_palette_action)
+        geo = self.geometry()
+        x = geo.x() + (geo.width() - palette.width()) // 2
+        y = geo.y() + 80
+        palette.move(x, y)
+        palette.exec()
+
+    def _handle_palette_action(self, cmd_id: str, payload: str):
+        if cmd_id == "system_stats":
+            self._quick_action("system_stats")
+        elif cmd_id == "clear_temp":
+            self._quick_action("clear_temp")
+        elif cmd_id == "empty_recycle_bin":
+            self._quick_action("empty_recycle_bin")
+        elif cmd_id == "lock":
+            self._quick_action("lock")
+        elif cmd_id == "snip_screen":
+            self.snipper.start_snip()
+        elif cmd_id == "toggle_vision":
+            self._toggle_screen_vision()
+        elif cmd_id == "web_research":
+            self._send_quick_prompt("[action:web_search:] ")
+        elif cmd_id == "write_python":
+            self._send_quick_prompt("Write a modular Python script with robust error handling and CLI arguments: ")
+        elif cmd_id == "run_py_file":
+            self._on_run_python_file()
+        elif cmd_id == "nav_tasks":
+            self._switch_nav(1)
+        elif cmd_id == "nav_conn":
+            self._switch_nav(2)
+        elif cmd_id == "nav_feed":
+            self._switch_nav(3)
+        elif cmd_id == "nav_settings":
+            self._switch_nav(4)
+        elif cmd_id == "export_chat":
+            self._export_conversation()
+        elif cmd_id == "clear_chat":
+            self._clear_conversation()
+        elif cmd_id == "custom_prompt":
+            self._send_quick_prompt(payload)
+
+    def _export_conversation(self):
+        recent = db.get_recent_history(limit=100)
+        if not recent:
+            QMessageBox.information(self, "Export Conversation", "No conversation messages found to export.")
+            return
+
+        now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"Nova_Chat_{now_str}.md"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Conversation Log", default_name, "Markdown (*.md);;Text File (*.txt)"
+        )
+        if file_path:
+            try:
+                lines = [
+                    "# Nova AI - Autonomous Conversation Log",
+                    f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                    f"Model Engine: {self.config.llm.model}",
+                    "",
+                    "---",
+                    ""
+                ]
+                for msg in recent:
+                    role_title = "User" if msg["role"] == "user" else "Nova AI Assistant"
+                    lines.append(f"### {role_title}\n")
+                    lines.append(f"{msg['content']}\n")
+                    lines.append("---\n")
+                Path(file_path).write_text("\n".join(lines), encoding="utf-8")
+                self.show_toast(f"Exported to {Path(file_path).name}", "EXPORT")
+            except Exception as e:
+                self.show_toast(f"Export failed: {e}", "ERROR")
+
+    def _setup_tray_icon(self):
+        pix = QPixmap(32, 32)
+        pix.fill(Qt.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(QColor("#0284c7"))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(0, 0, 32, 32, 8, 8)
+        p.setPen(QColor("#ffffff"))
+        f = p.font()
+        f.setBold(True)
+        f.setPixelSize(20)
+        p.setFont(f)
+        p.drawText(pix.rect(), Qt.AlignCenter, "N")
+        p.end()
+        tray_icon = QIcon(pix)
+
+        self.tray = QSystemTrayIcon(tray_icon, self)
+        self.tray.setToolTip(f"{self.config.ui.assistant_name} - Autonomous Desktop Studio")
+
+        tray_menu = QMenu()
+        tray_menu.setStyleSheet("""
+            QMenu {
+                background-color: #121217;
+                color: #f8fafc;
+                border: 1px solid #22222b;
+                border-radius: 6px;
+                padding: 4px;
+                font-size: 11px;
+            }
+            QMenu::item {
+                padding: 6px 16px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #0284c7;
+                color: #ffffff;
+            }
+        """)
+        act_open = QAction("Open Nova Studio", self)
+        act_open.triggered.connect(self._restore_from_tray)
+        tray_menu.addAction(act_open)
+
+        act_palette = QAction("Quick Command Palette (Ctrl+K)", self)
+        act_palette.triggered.connect(self._open_command_palette)
+        tray_menu.addAction(act_palette)
+
+        act_snip = QAction("Snip Screen (Ctrl+Shift+D)", self)
+        act_snip.triggered.connect(self.snipper.start_snip)
+        tray_menu.addAction(act_snip)
+
+        act_stats = QAction("System Diagnostics", self)
+        act_stats.triggered.connect(lambda: self._quick_action("system_stats"))
+        tray_menu.addAction(act_stats)
+
+        tray_menu.addSeparator()
+
+        act_exit = QAction("Exit Completely", self)
+        act_exit.triggered.connect(self._force_quit)
+        tray_menu.addAction(act_exit)
+
+        self.tray.setContextMenu(tray_menu)
+        self.tray.activated.connect(self._on_tray_activated)
+        self.tray.show()
+
+    def _on_tray_activated(self, reason):
+        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
+            self._restore_from_tray()
+
+    def _restore_from_tray(self):
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _force_quit(self):
+        self._is_force_quitting = True
+        QApplication.quit()
+
+    def closeEvent(self, event):
+        if not getattr(self, "_is_force_quitting", False) and hasattr(self, "tray") and self.tray.isVisible():
+            event.ignore()
+            self.hide()
+            self.tray.showMessage(
+                "Nova AI Assistant",
+                "Nova is running in the background. Press Ctrl+Shift+N to summon or click the tray icon.",
+                QSystemTrayIcon.Information,
+                2200
+            )
+        else:
+            event.accept()
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls:
+                file_path = Path(urls[0].toLocalFile())
+                if file_path.exists():
+                    self._attached_path = file_path
+                    self.attachment_preview.setText(f"[Attached: {file_path.name}]")
+                    self.attachment_preview.setVisible(True)
+                    self.show_toast(f"Attached: {file_path.name}", "SUCCESS")
+                    event.acceptProposedAction()
+                    return
+        super().dropEvent(event)
 
     def _on_hero_action(self, prompt: str, is_instant: bool):
         if is_instant and prompt == "system_stats":
@@ -1197,6 +1621,62 @@ class MainWindow(QWidget):
         self.speak_toggle_btn.clicked.connect(self._toggle_auto_speak)
         sidebar_layout.addWidget(self.speak_toggle_btn)
 
+        # Real-time System Telemetry Card
+        self.telemetry_card = QFrame()
+        self.telemetry_card.setStyleSheet("""
+            QFrame {
+                background-color: #0c0c14;
+                border: 1px solid #1c1c28;
+                border-radius: 6px;
+                padding: 6px 8px;
+            }
+        """)
+        telem_layout = QVBoxLayout(self.telemetry_card)
+        telem_layout.setContentsMargins(2, 2, 2, 2)
+        telem_layout.setSpacing(4)
+
+        telem_hdr = QHBoxLayout()
+        telem_title = QLabel("TELEMETRY")
+        telem_title.setStyleSheet("color: #475569; font-size: 8px; font-weight: 800; letter-spacing: 0.6px;")
+        telem_hdr.addWidget(telem_title)
+        telem_hdr.addStretch()
+        self.telem_live_dot = QLabel("●")
+        self.telem_live_dot.setStyleSheet("color: #10b981; font-size: 8px;")
+        telem_hdr.addWidget(self.telem_live_dot)
+        telem_layout.addLayout(telem_hdr)
+
+        # CPU Row
+        cpu_row = QHBoxLayout()
+        self.cpu_lbl = QLabel("CPU: --%")
+        self.cpu_lbl.setStyleSheet("color: #cbd5e1; font-size: 10px; font-weight: 600; font-family: Consolas, monospace;")
+        cpu_row.addWidget(self.cpu_lbl)
+        telem_layout.addLayout(cpu_row)
+
+        self.cpu_bar = QProgressBar()
+        self.cpu_bar.setFixedHeight(3)
+        self.cpu_bar.setTextVisible(False)
+        self.cpu_bar.setRange(0, 100)
+        self.cpu_bar.setValue(0)
+        self.cpu_bar.setStyleSheet("QProgressBar { background: #1a1a26; border-radius: 1px; } QProgressBar::chunk { background: #38bdf8; border-radius: 1px; }")
+        telem_layout.addWidget(self.cpu_bar)
+
+        # RAM Row
+        ram_row = QHBoxLayout()
+        self.ram_lbl = QLabel("RAM: --%")
+        self.ram_lbl.setStyleSheet("color: #cbd5e1; font-size: 10px; font-weight: 600; font-family: Consolas, monospace;")
+        ram_row.addWidget(self.ram_lbl)
+        telem_layout.addLayout(ram_row)
+
+        self.ram_bar = QProgressBar()
+        self.ram_bar.setFixedHeight(3)
+        self.ram_bar.setTextVisible(False)
+        self.ram_bar.setRange(0, 100)
+        self.ram_bar.setValue(0)
+        self.ram_bar.setStyleSheet("QProgressBar { background: #1a1a26; border-radius: 1px; } QProgressBar::chunk { background: #10b981; border-radius: 1px; }")
+        telem_layout.addWidget(self.ram_bar)
+
+        sidebar_layout.addWidget(self.telemetry_card)
+
         # Version Pill
         ver_lbl = QLabel("Nova AI • v2.5 Pro")
         ver_lbl.setStyleSheet("color: #475569; font-size: 10px; font-weight: 600; margin-top: 4px;")
@@ -1219,21 +1699,85 @@ class MainWindow(QWidget):
         self.view_title = QLabel("Chat & Autonomous Code Console")
         self.view_title.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: 700;")
         top_bar.addWidget(self.view_title)
+
+        # Quick Command Palette Button
+        self.palette_btn = QPushButton("Quick Command (Ctrl+K)")
+        self.palette_btn.setToolTip("Open Command Palette (Ctrl+K)")
+        self.palette_btn.setCursor(Qt.PointingHandCursor)
+        self.palette_btn.setFixedHeight(24)
+        self.palette_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #12121a;
+                color: #64748b;
+                border: 1px solid {_BORDER};
+                border-radius: 5px;
+                padding: 0 10px;
+                font-size: 10px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                border-color: {_ACCENT_CYAN};
+                color: #cbd5e1;
+                background-color: #181826;
+            }}
+        """)
+        self.palette_btn.clicked.connect(self._open_command_palette)
+        top_bar.addWidget(self.palette_btn)
+
         top_bar.addStretch()
 
-        self.model_badge = QLabel(f"ENGINE: {self.config.llm.provider.upper()} ({self.config.llm.model})")
-        self.model_badge.setStyleSheet("""
-            color: #38bdf8;
-            font-size: 9px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            padding: 3px 10px;
-            border-radius: 9px;
-            background: #0f172a;
-            border: 1px solid #1e3a5f;
-            font-family: Consolas, monospace;
+        # Interactive Model Switcher Dropdown
+        self.model_combo = QComboBox()
+        self.model_combo.setCursor(Qt.PointingHandCursor)
+        self.model_combo.setFixedHeight(26)
+        self.model_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #0f172a;
+                color: #38bdf8;
+                border: 1px solid #1e3a5f;
+                border-radius: 6px;
+                padding: 2px 10px;
+                font-size: 10px;
+                font-weight: 700;
+                font-family: Consolas, monospace;
+            }
+            QComboBox:hover {
+                border-color: #38bdf8;
+                background-color: #16243d;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 14px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #090d16;
+                color: #e2e8f0;
+                border: 1px solid #1e3a5f;
+                selection-background-color: #0284c7;
+                selection-color: #ffffff;
+                outline: none;
+                padding: 4px;
+            }
         """)
-        top_bar.addWidget(self.model_badge)
+        model_choices = [
+            ("qwen/qwen3.8-27b", "Groq: Qwen 3.8 (27B)"),
+            ("llama-3.3-70b-versatile", "Groq: Llama 3.3 (70B)"),
+            ("llama-3.1-8b-instant", "Groq: Llama 3.1 (8B)"),
+            ("mixtral-8x7b-32768", "Groq: Mixtral 8x7B"),
+            ("gemma2-9b-it", "Groq: Gemma 2 (9B)"),
+        ]
+        for m_id, m_label in model_choices:
+            self.model_combo.addItem(m_label, m_id)
+
+        active_idx = 0
+        for i in range(self.model_combo.count()):
+            if self.model_combo.itemData(i) == self.config.llm.model:
+                active_idx = i
+                break
+        self.model_combo.setCurrentIndex(active_idx)
+        self.model_combo.currentIndexChanged.connect(self._on_top_model_changed)
+        self.model_badge = self.model_combo
+        top_bar.addWidget(self.model_combo)
 
         self.status_pill = QLabel("READY")
         self.status_pill.setStyleSheet("""
@@ -1248,12 +1792,12 @@ class MainWindow(QWidget):
         """)
         top_bar.addWidget(self.status_pill)
 
-        # Snip Button
-        snip_btn = QPushButton("Snip Screen")
-        snip_btn.setToolTip("Snip Screen (Ctrl+Shift+D)")
-        snip_btn.setCursor(Qt.PointingHandCursor)
-        snip_btn.setFixedHeight(24)
-        snip_btn.setStyleSheet(f"""
+        # Export Button
+        export_btn = QPushButton("Export")
+        export_btn.setToolTip("Export conversation to Markdown (.md)")
+        export_btn.setCursor(Qt.PointingHandCursor)
+        export_btn.setFixedHeight(24)
+        export_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: #12121a;
                 color: #94a3b8;
@@ -1268,6 +1812,15 @@ class MainWindow(QWidget):
                 color: #ffffff;
             }}
         """)
+        export_btn.clicked.connect(self._export_conversation)
+        top_bar.addWidget(export_btn)
+
+        # Snip Button
+        snip_btn = QPushButton("Snip Screen")
+        snip_btn.setToolTip("Snip Screen (Ctrl+Shift+D)")
+        snip_btn.setCursor(Qt.PointingHandCursor)
+        snip_btn.setFixedHeight(24)
+        snip_btn.setStyleSheet(export_btn.styleSheet())
         snip_btn.clicked.connect(self.snipper.start_snip)
         top_bar.addWidget(snip_btn)
 
@@ -1393,7 +1946,7 @@ class MainWindow(QWidget):
 
         # Text input field
         self.input_edit = QTextEdit()
-        self.input_edit.setPlaceholderText("Ask Nova, write code, run scripts, or speak… (Enter to send, Shift+Enter for newline)")
+        self.input_edit.setPlaceholderText("Ask Nova, /help for commands, Ctrl+K for palette... (Enter to send, Shift+Enter for newline)")
         self.input_edit.setMaximumHeight(85)
         self.input_edit.setMinimumHeight(40)
         self.input_edit.setStyleSheet(f"""
@@ -1986,6 +2539,83 @@ class MainWindow(QWidget):
         self.attachment_preview.setVisible(False)
         self.input_edit.clear()
 
+        # Handle instant slash commands without external API delay
+        if text.startswith("/") and not image_path_to_send:
+            parts = text.split(maxsplit=1)
+            cmd = parts[0].lower()
+            arg = parts[1].strip() if len(parts) > 1 else ""
+
+            if cmd == "/clear":
+                self._clear_conversation()
+                db.clear_history()
+                self.show_toast("Conversation memory cleared", "SYSTEM")
+                return
+
+            if cmd == "/export":
+                self._export_conversation()
+                return
+
+            if cmd == "/palette":
+                self._open_command_palette()
+                return
+
+            if cmd in ("/sys", "/status", "/diagnostics"):
+                cpu_pct, ram_pct, ram_used, ram_total = _get_live_telemetry()
+                diag_text = (
+                    f"**Nova AI System Diagnostics:**\n\n"
+                    f"- **Active LLM Engine:** `{self.config.llm.model}`\n"
+                    f"- **CPU Utilization:** `{cpu_pct}%`\n"
+                    f"- **Physical Memory:** `{ram_used:.1f} GB / {ram_total:.1f} GB ({ram_pct}%)`\n"
+                    f"- **Voice Output:** `{'Active' if self.config.voice.enabled else 'Disabled'}`\n"
+                    f"- **Screen Vision:** `{'Active' if self.config.ui.screen_observing else 'Standby'}`\n"
+                    f"- **Runtime Workspace:** `E:\\Nova_AI`"
+                )
+                self._add_bubble("user", text)
+                b = self._add_bubble("assistant", diag_text)
+                b.set_meta(datetime.now().strftime("%I:%M %p"), 0.01, self.config.llm.model)
+                db.add_message("user", text)
+                db.add_message("assistant", diag_text)
+                self.show_toast("System diagnostics telemetry refreshed", "SYSTEM")
+                return
+
+            if cmd == "/model":
+                if arg:
+                    idx = self._find_model_index(arg)
+                    if idx >= 0:
+                        self.model_combo.setCurrentIndex(idx)
+                    else:
+                        self.show_toast(f"Model not found: {arg}", "WARNING")
+                else:
+                    self.show_toast(f"Active Model: {self.config.llm.model}", "MODEL")
+                return
+
+            if cmd == "/help":
+                help_text = (
+                    f"**Nova AI Studio — Quick Command Reference:**\n\n"
+                    f"- `/clear` — Wipe active conversation and reset context memory.\n"
+                    f"- `/export` — Save conversation logs to a clean Markdown (.md) file.\n"
+                    f"- `/palette` — Open the Spotlight Command Palette (`Ctrl+K`).\n"
+                    f"- `/sys` — Display instant Win32 CPU, RAM & engine telemetry.\n"
+                    f"- `/model <name>` — Switch the active LLM inference engine.\n"
+                    f"- `/task <prompt>` — Dispatch an autonomous background task.\n"
+                    f"- `/research <query>` — Trigger comprehensive online web research.\n"
+                    f"- `Ctrl+K` — Open Command Palette anywhere.\n"
+                    f"- `Ctrl+Shift+N` — Restore Nova AI from Windows System Tray."
+                )
+                self._add_bubble("user", text)
+                b = self._add_bubble("assistant", help_text)
+                b.set_meta(datetime.now().strftime("%I:%M %p"), 0.01, self.config.llm.model)
+                db.add_message("user", text)
+                db.add_message("assistant", help_text)
+                return
+
+            if cmd == "/task" and arg:
+                text = f"[Schedule Task] {arg}"
+            elif cmd == "/research" and arg:
+                text = f"[Deep Research] Perform comprehensive web research on: {arg}"
+            elif cmd == "/code" and arg:
+                text = f"[Code Architecture] Write complete, robust production code for: {arg}"
+
         # Add User bubble
         bubble_text = text or "[Attached Screen Context]"
         if image_path_to_send:
@@ -2074,16 +2704,19 @@ class MainWindow(QWidget):
             self._current_assistant_bubble.update_stream_text(clean_display)
             self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
 
-    def _on_llm_replied(self, full_reply: str):
+    def _on_llm_replied(self, full_reply: str, elapsed_sec: float = 0.0):
         self._reset_send_button()
         full_reply = clean_repetitive_patterns(full_reply)
         clean_text, actions_list = automation_executor.extract_actions(full_reply)
         clean_text = clean_repetitive_patterns(clean_text)
 
+        now_str = datetime.now().strftime("%I:%M %p")
         if self._current_assistant_bubble:
             self._current_assistant_bubble.finalize_content(clean_text or "(Task acknowledged)")
+            self._current_assistant_bubble.set_meta(now_str, elapsed_sec, self.config.llm.model)
         else:
-            self._add_bubble("assistant", clean_text or "(Task acknowledged)")
+            b = self._add_bubble("assistant", clean_text or "(Task acknowledged)")
+            b.set_meta(now_str, elapsed_sec, self.config.llm.model)
 
         if clean_text:
             db.add_message("assistant", clean_text)
