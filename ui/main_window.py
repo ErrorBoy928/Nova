@@ -1483,6 +1483,8 @@ class MainWindow(QWidget):
         self._current_plan_widget: _ExecutionPlanWidget | None = None
         self._code_artifacts: list[dict] = []
         self._active_session_id = "default"
+        self._prompt_history: list[str] = []
+        self._prompt_history_idx: int = -1
 
         # Global Hotkey Thread (Ctrl+Shift+D for Snip, Ctrl+Shift+N to Toggle Nova)
         self.hotkey_thread = GlobalHotkeyThread()
@@ -1495,6 +1497,15 @@ class MainWindow(QWidget):
         self._refresh_session_combo(selected_id=self._active_session_id)
         self._load_history()
         self._update_tasks_btn_badge()
+
+        # Seed prompt history from recent sessions
+        try:
+            recent_msgs = db.get_recent_history(limit=25, session_id=self._active_session_id)
+            for m in recent_msgs:
+                if m["role"] == "user" and m["content"] and not m["content"].startswith("["):
+                    self._prompt_history.append(m["content"])
+        except Exception:
+            pass
 
         # System Tray Integration
         self._is_force_quitting = False
@@ -1511,6 +1522,9 @@ class MainWindow(QWidget):
 
         self.cmd_attach_shortcut = QShortcut(QKeySequence("Ctrl+O"), self)
         self.cmd_attach_shortcut.activated.connect(self._on_attach_file)
+
+        self.cmd_git_shortcut = QShortcut(QKeySequence("Ctrl+G"), self)
+        self.cmd_git_shortcut.activated.connect(self._open_git_manager)
 
         self.cmd_find_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         self.cmd_find_shortcut.activated.connect(self._toggle_search_bar)
@@ -1739,6 +1753,7 @@ class MainWindow(QWidget):
             ("Ctrl + K", "Spotlight Command Palette (Actions & Navigation)"),
             ("Ctrl + N", "Start New Chat Session / Thread"),
             ("Ctrl + O", "Attach File Context (Code, Logs, Data, Images)"),
+            ("Ctrl + G", "Git Workspace Manager (Status, Diff, Commit & Push)"),
             ("Ctrl + P", "Prompt & Automation Library (Templates & Workflows)"),
             ("Ctrl + B", "Code Artifacts & Scripts Drawer"),
             ("Ctrl + T", "Quick Embedded PowerShell Terminal"),
@@ -1807,6 +1822,19 @@ class MainWindow(QWidget):
             dlg.exec()
         except Exception as e:
             self.show_toast(f"Terminal notice: {e}", "WARNING")
+
+    def _open_git_manager(self):
+        try:
+            from ui.git_manager_dialog import GitManagerDialog
+            dlg = GitManagerDialog("E:\\Nova_AI", self)
+            def _on_analyze(prompt_type, text):
+                self.input_edit.setText(text)
+                self.input_edit.setFocus()
+                self.show_toast("Git diff handed off to Nova", "INFO")
+            dlg.analyze_requested.connect(_on_analyze)
+            dlg.exec()
+        except Exception as e:
+            self.show_toast(f"Git notice: {e}", "WARNING")
 
     def _on_terminal_analyze(self, cmd: str, output: str):
         prompt = (
@@ -1906,6 +1934,8 @@ class MainWindow(QWidget):
             self._open_artifacts_drawer()
         elif cmd_id == "open_terminal":
             self._open_terminal_runner()
+        elif cmd_id == "open_git":
+            self._open_git_manager()
         elif cmd_id == "show_shortcuts":
             self._show_shortcuts_dialog()
         elif cmd_id == "custom_prompt":
@@ -2611,6 +2641,15 @@ class MainWindow(QWidget):
         terminal_btn.setStyleSheet(find_btn.styleSheet())
         terminal_btn.clicked.connect(self._open_terminal_runner)
         top_bar.addWidget(terminal_btn)
+
+        # Git Workspace Manager Button (Ctrl+G)
+        git_btn = QPushButton("Git")
+        git_btn.setToolTip("Git Workspace Manager (Ctrl+G)")
+        git_btn.setCursor(Qt.PointingHandCursor)
+        git_btn.setFixedHeight(24)
+        git_btn.setStyleSheet(find_btn.styleSheet())
+        git_btn.clicked.connect(self._open_git_manager)
+        top_bar.addWidget(git_btn)
 
         main_vbox.addLayout(top_bar)
 
@@ -3501,12 +3540,17 @@ class MainWindow(QWidget):
                 self._on_attach_file()
                 return
 
+            if cmd in ("/git", "/repo"):
+                self._open_git_manager()
+                return
+
             if cmd == "/help":
                 help_text = (
                     f"**Nova AI Studio — Quick Command Reference:**\n\n"
                     f"- `/new` — Start a fresh, isolated chat session (`Ctrl+N`).\n"
                     f"- `/sessions` — List all active and archived conversation threads.\n"
                     f"- `/attach` — Attach code, logs, data or image context (`Ctrl+O`).\n"
+                    f"- `/git` — Open Git Workspace Manager (`Ctrl+G`).\n"
                     f"- `/clear` — Wipe active conversation and reset context memory.\n"
                     f"- `/export` — Save conversation logs to a clean Markdown (.md) or HTML file.\n"
                     f"- `/palette` — Open the Spotlight Command Palette (`Ctrl+K`).\n"
@@ -3520,6 +3564,7 @@ class MainWindow(QWidget):
                     f"- `/research <query>` — Trigger comprehensive online web research.\n"
                     f"- `Ctrl+N` — New Chat Session.\n"
                     f"- `Ctrl+O` — Attach File / Code Context.\n"
+                    f"- `Ctrl+G` — Git Workspace Manager.\n"
                     f"- `Ctrl+K` — Open Command Palette anywhere.\n"
                     f"- `Ctrl+T` — Quick Terminal Runner.\n"
                     f"- `Ctrl+P` — Prompt Library.\n"
@@ -3540,6 +3585,12 @@ class MainWindow(QWidget):
                 text = f"[Deep Research] Perform comprehensive web research on: {arg}"
             elif cmd == "/code" and arg:
                 text = f"[Code Architecture] Write complete, robust production code for: {arg}"
+
+        # Record prompt into history for Up/Down arrow navigation
+        if text and not text.startswith("/"):
+            if not self._prompt_history or self._prompt_history[-1] != text:
+                self._prompt_history.append(text)
+        self._prompt_history_idx = -1
 
         # Add User bubble
         bubble_text = text or "[Attached Screen Context]"
@@ -3781,4 +3832,31 @@ class MainWindow(QWidget):
             if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not (event.modifiers() & Qt.ShiftModifier):
                 self._send_message()
                 return True
+            elif event.key() == Qt.Key_Up:
+                cursor = self.input_edit.textCursor()
+                if (cursor.blockNumber() == 0 or not self.input_edit.toPlainText().strip()) and getattr(self, "_prompt_history", None):
+                    if self._prompt_history_idx < len(self._prompt_history) - 1:
+                        self._prompt_history_idx += 1
+                        hist_text = self._prompt_history[-(self._prompt_history_idx + 1)]
+                        self.input_edit.setPlainText(hist_text)
+                        from PySide6.QtGui import QTextCursor
+                        c = self.input_edit.textCursor()
+                        c.movePosition(QTextCursor.End)
+                        self.input_edit.setTextCursor(c)
+                        return True
+            elif event.key() == Qt.Key_Down:
+                if getattr(self, "_prompt_history", None):
+                    if self._prompt_history_idx > 0:
+                        self._prompt_history_idx -= 1
+                        hist_text = self._prompt_history[-(self._prompt_history_idx + 1)]
+                        self.input_edit.setPlainText(hist_text)
+                        from PySide6.QtGui import QTextCursor
+                        c = self.input_edit.textCursor()
+                        c.movePosition(QTextCursor.End)
+                        self.input_edit.setTextCursor(c)
+                        return True
+                    elif self._prompt_history_idx == 0:
+                        self._prompt_history_idx = -1
+                        self.input_edit.clear()
+                        return True
         return super().eventFilter(obj, event)
