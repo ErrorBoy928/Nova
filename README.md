@@ -1,75 +1,83 @@
-# AI Desktop Assistant (Full Control & Voice)
+# NOVA AI - Autonomous Multi-Platform Agent Ecosystem
 
-A powerful, full-control AI Desktop Assistant located on **Disk E:** (`E:\AI_Assistant`).
-Designed to execute computer control actions, speak and understand **English** and **Urdu (اردو)**, and operate with zero clutter.
-
----
-
-## 🚀 Quick Run (1-Click)
-
-1. Open folder: `E:\AI_Assistant`
-2. Double-click **`run.bat`**
-   *(Or run `python main.py` in your terminal)*
+Nova AI is an autonomous, multi-platform AI agent ecosystem designed for high-performance desktop workflow automation, mobile WhatsApp integration, and 24/7 Discord community management.
 
 ---
 
-## 🎙️ Voice Features (English & Urdu)
+## Architecture Overview
 
-- **Voice Output (TTS)**:
-  - Powered by natural neural speech synthesis with automatic language detection:
-    - **English**: `en-US-AriaNeural` (clear natural female) or `en-US-GuyNeural`
-    - **Urdu**: `ur-PK-UzmaNeural` (natural Urdu female) or `ur-PK-AsadNeural`
-  - Toggle auto-speech on or off anytime using the **🔊 Voice ON/OFF** button in the header bar.
-  - Click the **🔊** button on any message to replay it aloud.
-- **Voice Input (STT)**:
-  - Click the **🎤 Mic** button and speak in English or Urdu. The assistant will transcribe your speech and execute your command.
+1. **Master Desktop Studio**: Executive desktop assistant built with PySide6, featuring full-stack code execution, real-time token streaming, screen vision, cross-platform task scheduling, and live activity monitoring.
+2. **WhatsApp Web Bridge**: Baileys WebSocket gateway providing remote device control, autonomous chat management, and live screenshot dispatching (`!screen`, `!pc <cmd>`, `!pctasks`, `!pcstats`, `!stop`, `!start`).
+3. **Discord Superbot**: Comprehensive Discord agent with multimodal vision, system administration, secret vault encryption, support tickets, and desktop management (`!screen`, `!pc <action>`, `!pctasks`, `!pcstats`, `!secret`).
+4. **Autonomous Tasks & Automations**: Dual-tier scheduling daemon supporting recurring daily routines and same-day scheduled tasks with multi-channel dispatch (Desktop Toast, WhatsApp, Discord).
+5. **Central Admin Live Feed**: Bidirectional event bus syncing conversations and command executions across all platforms via local bridge (`http://127.0.0.1:5050/feed`).
 
 ---
 
-## 💻 Full Computer Control
+## Deployment Options
 
-You can speak or type commands in either **English** or **Urdu / Roman Urdu**. Examples:
+### 1. Local Desktop Studio (Windows)
 
-### 1. Applications & Windows
-- *"Open Chrome"* / *"Chrome kholo"*
-- *"Launch Notepad and write Hello World"* / *"Notepad kholo"*
-- *"Close Chrome"* / *"Chrome band karo"*
-- *"Minimize window"* / *"Show desktop"* / *"Switch window"*
+Requirements:
+- Python 3.10+
+- Node.js 18+ (for local WhatsApp bridge)
 
-### 2. Audio & Media
-- *"Set volume to 75%"* / *"Volume barhao"* / *"Volume 50 percent kardo"*
-- *"Mute volume"* / *"Mute kardo"*
-- *"Play next song"* / *"Pause music"*
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
 
-### 3. File Operations
-- *"Open downloads folder"* / *"Downloads folder kholo"*
-- *"Open Desktop"* / *"E drive kholo"*
-- *"Create a file on desktop called notes.txt with text Hello World"*
-- *"Create a folder on E drive called ProjectDocs"*
-- *"List files in downloads"*
-- *"Search for invoice on E drive"*
-
-### 4. System & Hardware
-- *"Check system specs"* / *"Drive space kitni bachi hai"* (checks C: and E: free space, RAM, CPU)
-- *"Take a screenshot"* / *"Screenshot lo"*
-- *"Empty recycle bin"* / *"Recycle bin khali kardo"*
-- *"Lock PC"* / *"Lock kardo"*
-- *"Sleep PC"* / *"Shutdown in 1 minute"*
-
-### 5. Web & Search
-- *"Search YouTube for tutorial"*
-- *"Search Google for latest tech news"*
-- *"Open github.com"*
-
-### 6. Screen Snipping
-- Press **Ctrl + Shift + D** anywhere on Windows to drag and crop any error message, code, or screen region for instant AI diagnosis.
-
----
-
-## ⚙️ Configuration & API Key
-
-Open `E:\AI_Assistant\.env` and paste your free Google Gemini API key:
-```env
-GOOGLE_API_KEY=AIzaSy...
+# Launch Master Studio
+python main.py
 ```
-*(You can also configure API keys, models, and custom voices anytime by clicking the ⚙️ Settings button in the app).*
+Alternatively, double-click **`Nova_AI.bat`** on your Desktop.
+
+---
+
+### 2. Cloud 24/7 Hosting on Render (WhatsApp + Discord Bots)
+
+The repository includes native configuration files for 1-click container deployment on Render:
+- `render.yaml` : Blueprint definition for automated provisioning
+- `Dockerfile` : Multi-runtime Debian environment with Node.js 20, Python 3, and FFmpeg
+
+#### Steps to Deploy on Render:
+1. Push this repository to your GitHub account under repository name `Nova`.
+2. Log into [Render.com](https://render.com) and click **New +** -> **Blueprint**.
+3. Connect your `Nova` GitHub repository. Render will automatically detect `render.yaml` and `Dockerfile`.
+4. In the Environment Variables section, configure:
+   - `GROQ_API_KEY` : Your Groq API key for high-speed LLM inference.
+   - `DISCORD_BOT_TOKEN` : Your Discord Bot Token (from Discord Developer Portal).
+   - `OWNER_NAME` : Your chosen administrator username.
+   - `OWNER_NUMBERS` : Comma-separated WhatsApp phone numbers authorized for administration.
+   - `PORT` : `3000` (default)
+5. Click **Apply**. Render will build the container and maintain your 24/7 cloud instance with automatic health pings.
+
+---
+
+## Remote Management Commands
+
+| Command | Channel | Action |
+| :--- | :--- | :--- |
+| `!screen` | WhatsApp & Discord | Captures current desktop display and returns high-resolution image |
+| `!pc <command>` | WhatsApp & Discord | Executes remote application or command on host PC |
+| `!pctasks` | WhatsApp & Discord | Queries status of active autonomous scheduled tasks |
+| `!pcstats` | WhatsApp & Discord | Dispatches live hardware diagnostic report (CPU, RAM, Disk) |
+| `!stop` / `!start` | WhatsApp | Toggles auto-responder on or off for the current conversation |
+| `!secret <key>` | Discord | Stores or retrieves encrypted credentials in Nova Vault |
+
+---
+
+## Environment Variables Reference
+
+See `.env.example` for the full template:
+```env
+GROQ_API_KEY=
+DISCORD_BOT_TOKEN=
+OWNER_NAME=Admin
+OWNER_NUMBERS=
+OWNER_DISCORD_IDS=
+EMAIL_USER=
+EMAIL_PASS=
+EMAIL_SMTP=smtp.gmail.com
+EMAIL_PORT=587
+PORT=3000
+```

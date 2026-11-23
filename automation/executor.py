@@ -176,6 +176,18 @@ def run_action(name: str, arg: str) -> tuple[bool, str]:
         return actions.run_code(arg)
     elif name in ("save_code_file", "save_code", "write_code"):
         return actions.save_code_file(arg)
+    elif name in ("edit_file_block", "edit_file", "patch_file"):
+        return actions.edit_file_block(arg)
+    elif name in ("search_code", "grep_code", "code_search"):
+        return actions.search_code(arg)
+    elif name in ("fetch_webpage", "fetch_url", "scrape_url", "web_fetch"):
+        return actions.fetch_webpage_text(arg)
+    elif name in ("task_complete", "goal_achieved", "agent_finish"):
+        return True, f"Goal completed: {arg}"
+    elif name in ("update_steps", "steps", "plan_steps", "set_steps"):
+        return actions.update_steps(arg)
+    elif name in ("update_focus", "focus", "set_focus"):
+        return actions.update_focus(arg)
     elif name in ("run_git", "git"):
         return actions.run_git(arg)
     elif name in ("pip_install", "install_package", "pip"):
@@ -202,6 +214,10 @@ def run_action(name: str, arg: str) -> tuple[bool, str]:
         t = parts[0].strip() if len(parts) > 1 else "Nova AI Alert"
         m = parts[1].strip() if len(parts) > 1 else arg
         return actions.action_notify(t, m)
+    elif name in ("schedule_daily", "daily_task", "add_daily"):
+        return actions.action_schedule_daily(arg)
+    elif name in ("schedule_once", "schedule_task", "add_schedule"):
+        return actions.action_schedule_once(arg)
     else:
         log.warning("Unknown action requested: {}", name)
         # Fallback: try opening as an application or executing command

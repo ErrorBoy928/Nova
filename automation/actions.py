@@ -621,6 +621,170 @@ def search_files(query: str, drive: str = "E:") -> ActionResult:
         return False, f"Search failed: {exc}"
 
 
+def edit_file_block(payload: str) -> ActionResult:
+    """Replaces a target block with replacement content in a file.
+    Format: filepath:::target:::replacement
+    """
+    try:
+        parts = payload.split(":::")
+        if len(parts) < 3:
+            return False, "Invalid edit_file_block format. Expected: path:::target:::replacement"
+        path_str, target, replacement = parts[0].strip(), parts[1], parts[2]
+        p = Path(os.path.expandvars(path_str))
+        if not p.is_absolute():
+            p_desk = Path.home() / "Desktop" / p
+            p = p_desk if p_desk.exists() else p
+        if not p.exists():
+            return False, f"File not found: {p}"
+        content = p.read_text(encoding="utf-8")
+        if target not in content:
+            return False, f"Target string not found in {p.name}."
+        new_content = content.replace(target, replacement, 1)
+        p.write_text(new_content, encoding="utf-8")
+        return True, f"Successfully edited {p.name}."
+    except Exception as exc:
+        return False, f"Could not edit file: {exc}"
+
+
+def search_code(payload: str) -> ActionResult:
+    """Searches for a string inside code files within a directory.
+    Format: query:::directory (default dir is E:\\Nova_AI)
+    """
+    try:
+        if ":::" in payload:
+            parts = payload.split(":::", 1)
+            query, base_dir = parts[0].strip(), parts[1].strip()
+        else:
+            query, base_dir = payload.strip(), "E:\\Nova_AI"
+        p_base = Path(os.path.expandvars(base_dir))
+        if not p_base.exists():
+            p_base = Path("E:\\Nova_AI")
+        matches = []
+        ignored = {".git", "__pycache__", "venv", "node_modules", "data"}
+        for root, dirs, files in os.walk(p_base):
+            dirs[:] = [d for d in dirs if d not in ignored]
+            for f in files:
+                if f.endswith((".py", ".js", ".ts", ".json", ".md", ".txt", ".bat", ".ps1", ".html", ".css", ".yaml", ".yml")):
+                    fp = Path(root) / f
+                    try:
+                        content = fp.read_text(encoding="utf-8", errors="ignore")
+                        if query.lower() in content.lower():
+                            for idx, line in enumerate(content.splitlines(), 1):
+                                if query.lower() in line.lower():
+                                    rel = fp.relative_to(p_base)
+                                    matches.append(f"{rel}:{idx}: {line.strip()[:60]}")
+                                    break
+                    except Exception:
+                        pass
+                if len(matches) >= 12:
+                    break
+            if len(matches) >= 12:
+                break
+        if not matches:
+            return True, f"No code matches found for '{query}' in {p_base}."
+        return True, f"Found {len(matches)} matches for '{query}':\n" + "\n".join(f"- {m}" for m in matches)
+    except Exception as exc:
+        return False, f"Code search error: {exc}"
+
+
+def fetch_webpage_text(url: str) -> ActionResult:
+    """Fetches text content from a public webpage and strips HTML tags."""
+    import urllib.request
+    from urllib.parse import urlparse
+    try:
+        url = url.strip()
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+        parsed = urlparse(url)
+        if not parsed.netloc:
+            return False, "Invalid URL specified."
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Nova-AI/3.0"}
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            raw_html = resp.read().decode("utf-8", errors="replace")
+        clean = re.sub(r"<(script|style).*?>.*?</\1>", "", raw_html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", " ", clean)
+        text = re.sub(r"\s+", " ", text).strip()
+        preview = text[:2500] + ("\n...(truncated)" if len(text) > 2500 else "")
+        return True, f"Webpage Content ({parsed.netloc}):\n{preview}"
+    except Exception as exc:
+        return False, f"Could not fetch webpage: {exc}"
+
+
+# ── Antigravity Dynamic Steps & Focus Listeners ─────────────────────────────
+_STEPS_CALLBACKS: list = []
+_FOCUS_CALLBACKS: list = []
+
+
+def register_steps_listener(callback):
+    """Registers a listener for live step checklist updates."""
+    if callback not in _STEPS_CALLBACKS:
+        _STEPS_CALLBACKS.append(callback)
+
+
+def unregister_steps_listener(callback):
+    if callback in _STEPS_CALLBACKS:
+        _STEPS_CALLBACKS.remove(callback)
+
+
+def register_focus_listener(callback):
+    """Registers a listener for live focus headline updates."""
+    if callback not in _FOCUS_CALLBACKS:
+        _FOCUS_CALLBACKS.append(callback)
+
+
+def unregister_focus_listener(callback):
+    if callback in _FOCUS_CALLBACKS:
+        _FOCUS_CALLBACKS.remove(callback)
+
+
+def update_steps(payload: str) -> ActionResult:
+    """Updates live Antigravity execution steps checklist.
+    Format: Step 1 (done)|Step 2 (in_progress)|Step 3 (pending)
+    """
+    try:
+        steps_raw = payload.strip().split("|")
+        parsed_steps = []
+        for s in steps_raw:
+            s = s.strip()
+            if not s:
+                continue
+            status = "pending"
+            title = s
+            for st in ("done", "in_progress", "pending", "failed", "skipped"):
+                pattern = r"\s*[\(\[]" + st + r"[\)\]]\s*"
+                if re.search(pattern, s, flags=re.IGNORECASE):
+                    status = st
+                    title = re.sub(pattern, "", s, flags=re.IGNORECASE).strip()
+                    break
+            parsed_steps.append({"title": title, "status": status})
+
+        for cb in list(_STEPS_CALLBACKS):
+            try:
+                cb(parsed_steps)
+            except Exception as e:
+                log.warning(f"Error in steps callback: {e}")
+        return True, f"Updated {len(parsed_steps)} plan steps."
+    except Exception as exc:
+        return False, f"Could not update steps: {exc}"
+
+
+def update_focus(payload: str) -> ActionResult:
+    """Broadcasts high-level focus headline for Antigravity HUD."""
+    try:
+        focus_text = payload.strip()
+        for cb in list(_FOCUS_CALLBACKS):
+            try:
+                cb(focus_text)
+            except Exception as e:
+                log.warning(f"Error in focus callback: {e}")
+        return True, f"Focus updated: {focus_text}"
+    except Exception as exc:
+        return False, f"Could not update focus: {exc}"
+
+
 def zip_item(path_str: str) -> ActionResult:
     """Creates a zip archive of a file or folder (defaults to Desktop if relative)."""
     import zipfile
@@ -1374,6 +1538,57 @@ def action_notify(title: str, msg: str) -> ActionResult:
         return True, f"Notification delivered: {title} - {msg}"
     except Exception as exc:
         return False, f"Notification failed: {exc}"
+
+
+def action_schedule_daily(arg: str) -> ActionResult:
+    """Schedules a daily recurring task. Format: 'HH:MM:task_prompt'."""
+    try:
+        parts = arg.split(":", 2)
+        if len(parts) < 3:
+            return False, "Usage format: HH:MM:task_prompt (e.g. 09:30:Check morning news and email)"
+        hh = parts[0].strip().zfill(2)
+        mm = parts[1].strip().zfill(2)
+        time_str = f"{hh}:{mm}"
+        prompt = parts[2].strip()
+        import memory.database as db
+        db.save_scheduled_task(
+            task_type="daily",
+            prompt=prompt,
+            target_time=time_str,
+            title=prompt[:40],
+            notify_wa=True,
+            notify_dc=True,
+            notify_app=True
+        )
+        return True, f"Daily recurring task scheduled for {time_str}: '{prompt}'"
+    except Exception as exc:
+        return False, f"Failed to schedule daily task: {exc}"
+
+
+def action_schedule_once(arg: str) -> ActionResult:
+    """Schedules a one-off task for today. Format: 'HH:MM:task_prompt'."""
+    try:
+        parts = arg.split(":", 2)
+        if len(parts) < 3:
+            return False, "Usage format: HH:MM:task_prompt (e.g. 15:00:Generate project summary)"
+        hh = parts[0].strip().zfill(2)
+        mm = parts[1].strip().zfill(2)
+        time_str = f"{hh}:{mm}"
+        prompt = parts[2].strip()
+        import memory.database as db
+        db.save_scheduled_task(
+            task_type="day_schedule",
+            prompt=prompt,
+            target_time=time_str,
+            title=prompt[:40],
+            notify_wa=True,
+            notify_dc=True,
+            notify_app=True
+        )
+        return True, f"One-off task scheduled for today at {time_str}: '{prompt}'"
+    except Exception as exc:
+        return False, f"Failed to schedule one-off task: {exc}"
+
 
 
 
