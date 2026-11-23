@@ -332,7 +332,8 @@ class ApiKeyDialog(QDialog):
         save_config(self.config)
 
         # 2. Update .env file
-        env_path = Path(__file__).resolve().parent.parent / ".env"
+        from utils.app_paths import project_root
+        env_path = project_root() / ".env"
         try:
             lines = []
             if env_path.exists():

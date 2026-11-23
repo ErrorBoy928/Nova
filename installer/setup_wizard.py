@@ -16,7 +16,28 @@ import os
 import shutil
 import sys
 import time
+import zipfile
 from pathlib import Path
+
+# Root directory of source files
+_SOURCE_DIR = Path(__file__).resolve().parent.parent
+
+def get_payload_path() -> Path | None:
+    """Locates the embedded or bundled payload.zip archive."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        meipass_p = Path(sys._MEIPASS) / "payload.zip"
+        if meipass_p.exists():
+            return meipass_p
+    
+    candidates = [
+        Path(__file__).resolve().parent / "payload.zip",
+        Path(sys.executable).resolve().parent / "payload.zip",
+        _SOURCE_DIR / "installer" / "payload.zip",
+    ]
+    for cand in candidates:
+        if cand.exists():
+            return cand
+    return None
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
@@ -127,73 +148,81 @@ class InstallWorker(QThread):
 
     def run(self):
         try:
-            self.progress_changed.emit(10, "Verifying target directory...")
-            time.sleep(0.3)
+            self.progress_changed.emit(5, "Verifying target directory...")
+            time.sleep(0.2)
             self.target_dir.mkdir(parents=True, exist_ok=True)
 
+            payload_zip = get_payload_path()
+            if payload_zip and payload_zip.exists():
+                self.progress_changed.emit(10, "Extracting Nova AI application files...")
+                with zipfile.ZipFile(payload_zip, "r") as zf:
+                    infolist = zf.infolist()
+                    total = len(infolist)
+                    for i, member in enumerate(infolist):
+                        zf.extract(member, self.target_dir)
+                        if i % 30 == 0 or i == total - 1:
+                            pct = int(10 + (i / max(total, 1)) * 70)
+                            self.progress_changed.emit(pct, f"Installing: {Path(member.filename).name}")
+            else:
+                # Fallback to copying source files
+                self.progress_changed.emit(25, "Synchronizing application modules...")
+                core_folders = ["ai", "automation", "config", "memory", "ui", "utils", "voice", "skills"]
+                for f in core_folders:
+                    src_path = _SOURCE_DIR / f
+                    dst_path = self.target_dir / f
+                    if src_path.exists() and src_path.resolve() != dst_path.resolve():
+                        shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
+
+                for fname in ["main.py", ".env", "requirements.txt", "README.md"]:
+                    src_file = _SOURCE_DIR / fname
+                    dst_file = self.target_dir / fname
+                    if src_file.exists() and src_file.resolve() != dst_file.resolve():
+                        shutil.copy2(src_file, dst_file)
+
             # Ensure data subdirectories
-            for sub in ["data", "data/database", "data/logs", "data/temp", "data/temp_audio", "installer"]:
+            for sub in ["data", "data/database", "data/logs", "data/temp", "data/temp_audio"]:
                 (self.target_dir / sub).mkdir(parents=True, exist_ok=True)
 
-            self.progress_changed.emit(25, "Synchronizing application modules...")
-            time.sleep(0.3)
+            self.progress_changed.emit(85, "Configuring shortcuts and launch entry...")
+            time.sleep(0.2)
 
-            # Core files and folders to ensure in target
-            core_folders = ["ai", "automation", "config", "memory", "ui", "utils", "voice", "installer"]
-            for f in core_folders:
-                src_path = _SOURCE_DIR / f
-                dst_path = self.target_dir / f
-                if src_path.exists() and src_path.resolve() != dst_path.resolve():
-                    shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
+            nova_exe = self.target_dir / "Nova_AI.exe"
+            if nova_exe.exists():
+                target_exec = str(nova_exe.resolve())
+                args = ""
+                icon_target = f"{target_exec},0"
+            else:
+                # Fallback to pythonw
+                pythonw_candidates = [
+                    r"E:\python\pythonw.exe",
+                    shutil.which("pythonw.exe"),
+                    Path(sys.executable).parent / "pythonw.exe",
+                ]
+                pythonw_path = None
+                for cand in pythonw_candidates:
+                    if cand and Path(cand).exists():
+                        pythonw_path = str(Path(cand).resolve())
+                        break
+                target_exec = pythonw_path or sys.executable
+                args = f'"{self.target_dir / "main.py"}"'
+                icon_target = "shell32.dll,14"
 
-            # Core files
-            for fname in ["main.py", ".env", "requirements.txt", "README.md"]:
-                src_file = _SOURCE_DIR / fname
-                dst_file = self.target_dir / fname
-                if src_file.exists() and src_file.resolve() != dst_file.resolve():
-                    shutil.copy2(src_file, dst_file)
+                # Generate run.bat and AI_Assistant.vbs
+                vbs_file = self.target_dir / "AI_Assistant.vbs"
+                vbs_file.write_text(f'CreateObject("Wscript.Shell").Run """{target_exec}""" """{self.target_dir / "main.py"}""", 0, False\n', encoding="utf-8")
 
-            self.progress_changed.emit(50, "Generating headless Windows launcher...")
-            time.sleep(0.3)
-
-            # Find pythonw.exe
-            pythonw_candidates = [
-                r"E:\python\pythonw.exe",
-                shutil.which("pythonw.exe"),
-                Path(sys.executable).parent / "pythonw.exe",
-            ]
-            pythonw_path = None
-            for cand in pythonw_candidates:
-                if cand and Path(cand).exists():
-                    pythonw_path = str(Path(cand).resolve())
-                    break
-
-            if not pythonw_path:
-                pythonw_path = sys.executable
-
-            # Generate AI_Assistant.vbs in target
-            vbs_file = self.target_dir / "AI_Assistant.vbs"
-            vbs_content = f'CreateObject("Wscript.Shell").Run """{pythonw_path}"" """{self.target_dir / "main.py"}""", 0, False\n'
-            vbs_file.write_text(vbs_content, encoding="utf-8")
-
-            # Generate run.bat
-            bat_file = self.target_dir / "run.bat"
-            bat_content = f'@echo off\nstart "" "{pythonw_path}" "{self.target_dir / "main.py"}"\n'
-            bat_file.write_text(bat_content, encoding="utf-8")
-
-            self.progress_changed.emit(75, "Registering Windows shortcuts & system entries...")
-            time.sleep(0.3)
+            self.progress_changed.emit(90, "Registering Windows shortcuts & system entries...")
 
             # Desktop Shortcut
             if self.create_desktop:
                 desktop_dir = Path(os.environ.get("USERPROFILE", "")) / "Desktop"
                 if desktop_dir.exists():
                     create_windows_shortcut(
-                        target_path=pythonw_path,
-                        shortcut_path=str(desktop_dir / "Nova AI Assistant.lnk"),
-                        arguments=f'"{self.target_dir / "main.py"}"',
+                        target_path=target_exec,
+                        shortcut_path=str(desktop_dir / "Nova AI.lnk"),
+                        arguments=args,
                         working_dir=str(self.target_dir),
-                        icon_path="shell32.dll,14",
+                        icon_path=icon_target,
                         description="Nova AI Desktop Assistant"
                     )
 
@@ -202,11 +231,11 @@ class InstallWorker(QThread):
                 start_menu_dir = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
                 if start_menu_dir.exists():
                     create_windows_shortcut(
-                        target_path=pythonw_path,
-                        shortcut_path=str(start_menu_dir / "Nova AI Assistant.lnk"),
-                        arguments=f'"{self.target_dir / "main.py"}"',
+                        target_path=target_exec,
+                        shortcut_path=str(start_menu_dir / "Nova AI.lnk"),
+                        arguments=args,
                         working_dir=str(self.target_dir),
-                        icon_path="shell32.dll,14",
+                        icon_path=icon_target,
                         description="Nova AI Desktop Assistant"
                     )
 
@@ -215,36 +244,36 @@ class InstallWorker(QThread):
                 startup_dir = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
                 if startup_dir.exists():
                     create_windows_shortcut(
-                        target_path=pythonw_path,
-                        shortcut_path=str(startup_dir / "Nova AI Assistant.lnk"),
-                        arguments=f'"{self.target_dir / "main.py"}"',
+                        target_path=target_exec,
+                        shortcut_path=str(startup_dir / "Nova AI.lnk"),
+                        arguments=args,
                         working_dir=str(self.target_dir),
-                        icon_path="shell32.dll,14",
+                        icon_path=icon_target,
                         description="Nova AI Desktop Assistant (Startup)"
                     )
 
             # Create uninstaller script
-            uninstaller_bat = self.target_dir / "installer" / "uninstall.bat"
+            uninstaller_bat = self.target_dir / "uninstall.bat"
             uninstaller_content = f'''@echo off
 echo ===================================================
 echo     Uninstalling Nova AI Desktop Assistant
 echo ===================================================
 echo Removing Desktop shortcut...
-del /f /q "%USERPROFILE%\\Desktop\\Nova AI Assistant.lnk" >nul 2>&1
+del /f /q "%USERPROFILE%\\Desktop\\Nova AI.lnk" >nul 2>&1
 echo Removing Start Menu shortcut...
-del /f /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Nova AI Assistant.lnk" >nul 2>&1
+del /f /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Nova AI.lnk" >nul 2>&1
 echo Removing Startup shortcut...
-del /f /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Nova AI Assistant.lnk" >nul 2>&1
+del /f /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Nova AI.lnk" >nul 2>&1
 echo.
 echo Shortcuts removed successfully!
-echo The project folder at {self.target_dir} is preserved.
-echo To delete all data, you can delete this folder manually.
+echo To delete all remaining files, delete this folder:
+echo {self.target_dir}
 pause
 '''
             uninstaller_bat.write_text(uninstaller_content, encoding="utf-8")
 
             self.progress_changed.emit(100, "Setup finalized successfully!")
-            time.sleep(0.4)
+            time.sleep(0.3)
             self.finished.emit(True, "Installation completed successfully.")
         except Exception as exc:
             self.finished.emit(False, str(exc))
@@ -394,12 +423,20 @@ class SetupWizardWindow(QWidget):
         card_dir_l.setContentsMargins(12, 10, 12, 10)
         card_dir_l.setSpacing(6)
 
-        dir_lbl = QLabel("Installation Directory (Drive E: Recommended):")
+        dir_lbl = QLabel("Installation Directory:")
         dir_lbl.setStyleSheet("font-size: 11px; font-weight: 600; color: #e2e8f0;")
         card_dir_l.addWidget(dir_lbl)
 
+        # Smart default: Drive E if exists, otherwise LocalAppData Programs
+        if Path("E:/").exists():
+            default_path = Path("E:/Nova_AI")
+        elif os.environ.get("LOCALAPPDATA"):
+            default_path = Path(os.environ.get("LOCALAPPDATA")) / "Programs" / "Nova_AI"
+        else:
+            default_path = Path(os.environ.get("USERPROFILE", "C:/")) / "Nova_AI"
+
         dir_row = QHBoxLayout()
-        self.dir_edit = QLineEdit(str(_SOURCE_DIR if str(_SOURCE_DIR).startswith("E:") else Path("E:/AI_Assistant")))
+        self.dir_edit = QLineEdit(str(default_path))
         browse_btn = QPushButton("Browse...")
         browse_btn.setObjectName("secondary")
         browse_btn.setFixedHeight(30)
@@ -546,6 +583,12 @@ class SetupWizardWindow(QWidget):
 
     def _launch_app(self):
         target_dir = Path(self.dir_edit.text().strip())
+        nova_exe = target_dir / "Nova_AI.exe"
+        if nova_exe.exists():
+            import subprocess
+            subprocess.Popen([str(nova_exe)], cwd=str(target_dir))
+            return
+
         launcher = target_dir / "AI_Assistant.vbs"
         if launcher.exists():
             import subprocess

@@ -19,12 +19,15 @@ log = get_logger(__name__)
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL)
 
 
+from utils.app_paths import project_root
+
+
 class SkillsManager:
     """Manages discovery, loading, and runtime matching of Antigravity skills."""
 
     def __init__(self, root_dir: Path | str | None = None):
         if root_dir is None:
-            self.root_dir = Path(__file__).resolve().parent.parent / "skills"
+            self.root_dir = project_root() / "skills"
         else:
             self.root_dir = Path(root_dir)
 

@@ -24,7 +24,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Ensure project root is always the first lookup in sys.path
-_base_dir = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False):
+    _base_dir = Path(sys.executable).resolve().parent
+else:
+    _base_dir = Path(__file__).resolve().parent
+
 if str(_base_dir) not in sys.path:
     sys.path.insert(0, str(_base_dir))
 try:

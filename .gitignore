@@ -23,3 +23,11 @@ npm-debug.log*
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# PyInstaller & Build Artifacts
+build/
+build_installer/
+dist/
+installer/payload.zip
+*.spec
+
