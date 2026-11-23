@@ -1005,6 +1005,80 @@ class BackgroundTaskWorker(QThread):
         self.finished_report.emit(results)
 
 
+class VoiceWaveformWidget(QWidget):
+    """
+    Animated 5-bar live voice visualizer equalizer.
+    Provides visual feedback for idle, listening, and speaking states.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(64, 24)
+        self._state = "idle"  # "idle" | "listening" | "speaking"
+        self._bar_heights = [3, 4, 3, 5, 3]
+        self._phase = 0.0
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(45)
+        self._timer.timeout.connect(self._animate_frame)
+
+    def set_state(self, state: str):
+        self._state = state
+        if state == "idle":
+            self._timer.stop()
+            self._bar_heights = [3, 4, 3, 5, 3]
+            self.update()
+        else:
+            if not self._timer.isActive():
+                self._timer.start()
+
+    def _animate_frame(self):
+        import math, random
+        self._phase += 0.28
+        if self._state == "listening":
+            self._bar_heights = [
+                int(4 + 10 * abs(math.sin(self._phase + 0.3)) + random.randint(0, 3)),
+                int(5 + 13 * abs(math.sin(self._phase + 0.8)) + random.randint(0, 4)),
+                int(6 + 15 * abs(math.sin(self._phase + 1.2)) + random.randint(0, 4)),
+                int(5 + 12 * abs(math.sin(self._phase + 1.7)) + random.randint(0, 3)),
+                int(4 + 9 * abs(math.sin(self._phase + 2.1)) + random.randint(0, 2)),
+            ]
+        elif self._state == "speaking":
+            self._bar_heights = [
+                int(4 + 8 * abs(math.sin(self._phase * 1.5 + 0.2))),
+                int(6 + 12 * abs(math.sin(self._phase * 1.5 + 0.6))),
+                int(8 + 14 * abs(math.sin(self._phase * 1.5 + 1.0))),
+                int(6 + 11 * abs(math.sin(self._phase * 1.5 + 1.4))),
+                int(4 + 7 * abs(math.sin(self._phase * 1.5 + 1.8))),
+            ]
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        if self._state == "listening":
+            bar_color = QColor("#10b981")  # Emerald green pulse
+        elif self._state == "speaking":
+            bar_color = QColor("#38bdf8")  # Sky cyan pulse
+        else:
+            bar_color = QColor("#334155")  # Muted slate
+
+        p.setBrush(bar_color)
+        p.setPen(Qt.NoPen)
+
+        bar_width = 3
+        spacing = 5
+        start_x = 8
+        mid_y = self.height() // 2
+
+        for h in self._bar_heights:
+            top_y = mid_y - (h // 2)
+            p.drawRoundedRect(start_x, top_y, bar_width, h, 1.5, 1.5)
+            start_x += bar_width + spacing
+
+        p.end()
+
+
 class _MessageBubble(QWidget):
     """Refined message card with live streaming, interactive code blocks, and screen vision action CTA."""
 
@@ -1407,6 +1481,7 @@ class MainWindow(QWidget):
         self._search_matches: list[_MessageBubble] = []
         self._search_idx: int = -1
         self._current_plan_widget: _ExecutionPlanWidget | None = None
+        self._code_artifacts: list[dict] = []
 
         # Global Hotkey Thread (Ctrl+Shift+D for Snip, Ctrl+Shift+N to Toggle Nova)
         self.hotkey_thread = GlobalHotkeyThread()
@@ -1432,6 +1507,9 @@ class MainWindow(QWidget):
 
         self.cmd_prompt_shortcut = QShortcut(QKeySequence("Ctrl+P"), self)
         self.cmd_prompt_shortcut.activated.connect(self._open_prompt_library)
+
+        self.cmd_artifacts_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
+        self.cmd_artifacts_shortcut.activated.connect(self._open_artifacts_drawer)
 
         self.cmd_help_shortcut = QShortcut(QKeySequence("F1"), self)
         self.cmd_help_shortcut.activated.connect(self._show_shortcuts_dialog)
@@ -1640,6 +1718,7 @@ class MainWindow(QWidget):
             ("Ctrl + K", "Spotlight Command Palette (Actions & Navigation)"),
             ("Ctrl + P", "Prompt & Automation Library (Templates & Workflows)"),
             ("Ctrl + F", "Find in Chat Conversation"),
+            ("Ctrl + B", "Code Artifacts & Scripts Drawer"),
             ("Ctrl + Shift + D", "Desktop Screen Snip & Vision OCR"),
             ("Ctrl + Shift + N", "Summon Nova AI from System Tray"),
             ("Enter", "Send Message / Prompt"),
@@ -1688,6 +1767,34 @@ class MainWindow(QWidget):
         self.input_edit.setFocus()
         self.show_toast("Prompt template loaded into chat", "INFO")
 
+    def _open_artifacts_drawer(self):
+        try:
+            from ui.code_artifacts_dialog import CodeArtifactsDialog
+            dlg = CodeArtifactsDialog(self._code_artifacts, self)
+            dlg.exec()
+        except Exception as e:
+            self.show_toast(f"Artifacts Drawer notice: {e}", "WARNING")
+
+    def _register_code_artifact(self, lang: str, code: str):
+        lines = code.splitlines()
+        first_line = ""
+        for line in lines[:3]:
+            stripped = line.strip().lstrip("#/").strip()
+            if stripped:
+                first_line = stripped
+                break
+        title = first_line[:35] if first_line else f"{lang.upper()} Script"
+        self._code_artifacts.append({
+            "id": len(self._code_artifacts) + 1,
+            "lang": lang or "txt",
+            "code": code,
+            "time": datetime.now().strftime("%I:%M %p"),
+            "lines": len(lines),
+            "title": title
+        })
+        if hasattr(self, "artifacts_btn"):
+            self.artifacts_btn.setText(f"Artifacts ({len(self._code_artifacts)})")
+
     def _open_command_palette(self):
         palette = CommandPaletteDialog(self)
         palette.action_triggered.connect(self._handle_palette_action)
@@ -1732,6 +1839,8 @@ class MainWindow(QWidget):
             self._toggle_search_bar()
         elif cmd_id == "open_prompts":
             self._open_prompt_library()
+        elif cmd_id == "open_artifacts":
+            self._open_artifacts_drawer()
         elif cmd_id == "show_shortcuts":
             self._show_shortcuts_dialog()
         elif cmd_id == "custom_prompt":
@@ -2306,6 +2415,15 @@ class MainWindow(QWidget):
         prompts_btn.clicked.connect(self._open_prompt_library)
         top_bar.addWidget(prompts_btn)
 
+        # Code Artifacts Drawer Button (Ctrl+B)
+        self.artifacts_btn = QPushButton("Artifacts (0)")
+        self.artifacts_btn.setToolTip("Code Artifacts & Scripts Drawer (Ctrl+B)")
+        self.artifacts_btn.setCursor(Qt.PointingHandCursor)
+        self.artifacts_btn.setFixedHeight(24)
+        self.artifacts_btn.setStyleSheet(find_btn.styleSheet())
+        self.artifacts_btn.clicked.connect(self._open_artifacts_drawer)
+        top_bar.addWidget(self.artifacts_btn)
+
         main_vbox.addLayout(top_bar)
 
         # Stacked Pages
@@ -2474,6 +2592,10 @@ class MainWindow(QWidget):
         """)
         self.mic_btn.clicked.connect(self._on_single_shot_mic_clicked)
         controls_row.addWidget(self.mic_btn)
+
+        # Animated Live Voice Waveform Equalizer
+        self.voice_waveform = VoiceWaveformWidget()
+        controls_row.addWidget(self.voice_waveform)
 
         controls_row.addStretch()
 
@@ -2846,11 +2968,15 @@ class MainWindow(QWidget):
             self.hands_free_btn.setText("Hands-Free: ON")
             self.hands_free_btn.setIcon(create_mic_icon("#6ee7b7", size=14))
             self._style_header_button(self.hands_free_btn, active=True)
+            if hasattr(self, "voice_waveform"):
+                self.voice_waveform.set_state("listening")
             self._start_continuous_listener()
         else:
             self.hands_free_btn.setText("Hands-Free: OFF")
             self.hands_free_btn.setIcon(create_mic_icon("#94a3b8", size=14))
             self._style_header_button(self.hands_free_btn, active=False)
+            if hasattr(self, "voice_waveform"):
+                self.voice_waveform.set_state("idle")
             self._stop_continuous_listener()
 
     def _start_continuous_listener(self):
@@ -2893,6 +3019,8 @@ class MainWindow(QWidget):
 
         self.mic_btn.setText("Listening...")
         self.status_pill.setText("SPEAK NOW...")
+        if hasattr(self, "voice_waveform"):
+            self.voice_waveform.set_state("listening")
 
         self._single_shot_thread = QThread()
         self._single_shot_worker = SingleShotVoiceWorker(
@@ -2908,6 +3036,9 @@ class MainWindow(QWidget):
         def on_done():
             self.mic_btn.setText("Listen")
             self.status_pill.setText("READY")
+            if hasattr(self, "voice_waveform"):
+                state = "listening" if (self._continuous_worker and self._hands_free_active) else "idle"
+                self.voice_waveform.set_state(state)
 
         self._single_shot_worker.transcription_ready.connect(on_transcribed)
         self._single_shot_worker.error_occurred.connect(lambda err: self.status_pill.setText(err.upper()))
@@ -2921,6 +3052,8 @@ class MainWindow(QWidget):
 
     def _speak_text(self, text: str):
         self.status_pill.setText("SPEAKING...")
+        if hasattr(self, "voice_waveform"):
+            self.voice_waveform.set_state("speaking")
         if self._continuous_worker and self._hands_free_active:
             self._continuous_worker.pause()
 
@@ -2928,6 +3061,9 @@ class MainWindow(QWidget):
 
         def on_speech_ended():
             self.status_pill.setText("READY")
+            if hasattr(self, "voice_waveform"):
+                state = "listening" if (self._continuous_worker and self._hands_free_active) else "idle"
+                self.voice_waveform.set_state(state)
             if self._continuous_worker and self._hands_free_active:
                 self._continuous_worker.resume()
 
@@ -3185,6 +3321,13 @@ class MainWindow(QWidget):
         else:
             b = self._add_bubble("assistant", clean_text or "(Task acknowledged)")
             b.set_meta(now_str, elapsed_sec, self.config.llm.model)
+
+        # Register extracted code blocks into session artifacts drawer
+        for m in _CODE_FENCE_RE.finditer(full_reply):
+            lang = (m.group(1) or "code").strip()
+            code_text = m.group(2).rstrip("\n")
+            if code_text:
+                self._register_code_artifact(lang, code_text)
 
         if clean_text:
             db.add_message("assistant", clean_text)
