@@ -184,6 +184,10 @@ def run_action(name: str, arg: str) -> tuple[bool, str]:
         return actions.fetch_webpage_text(arg)
     elif name in ("task_complete", "goal_achieved", "agent_finish"):
         return True, f"Goal completed: {arg}"
+    elif name in ("update_steps", "steps", "plan_steps", "set_steps"):
+        return actions.update_steps(arg)
+    elif name in ("update_focus", "focus", "set_focus"):
+        return actions.update_focus(arg)
     elif name in ("run_git", "git"):
         return actions.run_git(arg)
     elif name in ("pip_install", "install_package", "pip"):

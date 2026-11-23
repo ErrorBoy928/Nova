@@ -38,6 +38,8 @@ AVAILABLE AUTONOMOUS TOOLS:
 - [action:list_dir:PATH] - List directory files.
 - [action:web_search:QUERY] - Perform live web search.
 - [action:fetch_webpage:URL] - Fetch webpage text content.
+- [action:update_focus:CONCISE_ACTIVITY] - Broadcast live high-level focus headline to HUD.
+- [action:update_steps:STEP1 (done)|STEP2 (in_progress)|STEP3 (pending)] - Broadcast dynamic step checklist.
 - [action:system_stats] - Win32 CPU, RAM, and Disk metrics.
 - [action:task_complete:EXECUTIVE_SUMMARY] - CALL THIS WHEN GOAL IS FULLY SATISFIED AND VERIFIED!
 

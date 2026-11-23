@@ -56,6 +56,9 @@ class CommandPaletteDialog(QDialog):
             ("open_terminal", "Quick PowerShell Terminal Runner (Ctrl+T)", "Run shell commands, git operations, and system probes", "TOOL"),
             ("open_git", "Git Workspace Manager (Ctrl+G)", "Inspect repository status, diffs, commits, and push", "TOOL"),
             ("super_agent", "Launch Autonomous Super Agent (/super)", "Base44-grade multi-step planning, coding & verification loop", "AGENT"),
+            ("open_skills", "Antigravity Skills & Extensions Manager (Ctrl+Shift+S)", "Manage custom skills, directives, and slash commands", "SKILLS"),
+            ("swarm_agent", "Launch Antigravity Multi-Agent Swarm (/teamwork)", "Orchestrates Researcher, Architect, and Verifier on shared board", "SWARM"),
+            ("compact_context", "Compact Chat Session Context (/compact)", "Compress conversation history into an executive reference brief", "CHAT"),
             ("show_shortcuts", "Keyboard Shortcuts Reference (F1)", "View complete cheat sheet of keys, shortcuts, and commands", "HELP"),
         ]
 

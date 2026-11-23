@@ -713,6 +713,78 @@ def fetch_webpage_text(url: str) -> ActionResult:
         return False, f"Could not fetch webpage: {exc}"
 
 
+# ── Antigravity Dynamic Steps & Focus Listeners ─────────────────────────────
+_STEPS_CALLBACKS: list = []
+_FOCUS_CALLBACKS: list = []
+
+
+def register_steps_listener(callback):
+    """Registers a listener for live step checklist updates."""
+    if callback not in _STEPS_CALLBACKS:
+        _STEPS_CALLBACKS.append(callback)
+
+
+def unregister_steps_listener(callback):
+    if callback in _STEPS_CALLBACKS:
+        _STEPS_CALLBACKS.remove(callback)
+
+
+def register_focus_listener(callback):
+    """Registers a listener for live focus headline updates."""
+    if callback not in _FOCUS_CALLBACKS:
+        _FOCUS_CALLBACKS.append(callback)
+
+
+def unregister_focus_listener(callback):
+    if callback in _FOCUS_CALLBACKS:
+        _FOCUS_CALLBACKS.remove(callback)
+
+
+def update_steps(payload: str) -> ActionResult:
+    """Updates live Antigravity execution steps checklist.
+    Format: Step 1 (done)|Step 2 (in_progress)|Step 3 (pending)
+    """
+    try:
+        steps_raw = payload.strip().split("|")
+        parsed_steps = []
+        for s in steps_raw:
+            s = s.strip()
+            if not s:
+                continue
+            status = "pending"
+            title = s
+            for st in ("done", "in_progress", "pending", "failed", "skipped"):
+                pattern = r"\s*[\(\[]" + st + r"[\)\]]\s*"
+                if re.search(pattern, s, flags=re.IGNORECASE):
+                    status = st
+                    title = re.sub(pattern, "", s, flags=re.IGNORECASE).strip()
+                    break
+            parsed_steps.append({"title": title, "status": status})
+
+        for cb in list(_STEPS_CALLBACKS):
+            try:
+                cb(parsed_steps)
+            except Exception as e:
+                log.warning(f"Error in steps callback: {e}")
+        return True, f"Updated {len(parsed_steps)} plan steps."
+    except Exception as exc:
+        return False, f"Could not update steps: {exc}"
+
+
+def update_focus(payload: str) -> ActionResult:
+    """Broadcasts high-level focus headline for Antigravity HUD."""
+    try:
+        focus_text = payload.strip()
+        for cb in list(_FOCUS_CALLBACKS):
+            try:
+                cb(focus_text)
+            except Exception as e:
+                log.warning(f"Error in focus callback: {e}")
+        return True, f"Focus updated: {focus_text}"
+    except Exception as exc:
+        return False, f"Could not update focus: {exc}"
+
+
 def zip_item(path_str: str) -> ActionResult:
     """Creates a zip archive of a file or folder (defaults to Desktop if relative)."""
     import zipfile

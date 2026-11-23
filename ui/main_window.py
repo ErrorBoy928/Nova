@@ -1073,6 +1073,218 @@ class _SuperAgentFeedWidget(QFrame):
         self.thought_box.setText(f"Summary: {summary[:120]}")
 
 
+class _AntigravityStepsWidget(QFrame):
+    """
+    Antigravity Live Execution Steps & Focus Tracker HUD.
+    Displays high-level focus headline and dynamic multi-step checklist
+    with live status badges (in_progress, done, pending, failed, skipped).
+    """
+    def __init__(self, initial_focus: str = "", steps: list[dict] = None, parent=None):
+        super().__init__(parent)
+        self.setObjectName("antigravitySteps")
+        self.setStyleSheet("""
+            QFrame#antigravitySteps {
+                background-color: #06060e;
+                border: 1px solid #312e81;
+                border-radius: 9px;
+                margin: 4px 6px;
+            }
+        """)
+
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(14, 10, 14, 10)
+        self._layout.setSpacing(6)
+
+        # Header
+        hdr = QHBoxLayout()
+        pill = QLabel("ANTIGRAVITY STEPS")
+        pill.setStyleSheet("background: #312e81; color: #a5b4fc; font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 4px; font-family: Consolas, monospace;")
+        hdr.addWidget(pill)
+
+        self.focus_lbl = QLabel(initial_focus or "Orchestrating multi-step workflow...")
+        self.focus_lbl.setStyleSheet("color: #e0e7ff; font-size: 11px; font-weight: 700;")
+        hdr.addWidget(self.focus_lbl)
+        hdr.addStretch()
+
+        self.stats_lbl = QLabel("0/0 Completed")
+        self.stats_lbl.setStyleSheet("color: #818cf8; font-size: 10px; font-weight: 700; font-family: Consolas, monospace;")
+        hdr.addWidget(self.stats_lbl)
+        self._layout.addLayout(hdr)
+
+        # Container for steps
+        self.steps_container = QVBoxLayout()
+        self.steps_container.setSpacing(4)
+        self._layout.addLayout(self.steps_container)
+
+        if steps:
+            self.set_steps(steps)
+
+    def set_focus(self, focus_text: str):
+        self.focus_lbl.setText(focus_text)
+
+    def set_steps(self, steps: list[dict]):
+        # Clear existing
+        while self.steps_container.count():
+            item = self.steps_container.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        done_count = sum(1 for s in steps if s.get("status") == "done")
+        self.stats_lbl.setText(f"{done_count}/{len(steps)} Completed")
+
+        for idx, step in enumerate(steps, 1):
+            row = QHBoxLayout()
+            row.setSpacing(8)
+
+            status = step.get("status", "pending").lower()
+            title = step.get("title", f"Step {idx}")
+
+            badge = QLabel()
+            badge.setFixedSize(26, 14)
+            badge.setAlignment(Qt.AlignCenter)
+
+            if status == "done":
+                badge.setText("OK")
+                badge.setStyleSheet("background: #065f46; color: #34d399; font-size: 8px; font-weight: 800; border-radius: 3px; font-family: Consolas;")
+                title_lbl = QLabel(title)
+                title_lbl.setStyleSheet("color: #94a3b8; font-size: 11px; text-decoration: line-through;")
+            elif status == "in_progress":
+                badge.setText("RUN")
+                badge.setStyleSheet("background: #4338ca; color: #a5b4fc; font-size: 8px; font-weight: 800; border-radius: 3px; font-family: Consolas;")
+                title_lbl = QLabel(title)
+                title_lbl.setStyleSheet("color: #ffffff; font-size: 11px; font-weight: 700;")
+            elif status == "failed":
+                badge.setText("ERR")
+                badge.setStyleSheet("background: #991b1b; color: #f87171; font-size: 7px; font-weight: 800; border-radius: 3px; font-family: Consolas;")
+                title_lbl = QLabel(title)
+                title_lbl.setStyleSheet("color: #f87171; font-size: 11px; font-weight: 600;")
+            else:  # pending / skipped
+                badge.setText("WAIT")
+                badge.setStyleSheet("background: #1e1e2e; color: #64748b; font-size: 7px; font-weight: 800; border-radius: 3px; font-family: Consolas;")
+                title_lbl = QLabel(title)
+                title_lbl.setStyleSheet("color: #64748b; font-size: 11px;")
+
+            row.addWidget(badge)
+            row.addWidget(title_lbl)
+            row.addStretch()
+
+            w = QWidget()
+            w.setLayout(row)
+            self.steps_container.addWidget(w)
+
+
+class _SwarmFeedWidget(QFrame):
+    """
+    Antigravity Multi-Agent Swarm Collaboration HUD.
+    Displays live status of Researcher, Coder, and Verifier subagents,
+    along with their shared message board entries.
+    """
+    def __init__(self, goal: str, parent=None):
+        super().__init__(parent)
+        self.goal = goal
+        self.setObjectName("swarmFeed")
+        self.setStyleSheet("""
+            QFrame#swarmFeed {
+                background-color: #06060f;
+                border: 1px solid #4338ca;
+                border-radius: 10px;
+                margin: 4px 6px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(8)
+
+        # Header
+        hdr = QHBoxLayout()
+        pill = QLabel("ANTIGRAVITY SWARM")
+        pill.setStyleSheet("background: #4338ca; color: #ffffff; font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 4px; font-family: Consolas, monospace;")
+        hdr.addWidget(pill)
+
+        title = QLabel("MULTI-AGENT COLLABORATION")
+        title.setStyleSheet("color: #e0e7ff; font-size: 11px; font-weight: 700; letter-spacing: 0.6px;")
+        hdr.addWidget(title)
+        hdr.addStretch()
+
+        self.status_lbl = QLabel("Initializing Swarm...")
+        self.status_lbl.setStyleSheet("color: #a5b4fc; font-size: 10px; font-weight: 700; font-family: Consolas, monospace;")
+        hdr.addWidget(self.status_lbl)
+        layout.addLayout(hdr)
+
+        # Member Status Badges
+        members_row = QHBoxLayout()
+        members_row.setSpacing(6)
+
+        self.member_badges = {}
+        for mid, mname in [("researcher", "RESEARCHER"), ("coder", "ARCHITECT"), ("verifier", "VERIFIER")]:
+            f = QFrame()
+            f.setStyleSheet("background: #0d0d1a; border: 1px solid #1e1e30; border-radius: 5px; padding: 4px 8px;")
+            fl = QHBoxLayout(f)
+            fl.setContentsMargins(4, 2, 4, 2)
+            fl.setSpacing(6)
+
+            dot = QLabel("*")
+            dot.setStyleSheet("color: #64748b; font-size: 11px; font-weight: 800;")
+            lbl = QLabel(mname)
+            lbl.setStyleSheet("color: #94a3b8; font-size: 9px; font-weight: 700; font-family: Consolas;")
+            st = QLabel("WAITING")
+            st.setStyleSheet("color: #64748b; font-size: 9px; font-weight: 700;")
+
+            fl.addWidget(dot)
+            fl.addWidget(lbl)
+            fl.addWidget(st)
+            members_row.addWidget(f)
+            self.member_badges[mid] = (dot, lbl, st, f)
+
+        layout.addLayout(members_row)
+
+        # Progress bar
+        self.pbar = QProgressBar()
+        self.pbar.setFixedHeight(3)
+        self.pbar.setTextVisible(False)
+        self.pbar.setRange(0, 3)
+        self.pbar.setValue(0)
+        self.pbar.setStyleSheet("QProgressBar { background: #161622; border-radius: 1px; } QProgressBar::chunk { background: #6366f1; border-radius: 1px; }")
+        layout.addWidget(self.pbar)
+
+        # Message Board Feed
+        self.board_box = QLabel("Waiting for swarm coordinator to brief members...")
+        self.board_box.setWordWrap(True)
+        self.board_box.setStyleSheet("background: #0a0a14; color: #cbd5e1; border: 1px solid #1a1a2e; border-radius: 6px; padding: 8px 10px; font-size: 11px; font-family: Consolas, monospace;")
+        layout.addWidget(self.board_box)
+
+    def set_member_status(self, mid: str, role: str, status: str):
+        if mid in self.member_badges:
+            dot, lbl, st, f = self.member_badges[mid]
+            st.setText(status.upper())
+            if status == "working":
+                dot.setStyleSheet("color: #818cf8; font-size: 11px; font-weight: 800;")
+                lbl.setStyleSheet("color: #ffffff; font-size: 9px; font-weight: 700;")
+                st.setStyleSheet("color: #a5b4fc; font-size: 9px; font-weight: 800;")
+                f.setStyleSheet("background: #14142b; border: 1px solid #4f46e5; border-radius: 5px; padding: 4px 8px;")
+            elif status == "done":
+                dot.setStyleSheet("color: #10b981; font-size: 11px; font-weight: 800;")
+                lbl.setStyleSheet("color: #94a3b8; font-size: 9px; font-weight: 700;")
+                st.setStyleSheet("color: #34d399; font-size: 9px; font-weight: 700;")
+                f.setStyleSheet("background: #061a12; border: 1px solid #065f46; border-radius: 5px; padding: 4px 8px;")
+            else:
+                dot.setStyleSheet("color: #ef4444; font-size: 11px; font-weight: 800;")
+                st.setStyleSheet("color: #f87171; font-size: 9px; font-weight: 700;")
+
+    def set_progress(self, current: int, total: int, stage_name: str):
+        self.pbar.setValue(current)
+        self.status_lbl.setText(f"STAGE {current}/{total}: {stage_name.upper()}")
+
+    def add_board_post(self, member: str, role: str, message: str):
+        self.board_box.setText(f"[{member.upper()} - {role}]\n{message}")
+
+    def set_complete(self, elapsed: float):
+        self.pbar.setValue(3)
+        self.status_lbl.setText(f"SWARM COMPLETED ({elapsed:.1f}s)")
+        self.status_lbl.setStyleSheet("color: #34d399; font-size: 10px; font-weight: 800; font-family: Consolas, monospace;")
+
+
 class BackgroundTaskWorker(QThread):
     progress = Signal(str)
     step_completed = Signal(int, bool, str, str)  # (step_idx, success, act_name, msg)
@@ -1635,6 +1847,17 @@ class MainWindow(QWidget):
         self.cmd_terminal_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
         self.cmd_terminal_shortcut.activated.connect(self._open_terminal_runner)
 
+        # Antigravity Shortcuts & Listeners
+        self.cmd_skills_shortcut = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+        self.cmd_skills_shortcut.activated.connect(self._open_skills_manager)
+
+        self._active_steps_widget: _AntigravityStepsWidget | None = None
+        self._swarm_worker = None
+
+        from automation.actions import register_steps_listener, register_focus_listener
+        register_steps_listener(self._on_antigravity_steps_update)
+        register_focus_listener(self._on_antigravity_focus_update)
+
         self.cmd_help_shortcut = QShortcut(QKeySequence("F1"), self)
         self.cmd_help_shortcut.activated.connect(self._show_shortcuts_dialog)
 
@@ -1853,6 +2076,7 @@ class MainWindow(QWidget):
             ("Ctrl + G", "Git Workspace Manager (Status, Diff, Commit & Push)"),
             ("Ctrl + P", "Prompt & Automation Library (Templates & Workflows)"),
             ("Ctrl + B", "Code Artifacts & Scripts Drawer"),
+            ("Ctrl + Shift + S", "Antigravity Skills & Customizations Manager"),
             ("Ctrl + T", "Quick Embedded PowerShell Terminal"),
             ("Ctrl + F", "Find in Chat Conversation"),
             ("Ctrl + Shift + D", "Desktop Screen Snip & Vision OCR"),
@@ -2043,6 +2267,124 @@ class MainWindow(QWidget):
         self._super_agent_worker.agent_finished.connect(on_finished)
         self._super_agent_worker.start()
 
+    def _open_skills_manager(self):
+        """Opens the Antigravity Skills & Extensions Manager Dialog."""
+        from ui.skills_manager_dialog import SkillsManagerDialog
+        dlg = SkillsManagerDialog(self)
+        dlg.exec()
+
+    def _on_antigravity_steps_update(self, steps: list[dict]):
+        """Live slot for updating Antigravity execution steps checklist."""
+        if not hasattr(self, "_active_steps_widget") or self._active_steps_widget is None:
+            self._active_steps_widget = _AntigravityStepsWidget(steps=steps)
+            self.message_layout.insertWidget(self.message_layout.count() - 1, self._active_steps_widget)
+        else:
+            self._active_steps_widget.set_steps(steps)
+        self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
+    def _on_antigravity_focus_update(self, focus_text: str):
+        """Live slot for broadcasting Antigravity high-level focus banner."""
+        if not hasattr(self, "_active_steps_widget") or self._active_steps_widget is None:
+            self._active_steps_widget = _AntigravityStepsWidget(initial_focus=focus_text)
+            self.message_layout.insertWidget(self.message_layout.count() - 1, self._active_steps_widget)
+        else:
+            self._active_steps_widget.set_focus(focus_text)
+        self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
+    def _launch_swarm(self, goal: str):
+        """Launches an Antigravity multi-agent swarm collaboration workflow."""
+        if hasattr(self, "_swarm_worker") and self._swarm_worker and self._swarm_worker.isRunning():
+            self._swarm_worker.cancel()
+            self.show_toast("Previous Swarm execution cancelled", "SYSTEM")
+
+        from ai.swarm_manager import SwarmWorker
+        self.status_pill.setText("SWARM WORKING...")
+        self.status_pill.setStyleSheet("""
+            color: #818cf8;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.6px;
+            padding: 3px 10px;
+            border-radius: 9px;
+            background: #1e1b4b;
+            border: 1px solid #4f46e5;
+        """)
+
+        # Insert live Swarm visual HUD into chat
+        self._swarm_feed = _SwarmFeedWidget(goal)
+        self.message_layout.insertWidget(self.message_layout.count() - 1, self._swarm_feed)
+        self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
+        # Update Send button to Stop
+        self.send_btn.setEnabled(True)
+        self.send_btn.setText("Stop")
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc2626;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: 700;
+                padding: 0 16px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #b91c1c;
+            }
+        """)
+
+        self._swarm_worker = SwarmWorker(goal, self.config, self.llm_manager)
+
+        def on_member_status(mid, role, status):
+            if hasattr(self, "_swarm_feed") and self._swarm_feed:
+                self._swarm_feed.set_member_status(mid, role, status)
+
+        def on_board_post(member, role, message):
+            if hasattr(self, "_swarm_feed") and self._swarm_feed:
+                self._swarm_feed.add_board_post(member, role, message)
+
+        def on_swarm_progress(current, total, stage_name):
+            if hasattr(self, "_swarm_feed") and self._swarm_feed:
+                self._swarm_feed.set_progress(current, total, stage_name)
+
+        def on_swarm_complete(synthesis, elapsed):
+            self._reset_send_button()
+            self.status_pill.setText("READY")
+            self.status_pill.setStyleSheet("""
+                color: #8e8ea0;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.6px;
+                padding: 3px 10px;
+                border-radius: 9px;
+                background: #111118;
+                border: 1px solid #272735;
+            """)
+            if hasattr(self, "_swarm_feed") and self._swarm_feed:
+                self._swarm_feed.set_complete(elapsed)
+
+            now_str = datetime.now().strftime("%I:%M %p")
+            b = self._add_bubble("assistant", synthesis)
+            b.set_meta(now_str, elapsed, self.config.llm.model)
+            cur_sid = getattr(self, "_active_session_id", "default")
+            db.add_message("assistant", synthesis, session_id=cur_sid)
+            self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
+
+            if self.config.voice.auto_speak:
+                self._speak_text("Swarm collaboration workflow completed successfully.")
+
+        def on_swarm_error(err_msg):
+            self._reset_send_button()
+            self.status_pill.setText("SWARM FAILED")
+            self.show_toast(err_msg, "ERROR")
+
+        self._swarm_worker.member_status.connect(on_member_status)
+        self._swarm_worker.board_post.connect(on_board_post)
+        self._swarm_worker.swarm_progress.connect(on_swarm_progress)
+        self._swarm_worker.swarm_complete.connect(on_swarm_complete)
+        self._swarm_worker.swarm_error.connect(on_swarm_error)
+        self._swarm_worker.start()
+
     def _on_mode_changed(self, index: int):
         mode_keys = ["ENGINEER", "RESEARCH", "SYSADMIN", "SUPERAGENT", "GENERAL"]
         if 0 <= index < len(mode_keys):
@@ -2160,6 +2502,13 @@ class MainWindow(QWidget):
             self._open_git_manager()
         elif cmd_id == "super_agent":
             self._send_quick_prompt("/super ")
+        elif cmd_id == "open_skills":
+            self._open_skills_manager()
+        elif cmd_id == "swarm_agent":
+            self._send_quick_prompt("/teamwork ")
+        elif cmd_id == "compact_context":
+            self.input_edit.setPlainText("/compact")
+            self._send_message()
         elif cmd_id == "show_shortcuts":
             self._show_shortcuts_dialog()
         elif cmd_id == "custom_prompt":
@@ -2875,6 +3224,15 @@ class MainWindow(QWidget):
         git_btn.setStyleSheet(find_btn.styleSheet())
         git_btn.clicked.connect(self._open_git_manager)
         top_bar.addWidget(git_btn)
+
+        # Antigravity Skills Manager Button (Ctrl+Shift+S)
+        skills_btn = QPushButton("Skills")
+        skills_btn.setToolTip("Antigravity Skills & Customizations Manager (Ctrl+Shift+S)")
+        skills_btn.setCursor(Qt.PointingHandCursor)
+        skills_btn.setFixedHeight(24)
+        skills_btn.setStyleSheet(find_btn.styleSheet())
+        skills_btn.clicked.connect(self._open_skills_manager)
+        top_bar.addWidget(skills_btn)
 
         main_vbox.addLayout(top_bar)
 
@@ -3644,7 +4002,7 @@ class MainWindow(QWidget):
         """)
 
     def _send_message(self, prefix: str = ""):
-        # If currently streaming or SuperAgent running, clicking Stop aborts cleanly
+        # If currently streaming, SuperAgent or Swarm running, clicking Stop aborts cleanly
         if self._llm_thread and self._llm_thread.isRunning():
             self._llm_thread.cancel()
             self._reset_send_button()
@@ -3655,6 +4013,12 @@ class MainWindow(QWidget):
             self._reset_send_button()
             self.status_pill.setText("READY")
             self.show_toast("SuperAgent stopped by user", "SYSTEM")
+            return
+        if hasattr(self, "_swarm_worker") and self._swarm_worker and self._swarm_worker.isRunning():
+            self._swarm_worker.cancel()
+            self._reset_send_button()
+            self.status_pill.setText("READY")
+            self.show_toast("Swarm stopped by user", "SYSTEM")
             return
 
         text = self.input_edit.toPlainText().strip()
@@ -3775,7 +4139,7 @@ class MainWindow(QWidget):
                 self._open_git_manager()
                 return
 
-            if cmd in ("/super", "/agent"):
+            if cmd in ("/super", "/agent", "/goal"):
                 if arg:
                     self._add_bubble("user", text)
                     cur_sid = getattr(self, "_active_session_id", "default")
@@ -3785,10 +4149,53 @@ class MainWindow(QWidget):
                     self.show_toast("Usage: /super <goal to accomplish>", "WARNING")
                 return
 
+            if cmd in ("/teamwork", "/swarm"):
+                if arg:
+                    self._add_bubble("user", text)
+                    cur_sid = getattr(self, "_active_session_id", "default")
+                    db.add_message("user", text, session_id=cur_sid)
+                    self._launch_swarm(arg)
+                else:
+                    self.show_toast("Usage: /teamwork <goal for multi-agent swarm>", "WARNING")
+                return
+
+            if cmd in ("/skills", "/skill"):
+                self._open_skills_manager()
+                return
+
+            if cmd == "/compact":
+                cur_sid = getattr(self, "_active_session_id", "default")
+                recent = db.get_recent_history(limit=25, session_id=cur_sid)
+                if not recent:
+                    self.show_toast("No messages in active session to compact", "SYSTEM")
+                    return
+                compact_prompt = (
+                    "Summarize the key facts, decisions, and technical context from this conversation thread into a dense, highly structured reference brief:\n\n"
+                    + "\n".join(f"{m['role'].upper()}: {m['content']}" for m in recent)
+                )
+                try:
+                    compact_result = self.llm_manager.query_sync(
+                        user_prompt=compact_prompt,
+                        system_prompt="You are an expert context archivist. Compress context with zero fluff and zero emojis.",
+                    )
+                    db.add_message("system", f"[Antigravity Compacted Context Brief]\n{compact_result}", session_id=cur_sid)
+                    self._add_bubble("user", "/compact")
+                    b = self._add_bubble("assistant", f"**Antigravity Context Compacted Successfully:**\n\n{compact_result}")
+                    b.set_meta(datetime.now().strftime("%I:%M %p"), 0.05, self.config.llm.model)
+                    self.show_toast("Session context compacted into reference brief", "SUCCESS")
+                except Exception as ex:
+                    self.show_toast(f"Context compaction failed: {ex}", "ERROR")
+                return
+
             if cmd == "/help":
                 help_text = (
                     f"**Nova AI Studio — Quick Command Reference:**\n\n"
+                    f"- `/teamwork <goal>` — Launch Antigravity Multi-Agent Swarm (Researcher, Architect, Verifier).\n"
                     f"- `/super <goal>` — Launch Autonomous Base44-grade SuperAgent Loop.\n"
+                    f"- `/skills` — Open Antigravity Skills & Extensions Manager (`Ctrl+Shift+S`).\n"
+                    f"- `/plan <goal>` — Dynamic Step-by-Step Execution Planner with Live Steps HUD.\n"
+                    f"- `/boost <query>` — High-Intensity Deep Reasoning & Verification Mode.\n"
+                    f"- `/compact` — Compress active conversation history into a dense reference brief.\n"
                     f"- `/new` — Start a fresh, isolated chat session (`Ctrl+N`).\n"
                     f"- `/sessions` — List all active and archived conversation threads.\n"
                     f"- `/attach` — Attach code, logs, data or image context (`Ctrl+O`).\n"
@@ -3801,17 +4208,14 @@ class MainWindow(QWidget):
                     f"- `/prompts` — Open Prompt & Workflow Library (`Ctrl+P`).\n"
                     f"- `/artifacts` — Open Code Artifacts & Script Drawer (`Ctrl+B`).\n"
                     f"- `/sys` — Display instant Win32 CPU, RAM & engine telemetry.\n"
-                    f"- `/model <name>` — Switch the active LLM inference engine.\n"
-                    f"- `/task <prompt>` — Dispatch an autonomous background task.\n"
-                    f"- `/research <query>` — Trigger comprehensive online web research.\n"
+                    f"- `Ctrl+Shift+S` — Antigravity Skills Manager.\n"
                     f"- `Ctrl+N` — New Chat Session.\n"
                     f"- `Ctrl+O` — Attach File / Code Context.\n"
                     f"- `Ctrl+G` — Git Workspace Manager.\n"
                     f"- `Ctrl+K` — Open Command Palette anywhere.\n"
                     f"- `Ctrl+T` — Quick Terminal Runner.\n"
                     f"- `Ctrl+P` — Prompt Library.\n"
-                    f"- `Ctrl+B` — Artifacts Drawer.\n"
-                    f"- `Ctrl+Shift+N` — Restore Nova AI from Windows System Tray."
+                    f"- `Ctrl+B` — Artifacts Drawer."
                 )
                 self._add_bubble("user", text)
                 b = self._add_bubble("assistant", help_text)
@@ -3821,7 +4225,11 @@ class MainWindow(QWidget):
                 db.add_message("assistant", help_text, session_id=cur_sid)
                 return
 
-            if cmd == "/task" and arg:
+            if cmd == "/plan" and arg:
+                text = f"[Antigravity Dynamic Planner] Create a structured step-by-step milestone execution plan using [action:update_steps:...] and [action:update_focus:...] for: {arg}"
+            elif cmd == "/boost" and arg:
+                text = f"[Antigravity Boost Mode] Perform exhaustive multi-angle analysis, verify all assumptions, check edge cases, and provide a verified solution for: {arg}"
+            elif cmd == "/task" and arg:
                 text = f"[Schedule Task] {arg}"
             elif cmd == "/research" and arg:
                 text = f"[Deep Research] Perform comprehensive web research on: {arg}"
@@ -3934,6 +4342,25 @@ class MainWindow(QWidget):
                 "- Decompose goals into clear milestone steps, execute actions directly, inspect observations, and self-correct.\n"
                 "- Emphasize end-to-end task completion, zero fluff, and proactive problem solving.\n"
             )
+
+        # Antigravity Dynamic Skills Matching & Injection
+        try:
+            from ai.skills_manager import skills_manager
+            matched_skills = skills_manager.match_skills(text)
+            if matched_skills:
+                skills_injection = skills_manager.format_skills_injection(matched_skills)
+                system_prompt += f"\n{skills_injection}"
+        except Exception as e:
+            log.warning(f"Skills injection error: {e}")
+
+        # Antigravity Steps & Focus Protocol
+        system_prompt += (
+            "\n[Antigravity Live Execution Protocol]\n"
+            "- When executing non-trivial or multi-step tasks, you may broadcast live UI updates:\n"
+            "  - Broadcast high-level activity: [action:update_focus:Short present-participle description]\n"
+            "  - Broadcast progress checklist: [action:update_steps:Step 1 (done)|Step 2 (in_progress)|Step 3 (pending)]\n"
+            "- Valid step statuses: done, in_progress, pending, failed, skipped.\n"
+        )
 
         self.send_btn.setEnabled(True)
         self.send_btn.setText("Stop")
