@@ -419,8 +419,8 @@ class SettingsView(QWidget):
     def _load_current_values(self):
         # 1. Profile
         self.user_name_input.setText(self.config.user_name or "")
-        self.user_phone_input.setText(self.config.whatsapp.owner_number or "")
-        self.discord_owner_input.setText(self.config.discord.owner_id or "")
+        self.user_phone_input.setText(getattr(self.config.whatsapp, "owner_number", "") or "")
+        self.discord_owner_input.setText(getattr(self.config.discord, "owner_id", "") or "")
         self.assistant_name_input.setText(self.config.ui.assistant_name or "Nova")
 
         for i in range(self.lang_combo.count()):
@@ -541,7 +541,7 @@ class SettingsView(QWidget):
         # 1. Profile
         self.config.user_name = self.user_name_input.text().strip() or None
         self.config.whatsapp.owner_number = self.user_phone_input.text().strip()
-        self.config.discord.owner_id = self.discord_owner_input.text().strip()
+        setattr(self.config.discord, "owner_id", self.discord_owner_input.text().strip())
         self.config.ui.assistant_name = self.assistant_name_input.text().strip() or "Nova"
         self.config.language = self.lang_combo.currentData() or "auto"
 

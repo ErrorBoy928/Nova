@@ -398,8 +398,8 @@ class ConnectionsView(QWidget):
         self.wa_owner_input.setText(saved_wa_num)
 
         # 2. Discord
-        token = self.config.discord.bot_token or os.environ.get("DISCORD_BOT_TOKEN", "")
-        owner_id = self.config.discord.owner_id or os.environ.get("OWNER_DISCORD_IDS", "")
+        token = getattr(self.config.discord, "bot_token", "") or os.environ.get("DISCORD_BOT_TOKEN", "")
+        owner_id = getattr(self.config.discord, "owner_id", "") or os.environ.get("OWNER_DISCORD_IDS", "")
 
         if token:
             self.dc_token_input.setText(token)

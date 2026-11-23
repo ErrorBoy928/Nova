@@ -92,12 +92,14 @@ class EmailConfig:
 class DiscordConfig:
     enabled: bool = False
     bot_token: str = ""
+    owner_id: str = ""
 
 
 @dataclass
 class WhatsAppConfig:
     enabled: bool = True
     owner_number: str = "923347973707"
+    owner_numbers: list[str] = field(default_factory=list)
 
 
 @dataclass
