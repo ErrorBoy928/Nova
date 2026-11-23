@@ -48,6 +48,8 @@ class CommandPaletteDialog(QDialog):
             ("nav_settings", "Open Master Settings", "Configure AI models, voice parameters, and API keys", "NAV"),
             ("export_chat", "Export Chat History", "Save conversation log to a clean Markdown (.md) file", "CHAT"),
             ("clear_chat", "Clear Conversation History", "Reset active chat memory and start a fresh session", "CHAT"),
+            ("find_chat", "Find in Conversation (Ctrl+F)", "Search keywords across message bubbles with instant highlights", "CHAT"),
+            ("show_shortcuts", "Keyboard Shortcuts Reference (F1)", "View complete cheat sheet of keys, shortcuts, and commands", "HELP"),
         ]
 
         self._build_ui()

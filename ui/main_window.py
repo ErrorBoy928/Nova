@@ -37,10 +37,12 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QMessageBox,
     QProgressBar,
@@ -229,6 +231,103 @@ class NovaToast(QFrame):
 
     def _dismiss(self):
         self.deleteLater()
+
+
+class ChatSearchBar(QFrame):
+    """
+    Sleek in-chat search bar overlay (Ctrl+F).
+    Finds keywords in chat bubbles and scrolls smoothly to matches.
+    """
+    closed = Signal()
+    search_changed = Signal(str)
+    navigate_next = Signal()
+    navigate_prev = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("chatSearchBar")
+        self.setStyleSheet("""
+            QFrame#chatSearchBar {
+                background-color: #0d0d16;
+                border: 1px solid #1e293b;
+                border-radius: 8px;
+            }
+            QLineEdit {
+                background: transparent;
+                border: none;
+                color: #f1f5f9;
+                font-size: 11px;
+                padding: 3px 6px;
+            }
+            QPushButton {
+                background-color: #161622;
+                color: #94a3b8;
+                border: 1px solid #222230;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 700;
+                padding: 2px 7px;
+            }
+            QPushButton:hover {
+                background-color: #262638;
+                color: #ffffff;
+                border-color: #38bdf8;
+            }
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(6)
+
+        search_icon = QLabel("FIND:")
+        search_icon.setStyleSheet("color: #38bdf8; font-size: 9px; font-weight: 800; font-family: Consolas, monospace;")
+        layout.addWidget(search_icon)
+
+        self.input = QLineEdit()
+        self.input.setPlaceholderText("Search conversation... (Enter: next, Esc: close)")
+        self.input.textChanged.connect(self._on_text_changed)
+        self.input.returnPressed.connect(self.navigate_next.emit)
+        layout.addWidget(self.input, 1)
+
+        self.match_lbl = QLabel("")
+        self.match_lbl.setStyleSheet("color: #64748b; font-size: 10px; font-weight: 600;")
+        layout.addWidget(self.match_lbl)
+
+        btn_prev = QPushButton("▲")
+        btn_prev.setFixedSize(22, 20)
+        btn_prev.setToolTip("Previous match")
+        btn_prev.clicked.connect(self.navigate_prev.emit)
+        layout.addWidget(btn_prev)
+
+        btn_next = QPushButton("▼")
+        btn_next.setFixedSize(22, 20)
+        btn_next.setToolTip("Next match")
+        btn_next.clicked.connect(self.navigate_next.emit)
+        layout.addWidget(btn_next)
+
+        btn_close = QPushButton("✕")
+        btn_close.setFixedSize(20, 20)
+        btn_close.setToolTip("Close (Esc)")
+        btn_close.clicked.connect(self.closed.emit)
+        layout.addWidget(btn_close)
+
+    def _on_text_changed(self, text: str):
+        self.search_changed.emit(text.strip())
+
+    def set_match_status(self, current: int, total: int):
+        if total == 0:
+            self.match_lbl.setText("No matches")
+            self.match_lbl.setStyleSheet("color: #ef4444; font-size: 10px; font-weight: 600;")
+        else:
+            self.match_lbl.setText(f"{current} of {total}")
+            self.match_lbl.setStyleSheet("color: #38bdf8; font-size: 10px; font-weight: 600;")
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.closed.emit()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
 
 def _format_inline(text: str) -> str:
@@ -778,23 +877,24 @@ class _MessageBubble(QWidget):
         self.card_layout.setSpacing(6)
 
         if self.is_user:
-            self.card.setStyleSheet(f"""
+            self._orig_style = f"""
                 QFrame {{
                     background-color: {_BG_USER};
                     color: {_TEXT_MAIN};
                     border-radius: 10px;
                     border: 1px solid #2b2b38;
                 }}
-            """)
+            """
         else:
-            self.card.setStyleSheet(f"""
+            self._orig_style = f"""
                 QFrame {{
                     background-color: {_BG_CARD};
                     color: {_TEXT_MAIN};
                     border-radius: 10px;
                     border: 1px solid {_BORDER};
                 }}
-            """)
+            """
+        self.card.setStyleSheet(self._orig_style)
 
         # Assistant Header
         if not self.is_user:
@@ -892,6 +992,24 @@ class _MessageBubble(QWidget):
             parts.append(short_model)
         if hasattr(self, "meta_lbl"):
             self.meta_lbl.setText(" • ".join(parts))
+
+    def highlight_search(self, query: str = "") -> bool:
+        """Highlights the bubble if query matches; returns True if matched."""
+        if not query:
+            self.card.setStyleSheet(self._orig_style)
+            return False
+        if query.lower() in (self.content or "").lower():
+            accent = "#38bdf8"
+            self.card.setStyleSheet(self._orig_style + f"""
+                QFrame {{
+                    border: 2px solid {accent} !important;
+                    background-color: #0f172a !important;
+                }}
+            """)
+            return True
+        else:
+            self.card.setStyleSheet(self._orig_style)
+            return False
 
     def update_stream_text(self, text: str):
         """Called dynamically as tokens arrive in real-time."""
@@ -1137,6 +1255,8 @@ class MainWindow(QWidget):
         self._current_assistant_bubble: _MessageBubble | None = None
         self._stream_text: str = ""
         self.hero_widget: ChatHeroWidget | None = None
+        self._search_matches: list[_MessageBubble] = []
+        self._search_idx: int = -1
 
         # Global Hotkey Thread (Ctrl+Shift+D for Snip, Ctrl+Shift+N to Toggle Nova)
         self.hotkey_thread = GlobalHotkeyThread()
@@ -1153,9 +1273,15 @@ class MainWindow(QWidget):
         self._is_force_quitting = False
         self._setup_tray_icon()
 
-        # Command Palette Shortcut (Ctrl+K)
+        # Keyboard Shortcuts
         self.cmd_k_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
         self.cmd_k_shortcut.activated.connect(self._open_command_palette)
+
+        self.cmd_find_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.cmd_find_shortcut.activated.connect(self._toggle_search_bar)
+
+        self.cmd_help_shortcut = QShortcut(QKeySequence("F1"), self)
+        self.cmd_help_shortcut.activated.connect(self._show_shortcuts_dialog)
 
         # Telemetry Polling Timer (smooth 2.5s interval)
         self._telemetry_timer = QTimer(self)
@@ -1270,6 +1396,130 @@ class MainWindow(QWidget):
             self.show_toast(f"Engine switched: {short_name}", "MODEL")
             QTimer.singleShot(1500, lambda: self.status_pill.setText("READY"))
 
+    def _toggle_search_bar(self):
+        if hasattr(self, "search_bar"):
+            if self.search_bar.isVisible():
+                self._close_search()
+            else:
+                self.search_bar.setVisible(True)
+                self.search_bar.input.setFocus()
+                self.search_bar.input.selectAll()
+
+    def _close_search(self):
+        if hasattr(self, "search_bar"):
+            self.search_bar.setVisible(False)
+        self.input_edit.setFocus()
+        self._search_matches = []
+        self._search_idx = -1
+        if hasattr(self, "search_bar"):
+            self.search_bar.set_match_status(0, 0)
+        for i in range(self.message_layout.count()):
+            item = self.message_layout.itemAt(i)
+            if item and item.widget() and isinstance(item.widget(), _MessageBubble):
+                item.widget().highlight_search("")
+
+    def _on_search_query_changed(self, query: str):
+        self._search_matches = []
+        self._search_idx = -1
+        if not query:
+            self._close_search()
+            return
+
+        for i in range(self.message_layout.count()):
+            item = self.message_layout.itemAt(i)
+            if item and item.widget() and isinstance(item.widget(), _MessageBubble):
+                bubble: _MessageBubble = item.widget()
+                if bubble.highlight_search(query):
+                    self._search_matches.append(bubble)
+
+        total = len(self._search_matches)
+        if total > 0:
+            self._search_idx = 0
+            self.search_bar.set_match_status(1, total)
+            self._scroll_to_bubble(self._search_matches[0])
+        else:
+            self.search_bar.set_match_status(0, 0)
+
+    def _navigate_search_next(self):
+        if not self._search_matches:
+            return
+        self._search_idx = (self._search_idx + 1) % len(self._search_matches)
+        self.search_bar.set_match_status(self._search_idx + 1, len(self._search_matches))
+        self._scroll_to_bubble(self._search_matches[self._search_idx])
+
+    def _navigate_search_prev(self):
+        if not self._search_matches:
+            return
+        self._search_idx = (self._search_idx - 1) % len(self._search_matches)
+        self.search_bar.set_match_status(self._search_idx + 1, len(self._search_matches))
+        self._scroll_to_bubble(self._search_matches[self._search_idx])
+
+    def _scroll_to_bubble(self, bubble: _MessageBubble):
+        try:
+            self.scroll.ensureWidgetVisible(bubble, 0, 60)
+        except Exception:
+            pass
+
+    def _show_shortcuts_dialog(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Nova AI - Keyboard Shortcuts")
+        dlg.setFixedSize(480, 360)
+        dlg.setStyleSheet("""
+            QDialog {
+                background-color: #0b0b12;
+                border: 1px solid #1e293b;
+                border-radius: 10px;
+            }
+            QLabel {
+                color: #e2e8f0;
+                font-family: 'Segoe UI', system-ui, sans-serif;
+            }
+        """)
+        d_layout = QVBoxLayout(dlg)
+        d_layout.setContentsMargins(20, 20, 20, 20)
+        d_layout.setSpacing(12)
+
+        t_lbl = QLabel("KEYBOARD SHORTCUTS & POWER KEYS")
+        t_lbl.setStyleSheet("font-size: 13px; font-weight: 800; color: #38bdf8; font-family: Consolas, monospace;")
+        d_layout.addWidget(t_lbl)
+
+        shortcuts = [
+            ("Ctrl + K", "Spotlight Command Palette (Actions & Navigation)"),
+            ("Ctrl + F", "Find in Chat Conversation"),
+            ("Ctrl + Shift + D", "Desktop Screen Snip & Vision OCR"),
+            ("Ctrl + Shift + N", "Summon Nova AI from System Tray"),
+            ("Enter", "Send Message / Prompt"),
+            ("Shift + Enter", "Insert newline in prompt box"),
+            ("F1", "Open this Keyboard Shortcuts cheat sheet"),
+            ("Esc", "Dismiss active Palette, Search bar, or Modal"),
+        ]
+
+        grid = QFrame()
+        grid.setStyleSheet("background: #111118; border-radius: 8px; border: 1px solid #1e293b; padding: 10px;")
+        g_layout = QVBoxLayout(grid)
+        g_layout.setSpacing(8)
+        for key, desc in shortcuts:
+            row = QHBoxLayout()
+            k_lbl = QLabel(key)
+            k_lbl.setStyleSheet("background: #1e293b; color: #38bdf8; font-family: Consolas, monospace; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px;")
+            k_lbl.setFixedWidth(130)
+            d_lbl = QLabel(desc)
+            d_lbl.setStyleSheet("color: #cbd5e1; font-size: 11px;")
+            row.addWidget(k_lbl)
+            row.addWidget(d_lbl)
+            row.addStretch()
+            g_layout.addLayout(row)
+        d_layout.addWidget(grid)
+
+        btn_close = QPushButton("Close")
+        btn_close.setFixedHeight(28)
+        btn_close.setCursor(Qt.PointingHandCursor)
+        btn_close.setStyleSheet("background-color: #0284c7; color: #ffffff; border: none; border-radius: 6px; font-weight: 700;")
+        btn_close.clicked.connect(dlg.accept)
+        d_layout.addWidget(btn_close)
+
+        dlg.exec()
+
     def _open_command_palette(self):
         palette = CommandPaletteDialog(self)
         palette.action_triggered.connect(self._handle_palette_action)
@@ -1310,6 +1560,10 @@ class MainWindow(QWidget):
             self._export_conversation()
         elif cmd_id == "clear_chat":
             self._clear_conversation()
+        elif cmd_id == "find_chat":
+            self._toggle_search_bar()
+        elif cmd_id == "show_shortcuts":
+            self._show_shortcuts_dialog()
         elif cmd_id == "custom_prompt":
             self._send_quick_prompt(payload)
 
@@ -1761,6 +2015,7 @@ class MainWindow(QWidget):
         """)
         model_choices = [
             ("qwen/qwen3.8-27b", "Groq: Qwen 3.8 (27B)"),
+            ("deepseek-r1-distill-llama-70b", "Groq: DeepSeek R1 (70B)"),
             ("llama-3.3-70b-versatile", "Groq: Llama 3.3 (70B)"),
             ("llama-3.1-8b-instant", "Groq: Llama 3.1 (8B)"),
             ("mixtral-8x7b-32768", "Groq: Mixtral 8x7B"),
@@ -1792,12 +2047,12 @@ class MainWindow(QWidget):
         """)
         top_bar.addWidget(self.status_pill)
 
-        # Export Button
-        export_btn = QPushButton("Export")
-        export_btn.setToolTip("Export conversation to Markdown (.md)")
-        export_btn.setCursor(Qt.PointingHandCursor)
-        export_btn.setFixedHeight(24)
-        export_btn.setStyleSheet(f"""
+        # Find in Chat Button (Ctrl+F)
+        find_btn = QPushButton("Find")
+        find_btn.setToolTip("Find in conversation (Ctrl+F)")
+        find_btn.setCursor(Qt.PointingHandCursor)
+        find_btn.setFixedHeight(24)
+        find_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: #12121a;
                 color: #94a3b8;
@@ -1809,9 +2064,19 @@ class MainWindow(QWidget):
             }}
             QPushButton:hover {{
                 background-color: #1e293b;
-                color: #ffffff;
+                color: #38bdf8;
+                border-color: #38bdf8;
             }}
         """)
+        find_btn.clicked.connect(self._toggle_search_bar)
+        top_bar.addWidget(find_btn)
+
+        # Export Button
+        export_btn = QPushButton("Export")
+        export_btn.setToolTip("Export conversation to Markdown (.md)")
+        export_btn.setCursor(Qt.PointingHandCursor)
+        export_btn.setFixedHeight(24)
+        export_btn.setStyleSheet(find_btn.styleSheet())
         export_btn.clicked.connect(self._export_conversation)
         top_bar.addWidget(export_btn)
 
@@ -1820,7 +2085,7 @@ class MainWindow(QWidget):
         snip_btn.setToolTip("Snip Screen (Ctrl+Shift+D)")
         snip_btn.setCursor(Qt.PointingHandCursor)
         snip_btn.setFixedHeight(24)
-        snip_btn.setStyleSheet(export_btn.styleSheet())
+        snip_btn.setStyleSheet(find_btn.styleSheet())
         snip_btn.clicked.connect(self.snipper.start_snip)
         top_bar.addWidget(snip_btn)
 
@@ -1848,6 +2113,15 @@ class MainWindow(QWidget):
         clear_btn.clicked.connect(self._clear_conversation)
         top_bar.addWidget(clear_btn)
 
+        # Shortcuts Guide Button (F1)
+        help_btn = QPushButton("Shortcuts")
+        help_btn.setToolTip("Keyboard shortcuts reference (F1)")
+        help_btn.setCursor(Qt.PointingHandCursor)
+        help_btn.setFixedHeight(24)
+        help_btn.setStyleSheet(find_btn.styleSheet())
+        help_btn.clicked.connect(self._show_shortcuts_dialog)
+        top_bar.addWidget(help_btn)
+
         main_vbox.addLayout(top_bar)
 
         # Stacked Pages
@@ -1858,6 +2132,15 @@ class MainWindow(QWidget):
         chat_vbox = QVBoxLayout(chat_page)
         chat_vbox.setContentsMargins(0, 0, 0, 0)
         chat_vbox.setSpacing(8)
+
+        # In-Chat Search Bar (Ctrl+F)
+        self.search_bar = ChatSearchBar()
+        self.search_bar.setVisible(False)
+        self.search_bar.closed.connect(self._close_search)
+        self.search_bar.search_changed.connect(self._on_search_query_changed)
+        self.search_bar.navigate_next.connect(self._navigate_search_next)
+        self.search_bar.navigate_prev.connect(self._navigate_search_prev)
+        chat_vbox.addWidget(self.search_bar)
 
         # Scroll Area for Messages
         self.scroll = QScrollArea()

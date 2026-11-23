@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import urllib.request
 from datetime import datetime
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -29,6 +29,20 @@ _BG_CARD = "#12121a"
 _BORDER = "#1e293b"
 _TEXT_MAIN = "#f8fafc"
 _TEXT_MUTED = "#94a3b8"
+
+
+class _FeedFetcherWorker(QThread):
+    feed_fetched = Signal(list)
+    feed_failed = Signal()
+
+    def run(self):
+        try:
+            req = urllib.request.Request("http://127.0.0.1:5050/feed", headers={"User-Agent": "NovaUI"})
+            with urllib.request.urlopen(req, timeout=1.2) as resp:
+                data = json.loads(resp.read().decode())
+                self.feed_fetched.emit(data.get("feed", []))
+        except Exception:
+            self.feed_failed.emit()
 
 
 class AdminFeedView(QWidget):
@@ -166,17 +180,22 @@ class AdminFeedView(QWidget):
         self._render_events()
 
     def _fetch_feed(self):
-        try:
-            req = urllib.request.Request("http://127.0.0.1:5050/feed", headers={"User-Agent": "NovaUI"})
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
-                data = json.loads(resp.read().decode())
-                self._events = data.get("feed", [])
-                self._render_events()
-                self.status_pill.setText("LIVE STREAM ONLINE")
-                self.status_pill.setStyleSheet("color: #10b981; font-weight: 700; font-size: 10px; padding: 4px 10px; background: #064e3b; border-radius: 6px; border: 1px solid #059669;")
-        except Exception:
-            self.status_pill.setText("BRIDGE OFFLINE (PORT 5050)")
-            self.status_pill.setStyleSheet("color: #ef4444; font-weight: 700; font-size: 10px; padding: 4px 10px; background: #450a0a; border-radius: 6px; border: 1px solid #991b1b;")
+        if hasattr(self, "_worker") and self._worker and self._worker.isRunning():
+            return
+        self._worker = _FeedFetcherWorker()
+        self._worker.feed_fetched.connect(self._on_feed_fetched)
+        self._worker.feed_failed.connect(self._on_feed_failed)
+        self._worker.start()
+
+    def _on_feed_fetched(self, events: list):
+        self._events = events
+        self._render_events()
+        self.status_pill.setText("LIVE STREAM ONLINE")
+        self.status_pill.setStyleSheet("color: #10b981; font-weight: 700; font-size: 10px; padding: 4px 10px; background: #064e3b; border-radius: 6px; border: 1px solid #059669;")
+
+    def _on_feed_failed(self):
+        self.status_pill.setText("BRIDGE OFFLINE (PORT 5050)")
+        self.status_pill.setStyleSheet("color: #ef4444; font-weight: 700; font-size: 10px; padding: 4px 10px; background: #450a0a; border-radius: 6px; border: 1px solid #991b1b;")
 
     def _send_test_event(self):
         try:

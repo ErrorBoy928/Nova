@@ -17,7 +17,7 @@ import smtplib
 import urllib.request
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -41,6 +41,20 @@ log = get_logger(__name__)
 
 _ENV_PATH = Path("E:/Nova_AI/.env")
 _AUTH_DIR = Path("E:/Nova_AI/auth_info_baileys")
+
+
+class _QRFetcherWorker(QThread):
+    qr_loaded = Signal(bytes)
+    qr_failed = Signal()
+
+    def run(self):
+        try:
+            req = urllib.request.Request("http://127.0.0.1:3000/qr", headers={"User-Agent": "NovaUI"})
+            with urllib.request.urlopen(req, timeout=1.5) as response:
+                img_data = response.read()
+                self.qr_loaded.emit(img_data)
+        except Exception:
+            self.qr_failed.emit()
 
 
 class ConnectionsView(QWidget):
@@ -425,24 +439,27 @@ class ConnectionsView(QWidget):
         QMessageBox.information(self, "Saved", f"WhatsApp owner mobile number saved successfully:\n{num or '(Cleared)'}")
 
     def _fetch_whatsapp_qr(self, silent: bool = False):
+        if hasattr(self, "_qr_worker") and self._qr_worker and self._qr_worker.isRunning():
+            return
         if not silent:
             self.qr_img_lbl.setText("Requesting pairing code from local bridge...")
             self.qr_img_lbl.setStyleSheet("color: #38bdf8; font-size: 11px; font-weight: 600;")
-        try:
-            req = urllib.request.Request("http://127.0.0.1:3000/qr", headers={"User-Agent": "NovaUI"})
-            with urllib.request.urlopen(req, timeout=2) as response:
-                img_data = response.read()
-                image = QImage()
-                if image.loadFromData(img_data):
-                    pix = QPixmap.fromImage(image).scaled(190, 190, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                    self.qr_img_lbl.setPixmap(pix)
-                    self.wa_status_lbl.setText("Scan QR Code")
-                    self.wa_status_lbl.setStyleSheet("color: #f59e0b; background: #451a03; border-radius: 6px; padding: 3px 10px;")
-                    return
-        except Exception:
-            pass
+        self._qr_silent = silent
+        self._qr_worker = _QRFetcherWorker()
+        self._qr_worker.qr_loaded.connect(self._on_qr_loaded)
+        self._qr_worker.qr_failed.connect(self._on_qr_failed)
+        self._qr_worker.start()
 
-        if not silent:
+    def _on_qr_loaded(self, img_data: bytes):
+        image = QImage()
+        if image.loadFromData(img_data):
+            pix = QPixmap.fromImage(image).scaled(190, 190, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.qr_img_lbl.setPixmap(pix)
+            self.wa_status_lbl.setText("Scan QR Code")
+            self.wa_status_lbl.setStyleSheet("color: #f59e0b; background: #451a03; border-radius: 6px; padding: 3px 10px;")
+
+    def _on_qr_failed(self):
+        if not getattr(self, "_qr_silent", False):
             self.qr_img_lbl.setText("WhatsApp Bridge Offline (Port 3000).\nRun 'node index.js' to start the local bridge.")
             self.qr_img_lbl.setStyleSheet("color: #ef4444; font-size: 11px; font-weight: 600; line-height: 1.4;")
 
