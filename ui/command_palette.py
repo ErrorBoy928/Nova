@@ -48,6 +48,8 @@ class CommandPaletteDialog(QDialog):
             ("nav_settings", "Open Master Settings", "Configure AI models, voice parameters, and API keys", "NAV"),
             ("export_chat", "Export Chat History", "Save conversation log to a clean Markdown (.md) file", "CHAT"),
             ("clear_chat", "Clear Conversation History", "Reset active chat memory and start a fresh session", "CHAT"),
+            ("new_chat", "Start New Chat Session (Ctrl+N)", "Create an isolated, parallel conversation thread", "CHAT"),
+            ("attach_file", "Attach File Context (Ctrl+O)", "Inject local code, logs, or select image for vision", "TOOL"),
             ("find_chat", "Find in Conversation (Ctrl+F)", "Search keywords across message bubbles with instant highlights", "CHAT"),
             ("open_prompts", "Prompt & Automation Library (Ctrl+P)", "Browse curated code, system, and research templates", "NAV"),
             ("open_artifacts", "Code Artifacts & Scripts Drawer (Ctrl+B)", "Inspect, copy, and run all session scripts", "CODE"),

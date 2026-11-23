@@ -1482,6 +1482,7 @@ class MainWindow(QWidget):
         self._search_idx: int = -1
         self._current_plan_widget: _ExecutionPlanWidget | None = None
         self._code_artifacts: list[dict] = []
+        self._active_session_id = "default"
 
         # Global Hotkey Thread (Ctrl+Shift+D for Snip, Ctrl+Shift+N to Toggle Nova)
         self.hotkey_thread = GlobalHotkeyThread()
@@ -1491,6 +1492,7 @@ class MainWindow(QWidget):
 
         self._setup_window()
         self._build_ui()
+        self._refresh_session_combo(selected_id=self._active_session_id)
         self._load_history()
         self._update_tasks_btn_badge()
 
@@ -1503,6 +1505,12 @@ class MainWindow(QWidget):
         # Keyboard Shortcuts
         self.cmd_k_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
         self.cmd_k_shortcut.activated.connect(self._open_command_palette)
+
+        self.cmd_new_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
+        self.cmd_new_shortcut.activated.connect(self._create_new_session)
+
+        self.cmd_attach_shortcut = QShortcut(QKeySequence("Ctrl+O"), self)
+        self.cmd_attach_shortcut.activated.connect(self._on_attach_file)
 
         self.cmd_find_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         self.cmd_find_shortcut.activated.connect(self._toggle_search_bar)
@@ -1707,7 +1715,7 @@ class MainWindow(QWidget):
     def _show_shortcuts_dialog(self):
         dlg = QDialog(self)
         dlg.setWindowTitle("Nova AI - Keyboard Shortcuts")
-        dlg.setFixedSize(480, 360)
+        dlg.setFixedSize(480, 420)
         dlg.setStyleSheet("""
             QDialog {
                 background-color: #0b0b12;
@@ -1729,6 +1737,8 @@ class MainWindow(QWidget):
 
         shortcuts = [
             ("Ctrl + K", "Spotlight Command Palette (Actions & Navigation)"),
+            ("Ctrl + N", "Start New Chat Session / Thread"),
+            ("Ctrl + O", "Attach File Context (Code, Logs, Data, Images)"),
             ("Ctrl + P", "Prompt & Automation Library (Templates & Workflows)"),
             ("Ctrl + B", "Code Artifacts & Scripts Drawer"),
             ("Ctrl + T", "Quick Embedded PowerShell Terminal"),
@@ -1884,6 +1894,10 @@ class MainWindow(QWidget):
             self._export_conversation()
         elif cmd_id == "clear_chat":
             self._clear_conversation()
+        elif cmd_id == "new_chat":
+            self._create_new_session()
+        elif cmd_id == "attach_file":
+            self._on_attach_file()
         elif cmd_id == "find_chat":
             self._toggle_search_bar()
         elif cmd_id == "open_prompts":
@@ -1898,7 +1912,7 @@ class MainWindow(QWidget):
             self._send_quick_prompt(payload)
 
     def _export_conversation(self):
-        recent = db.get_recent_history(limit=100)
+        recent = db.get_recent_history(limit=200, session_id=self._active_session_id)
         if not recent:
             QMessageBox.information(self, "Export Conversation", "No conversation messages found to export.")
             return
@@ -2313,6 +2327,66 @@ class MainWindow(QWidget):
         self.palette_btn.clicked.connect(self._open_command_palette)
         top_bar.addWidget(self.palette_btn)
 
+        # Session Switcher Dropdown
+        self.session_combo = QComboBox()
+        self.session_combo.setCursor(Qt.PointingHandCursor)
+        self.session_combo.setFixedHeight(24)
+        self.session_combo.setMinimumWidth(125)
+        self.session_combo.setMaximumWidth(190)
+        self.session_combo.setToolTip("Active Chat Session / Thread")
+        self.session_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: #12121a;
+                color: #e2e8f0;
+                border: 1px solid {_BORDER};
+                border-radius: 5px;
+                padding: 1px 8px;
+                font-size: 10px;
+                font-weight: 600;
+            }}
+            QComboBox:hover {{
+                border-color: {_ACCENT_CYAN};
+                color: #ffffff;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 14px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: #0b0b12;
+                color: #e2e8f0;
+                border: 1px solid {_BORDER};
+                selection-background-color: {_ACCENT_BLUE};
+                selection-color: #ffffff;
+                outline: none;
+                padding: 4px;
+            }}
+        """)
+        self.session_combo.currentIndexChanged.connect(self._on_session_combo_changed)
+        top_bar.addWidget(self.session_combo)
+
+        # New Chat Session Button (Ctrl+N)
+        new_chat_btn = QPushButton("+ New Chat")
+        new_chat_btn.setToolTip("Start New Isolated Chat Session (Ctrl+N)")
+        new_chat_btn.setCursor(Qt.PointingHandCursor)
+        new_chat_btn.setFixedHeight(24)
+        new_chat_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_ACCENT_BLUE};
+                color: #ffffff;
+                border: 1px solid #0369a1;
+                border-radius: 5px;
+                padding: 0 9px;
+                font-size: 10px;
+                font-weight: 700;
+            }}
+            QPushButton:hover {{
+                background-color: #0369a1;
+            }}
+        """)
+        new_chat_btn.clicked.connect(self._create_new_session)
+        top_bar.addWidget(new_chat_btn)
+
         top_bar.addStretch()
 
         # Interactive Model Switcher Dropdown
@@ -2459,6 +2533,15 @@ class MainWindow(QWidget):
         export_btn.setStyleSheet(find_btn.styleSheet())
         export_btn.clicked.connect(self._export_conversation)
         top_bar.addWidget(export_btn)
+
+        # Attach File Button (Ctrl+O)
+        attach_btn = QPushButton("Attach")
+        attach_btn.setToolTip("Attach File, Code, Logs, or Image Context (Ctrl+O)")
+        attach_btn.setCursor(Qt.PointingHandCursor)
+        attach_btn.setFixedHeight(24)
+        attach_btn.setStyleSheet(find_btn.styleSheet())
+        attach_btn.clicked.connect(self._on_attach_file)
+        top_bar.addWidget(attach_btn)
 
         # Snip Button
         snip_btn = QPushButton("Snip Screen")
@@ -2850,6 +2933,7 @@ class MainWindow(QWidget):
                 self.message_layout.removeWidget(w)
                 w.deleteLater()
         self.llm_manager.clear_history()
+        db.clear_history(session_id=getattr(self, "_active_session_id", "default"))
         self._show_welcome_message()
 
     def _show_welcome_message(self):
@@ -2971,8 +3055,57 @@ class MainWindow(QWidget):
         pos = self.plus_btn.mapToGlobal(QPoint(0, -self.plus_menu.sizeHint().height() - 4))
         self.plus_menu.exec(pos)
 
+    def _refresh_session_combo(self, selected_id: str | None = None):
+        if not hasattr(self, "session_combo"):
+            return
+        target_id = selected_id or getattr(self, "_active_session_id", "default")
+        self.session_combo.blockSignals(True)
+        self.session_combo.clear()
+        sessions = db.get_all_sessions()
+        active_index = 0
+        for idx, sess in enumerate(sessions):
+            self.session_combo.addItem(sess["title"], sess["id"])
+            if sess["id"] == target_id:
+                active_index = idx
+        self.session_combo.setCurrentIndex(active_index)
+        self.session_combo.blockSignals(False)
+
+    def _on_session_combo_changed(self, index: int):
+        if index < 0 or index >= self.session_combo.count():
+            return
+        sid = self.session_combo.itemData(index)
+        if sid and sid != getattr(self, "_active_session_id", "default"):
+            self._switch_session(sid)
+
+    def _switch_session(self, session_id: str):
+        self._active_session_id = session_id
+        self._clear_chat_bubbles()
+        self._load_history()
+        sess = db.get_session(session_id)
+        title = sess.get("title", "Session") if sess else "Session"
+        self.show_toast(f"Switched session: {title}", "SESSION")
+
+    def _create_new_session(self):
+        sid = db.create_session("New Session")
+        self._active_session_id = sid
+        self._refresh_session_combo(selected_id=sid)
+        self._clear_chat_bubbles()
+        if self.hero_widget:
+            self.hero_widget.setVisible(True)
+        self.input_edit.clear()
+        self.input_edit.setFocus()
+        self.show_toast("Started fresh chat session (Ctrl+N)", "SESSION")
+
+    def _clear_chat_bubbles(self):
+        for i in reversed(range(self.message_layout.count())):
+            item = self.message_layout.itemAt(i)
+            if item and item.widget() and item.widget() != self.hero_widget:
+                w = item.widget()
+                self.message_layout.removeWidget(w)
+                w.deleteLater()
+
     def _load_history(self):
-        recent = db.get_recent_history(limit=30)
+        recent = db.get_recent_history(limit=50, session_id=getattr(self, "_active_session_id", "default"))
         if recent:
             if self.hero_widget:
                 self.hero_widget.setVisible(False)
@@ -3181,12 +3314,38 @@ class MainWindow(QWidget):
 
     def _on_attach_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Attach File or Code", "", "Source Code & Images (*.py *.js *.html *.css *.json *.txt *.png *.jpg);;All Files (*.*)"
+            self,
+            "Attach Code, Logs, Data, or Image Context",
+            "",
+            "All Supported (*.py *.js *.ts *.html *.css *.json *.txt *.md *.log *.csv *.png *.jpg *.jpeg *.webp);;Code & Text (*.py *.js *.ts *.html *.css *.json *.txt *.md *.log *.csv *.bat *.ps1 *.sql);;Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*.*)"
         )
-        if file_path:
-            self._attached_path = Path(file_path)
-            self.attachment_preview.setText(f"[Attached: {self._attached_path.name}]")
+        if not file_path:
+            return
+
+        p = Path(file_path)
+        img_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+        if p.suffix.lower() in img_exts:
+            self._attached_path = p
+            self.attachment_preview.setText(f"[Attached Image: {p.name}]")
             self.attachment_preview.setVisible(True)
+            self.show_toast(f"Attached image for vision: {p.name}", "VISION")
+        else:
+            try:
+                content = p.read_text(encoding="utf-8", errors="replace")
+                lines = content.splitlines()
+                if len(content) > 40000:
+                    content = content[:40000] + "\n...[Content truncated: file exceeds 40KB]..."
+                ext = p.suffix.lstrip(".") or "txt"
+                snippet = f"\n\n[Attached File: {p.name} ({len(lines)} lines)]\n```{ext}\n{content}\n```\n"
+                cur = self.input_edit.toPlainText().strip()
+                if cur:
+                    self.input_edit.setText(f"{cur}\n{snippet}")
+                else:
+                    self.input_edit.setText(snippet.strip() + "\n\nAnalyze this file and ")
+                self.input_edit.setFocus()
+                self.show_toast(f"Injected {p.name} into prompt context", "CODE")
+            except Exception as e:
+                self.show_toast(f"Unable to read file: {e}", "WARNING")
 
     def _quick_action(self, action_name: str, arg: str = ""):
         self.input_edit.setText(f"Execute {action_name} {arg}".strip())
@@ -3321,11 +3480,35 @@ class MainWindow(QWidget):
                 self._open_artifacts_drawer()
                 return
 
+            if cmd in ("/new", "/newchat"):
+                self._create_new_session()
+                return
+
+            if cmd in ("/session", "/sessions"):
+                sess_list = db.get_all_sessions()
+                lines = ["**Active Chat Sessions & Threads:**\n"]
+                cur_id = getattr(self, "_active_session_id", "default")
+                for s in sess_list:
+                    marker = "[ACTIVE] " if s["id"] == cur_id else "- "
+                    lines.append(f"{marker}**{s['title']}** (`{s['id']}`)")
+                sess_text = "\n".join(lines)
+                self._add_bubble("user", text)
+                b = self._add_bubble("assistant", sess_text)
+                b.set_meta(datetime.now().strftime("%I:%M %p"), 0.01, self.config.llm.model)
+                return
+
+            if cmd in ("/attach", "/file"):
+                self._on_attach_file()
+                return
+
             if cmd == "/help":
                 help_text = (
                     f"**Nova AI Studio — Quick Command Reference:**\n\n"
+                    f"- `/new` — Start a fresh, isolated chat session (`Ctrl+N`).\n"
+                    f"- `/sessions` — List all active and archived conversation threads.\n"
+                    f"- `/attach` — Attach code, logs, data or image context (`Ctrl+O`).\n"
                     f"- `/clear` — Wipe active conversation and reset context memory.\n"
-                    f"- `/export` — Save conversation logs to a clean Markdown (.md) file.\n"
+                    f"- `/export` — Save conversation logs to a clean Markdown (.md) or HTML file.\n"
                     f"- `/palette` — Open the Spotlight Command Palette (`Ctrl+K`).\n"
                     f"- `/term` — Launch Quick Embedded PowerShell Console (`Ctrl+T`).\n"
                     f"- `/mode <name>` — Switch Persona (`engineer`, `research`, `sysadmin`, `general`).\n"
@@ -3335,6 +3518,8 @@ class MainWindow(QWidget):
                     f"- `/model <name>` — Switch the active LLM inference engine.\n"
                     f"- `/task <prompt>` — Dispatch an autonomous background task.\n"
                     f"- `/research <query>` — Trigger comprehensive online web research.\n"
+                    f"- `Ctrl+N` — New Chat Session.\n"
+                    f"- `Ctrl+O` — Attach File / Code Context.\n"
                     f"- `Ctrl+K` — Open Command Palette anywhere.\n"
                     f"- `Ctrl+T` — Quick Terminal Runner.\n"
                     f"- `Ctrl+P` — Prompt Library.\n"
@@ -3344,8 +3529,9 @@ class MainWindow(QWidget):
                 self._add_bubble("user", text)
                 b = self._add_bubble("assistant", help_text)
                 b.set_meta(datetime.now().strftime("%I:%M %p"), 0.01, self.config.llm.model)
-                db.add_message("user", text)
-                db.add_message("assistant", help_text)
+                cur_sid = getattr(self, "_active_session_id", "default")
+                db.add_message("user", text, session_id=cur_sid)
+                db.add_message("assistant", help_text, session_id=cur_sid)
                 return
 
             if cmd == "/task" and arg:
@@ -3360,11 +3546,12 @@ class MainWindow(QWidget):
         if image_path_to_send:
             bubble_text = f"{bubble_text}\n[Image: {image_path_to_send}]"
         self._add_bubble("user", bubble_text)
-        db.add_message("user", bubble_text)
+        cur_sid = getattr(self, "_active_session_id", "default")
+        db.add_message("user", bubble_text, session_id=cur_sid)
 
         # Prepare Chat Messages
         history: list[ChatMessage] = []
-        for msg in db.get_recent_history(limit=10):
+        for msg in db.get_recent_history(limit=10, session_id=cur_sid):
             history.append(ChatMessage(role=msg["role"], content=msg["content"]))
 
         # Attach image to the latest user message for vision
@@ -3494,8 +3681,21 @@ class MainWindow(QWidget):
             if code_text:
                 self._register_code_artifact(lang, code_text)
 
+        cur_sid = getattr(self, "_active_session_id", "default")
         if clean_text:
-            db.add_message("assistant", clean_text)
+            db.add_message("assistant", clean_text, session_id=cur_sid)
+
+        # Auto-name session if it was freshly created
+        sess = db.get_session(cur_sid)
+        if sess and sess.get("title") in ("New Session", "Untitled Session"):
+            recent = db.get_recent_history(limit=4, session_id=cur_sid)
+            user_msg = next((m["content"] for m in recent if m["role"] == "user"), "")
+            first_line = user_msg.splitlines()[0][:32].strip() if user_msg else ""
+            if first_line and not first_line.startswith("/"):
+                cleaned = re.sub(r"^\[.*?\]\s*", "", first_line).strip()[:28]
+                if cleaned:
+                    db.rename_session(cur_sid, cleaned)
+                    self._refresh_session_combo(selected_id=cur_sid)
 
         if not actions_list:
             self.status_pill.setText("READY")
