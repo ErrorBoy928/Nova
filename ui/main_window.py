@@ -40,9 +40,12 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMenu,
     QMessageBox,
     QProgressBar,
@@ -1644,121 +1647,111 @@ class ChatHeroWidget(QFrame):
     def update_user_name(self, name: str):
         self.user_name = name or "Commander"
         if hasattr(self, "greeting_lbl"):
-            self.greeting_lbl.setText(f"Welcome, {self.user_name}")
+            self.greeting_lbl.setText("How can I help you today?")
 
     def _build_ui(self):
         self.setStyleSheet("background-color: transparent;")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 20, 14, 14)
-        layout.setSpacing(16)
+        layout.setContentsMargins(16, 28, 16, 20)
+        layout.setSpacing(18)
         layout.setAlignment(Qt.AlignCenter)
 
         # Central Card Container
         hero_card = QFrame()
-        hero_card.setMaximumWidth(720)
+        hero_card.setMaximumWidth(680)
         hero_card.setStyleSheet(f"""
             QFrame {{
-                background-color: #0d0d14;
-                border: 1px solid {_BORDER};
-                border-radius: 12px;
+                background-color: #0b0b14;
+                border: 1px solid #1c1c2e;
+                border-radius: 14px;
             }}
         """)
         card_vbox = QVBoxLayout(hero_card)
-        card_vbox.setContentsMargins(24, 22, 24, 22)
-        card_vbox.setSpacing(14)
+        card_vbox.setContentsMargins(28, 26, 28, 26)
+        card_vbox.setSpacing(16)
 
         # Header with Logo & Brand
-        hdr_row = QHBoxLayout()
-        hdr_row.setSpacing(10)
+        hdr_box = QVBoxLayout()
+        hdr_box.setSpacing(6)
+        hdr_box.setAlignment(Qt.AlignCenter)
 
         logo = QLabel("N")
-        logo.setFixedSize(36, 36)
+        logo.setFixedSize(42, 42)
         logo.setAlignment(Qt.AlignCenter)
         logo.setStyleSheet("""
-            background: #0284c7;
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4f46e5, stop:1 #06b6d4);
             color: #ffffff;
             font-weight: 900;
-            font-size: 18px;
-            border-radius: 8px;
+            font-size: 20px;
+            border-radius: 10px;
         """)
-        hdr_row.addWidget(logo)
+        hdr_box.addWidget(logo, 0, Qt.AlignCenter)
 
-        hdr_text_box = QVBoxLayout()
-        hdr_text_box.setSpacing(1)
-        self.greeting_lbl = QLabel(f"Welcome, {self.user_name}")
-        self.greeting_lbl.setStyleSheet("color: #ffffff; font-size: 16px; font-weight: 800; letter-spacing: 0.3px;")
-        sub_title = QLabel("NOVA AUTONOMOUS AI • DESKTOP & MULTI-CHANNEL SUITE")
-        sub_title.setStyleSheet(f"color: {_ACCENT_CYAN}; font-size: 9px; font-weight: 800; letter-spacing: 1px;")
-        hdr_text_box.addWidget(self.greeting_lbl)
-        hdr_text_box.addWidget(sub_title)
-        hdr_row.addLayout(hdr_text_box)
-        hdr_row.addStretch()
+        self.greeting_lbl = QLabel("How can I help you today?")
+        self.greeting_lbl.setAlignment(Qt.AlignCenter)
+        self.greeting_lbl.setStyleSheet("color: #ffffff; font-size: 20px; font-weight: 800; letter-spacing: -0.2px;")
+        hdr_box.addWidget(self.greeting_lbl)
 
-        badge_box = QHBoxLayout()
-        badge_box.setSpacing(6)
-        for b_text, b_color in [("GROQ READY", "#10b981"), ("OBSERVER ON", "#38bdf8"), ("CHANNELS STANDBY", "#a855f7")]:
-            b_lbl = QLabel(b_text)
-            b_lbl.setStyleSheet(f"background: #11111a; border: 1px solid #222230; color: {b_color}; font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 4px;")
-            badge_box.addWidget(b_lbl)
-        hdr_row.addLayout(badge_box)
+        sub_title = QLabel("Autonomous coding, deep research, and computer execution")
+        sub_title.setAlignment(Qt.AlignCenter)
+        sub_title.setStyleSheet("color: #94a3b8; font-size: 12px; font-weight: 500;")
+        hdr_box.addWidget(sub_title)
+        card_vbox.addLayout(hdr_box)
 
-        card_vbox.addLayout(hdr_row)
-
-        desc = QLabel(
-            "Nova is your autonomous executive co-pilot. She can write and execute code in any language, "
-            "inspect and manipulate active desktop windows, autonomously research the web, "
-            "and synchronize tasks across WhatsApp, Discord, and scheduled background workers."
-        )
-        desc.setWordWrap(True)
-        desc.setStyleSheet("color: #94a3b8; font-size: 11px; line-height: 1.5;")
-        card_vbox.addWidget(desc)
-
-        # Action Cards Section
-        act_title = QLabel("QUICK CAPABILITIES:")
-        act_title.setStyleSheet("color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: 0.8px;")
-        card_vbox.addWidget(act_title)
-
-        grid = QHBoxLayout()
+        # 4 Clean Action Cards (2x2 Grid)
+        grid_container = QWidget()
+        grid = QGridLayout(grid_container)
+        grid.setContentsMargins(0, 8, 0, 0)
         grid.setSpacing(10)
 
         actions_data = [
-            ("System Health", "CPU, RAM & Disks", "system_stats", True),
-            ("Deep Research", "Autonomous Web Intel", "Perform a deep web research on latest AI agent advancements and generate a structured summary.", False),
-            ("Code Architect", "Write Python Utilities", "Write a modular Python script with robust error handling and CLI arguments.", False),
-            ("Screen Vision", "Inspect Desktop Display", "Analyze my active screen and summarize what is currently visible.", False),
+            ("SuperAgent Loop", "Autonomous multi-step execution", "/super ", "AGENT", "#6366f1"),
+            ("Code Architect", "Write modular, typed Python software", "/code ", "CODE", "#06b6d4"),
+            ("Deep Research", "Multi-source web intelligence & citations", "/research ", "INTEL", "#a855f7"),
+            ("Windows SysAdmin", "Silent PowerShell diagnostics & controls", "/sysadmin ", "SYSTEM", "#10b981"),
         ]
 
-        for title, subtitle, prompt, is_instant in actions_data:
+        for idx, (title, subtitle, prompt, badge, color) in enumerate(actions_data):
             btn = QPushButton()
             btn.setCursor(Qt.PointingHandCursor)
             btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: #12121a;
-                    border: 1px solid {_BORDER};
-                    border-radius: 8px;
-                    padding: 10px;
+                    background-color: #10101c;
+                    border: 1px solid #1e1e30;
+                    border-radius: 10px;
+                    padding: 12px 14px;
                     text-align: left;
                 }}
                 QPushButton:hover {{
-                    background-color: #1a1a26;
-                    border-color: {_ACCENT_CYAN};
+                    background-color: #17172a;
+                    border-color: {color};
                 }}
             """)
             btn_layout = QVBoxLayout(btn)
             btn_layout.setContentsMargins(0, 0, 0, 0)
-            btn_layout.setSpacing(2)
+            btn_layout.setSpacing(4)
 
+            top_row = QHBoxLayout()
             t_lbl = QLabel(title)
-            t_lbl.setStyleSheet("color: #ffffff; font-size: 11px; font-weight: 700;")
+            t_lbl.setStyleSheet("color: #f1f5f9; font-size: 12px; font-weight: 700;")
+            top_row.addWidget(t_lbl)
+            top_row.addStretch()
+
+            b_lbl = QLabel(badge)
+            b_lbl.setStyleSheet(f"background: #14142b; color: {color}; font-size: 8px; font-weight: 800; padding: 2px 6px; border-radius: 4px; font-family: Consolas;")
+            top_row.addWidget(b_lbl)
+            btn_layout.addLayout(top_row)
+
             s_lbl = QLabel(subtitle)
-            s_lbl.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 9px;")
-            btn_layout.addWidget(t_lbl)
+            s_lbl.setStyleSheet("color: #64748b; font-size: 10px;")
             btn_layout.addWidget(s_lbl)
 
-            btn.clicked.connect(lambda _, p=prompt, i=is_instant: self._handle_click(p, i))
-            grid.addWidget(btn, 1)
+            btn.clicked.connect(lambda _, p=prompt: self._handle_click(p, False))
+            r = idx // 2
+            c = idx % 2
+            grid.addWidget(btn, r, c)
 
-        card_vbox.addLayout(grid)
+        card_vbox.addWidget(grid_container)
         layout.addWidget(hero_card)
 
     def _handle_click(self, prompt: str, is_instant: bool):
@@ -1914,15 +1907,19 @@ class MainWindow(QWidget):
             return
         try:
             cpu_pct, ram_pct, used_gb, total_gb = _get_live_telemetry()
-            self.cpu_lbl.setText(f"CPU: {cpu_pct}%")
-            self.cpu_bar.setValue(cpu_pct)
-            cpu_color = "#ef4444" if cpu_pct > 80 else "#38bdf8"
-            self.cpu_bar.setStyleSheet(f"QProgressBar {{ background: #1a1a26; border-radius: 1px; }} QProgressBar::chunk {{ background: {cpu_color}; border-radius: 1px; }}")
+            if hasattr(self, "cpu_lbl"):
+                self.cpu_lbl.setText(f"CPU: {cpu_pct}%")
+            if hasattr(self, "cpu_bar"):
+                self.cpu_bar.setValue(cpu_pct)
+                cpu_color = "#ef4444" if cpu_pct > 80 else "#38bdf8"
+                self.cpu_bar.setStyleSheet(f"QProgressBar {{ background: #1a1a26; border-radius: 1px; }} QProgressBar::chunk {{ background: {cpu_color}; border-radius: 1px; }}")
 
-            self.ram_lbl.setText(f"RAM: {ram_pct}% ({used_gb}G)")
-            self.ram_bar.setValue(ram_pct)
-            ram_color = "#ef4444" if ram_pct > 85 else "#10b981"
-            self.ram_bar.setStyleSheet(f"QProgressBar {{ background: #1a1a26; border-radius: 1px; }} QProgressBar::chunk {{ background: {ram_color}; border-radius: 1px; }}")
+            if hasattr(self, "ram_lbl"):
+                self.ram_lbl.setText(f"RAM: {ram_pct}% ({used_gb}G)")
+            if hasattr(self, "ram_bar"):
+                self.ram_bar.setValue(ram_pct)
+                ram_color = "#ef4444" if ram_pct > 85 else "#10b981"
+                self.ram_bar.setStyleSheet(f"QProgressBar {{ background: #1a1a26; border-radius: 1px; }} QProgressBar::chunk {{ background: {ram_color}; border-radius: 1px; }}")
         except Exception:
             pass
 
@@ -2723,38 +2720,38 @@ class MainWindow(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── LEFT SIDEBAR ─────────────────────────────────────────────
+        # ── LEFT SIDEBAR (Modern ChatGPT / Cursor Style) ──────────────
         self.sidebar = QFrame()
-        self.sidebar.setFixedWidth(205)
-        self.sidebar.setStyleSheet(f"""
-            QFrame {{
-                background-color: #0c0c14;
-                border-right: 1px solid {_BORDER};
-            }}
+        self.sidebar.setFixedWidth(230)
+        self.sidebar.setStyleSheet("""
+            QFrame {
+                background-color: #080811;
+                border-right: 1px solid #1a1a2b;
+            }
         """)
         sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(12, 14, 12, 14)
-        sidebar_layout.setSpacing(6)
+        sidebar_layout.setContentsMargins(12, 14, 12, 12)
+        sidebar_layout.setSpacing(10)
 
         # Brand / Logo Header
         brand_box = QHBoxLayout()
-        brand_box.setSpacing(8)
+        brand_box.setSpacing(10)
         logo_lbl = QLabel("N")
-        logo_lbl.setFixedSize(28, 28)
+        logo_lbl.setFixedSize(30, 30)
         logo_lbl.setAlignment(Qt.AlignCenter)
         logo_lbl.setStyleSheet("""
-            background: #0284c7;
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4f46e5, stop:1 #06b6d4);
             color: #ffffff;
             font-weight: 900;
             font-size: 15px;
-            border-radius: 6px;
+            border-radius: 7px;
         """)
         brand_box.addWidget(logo_lbl)
 
         brand_text_box = QVBoxLayout()
         brand_text_box.setSpacing(1)
         self.title_label = QLabel(self.config.ui.assistant_name.upper())
-        self.title_label.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: 800; letter-spacing: 1px;")
+        self.title_label.setStyleSheet("color: #f8fafc; font-size: 13px; font-weight: 800; letter-spacing: 0.8px;")
         sub_brand = QLabel("Autonomous Agent")
         sub_brand.setStyleSheet("color: #64748b; font-size: 9px; font-weight: 600;")
         brand_text_box.addWidget(self.title_label)
@@ -2767,15 +2764,74 @@ class MainWindow(QWidget):
         brand_box.addWidget(self.beacon_dot)
         sidebar_layout.addLayout(brand_box)
 
-        # Separator line
-        sep = QFrame()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet("background-color: #1e293b; margin: 4px 0;")
-        sidebar_layout.addWidget(sep)
+        # Prominent + New Chat Button (Ctrl+N)
+        self.sidebar_new_btn = QPushButton("+  New Chat")
+        self.sidebar_new_btn.setCursor(Qt.PointingHandCursor)
+        self.sidebar_new_btn.setFixedHeight(34)
+        self.sidebar_new_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1e1b4b;
+                color: #e0e7ff;
+                border: 1px solid #4338ca;
+                border-radius: 7px;
+                font-size: 11px;
+                font-weight: 700;
+                padding-left: 12px;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background-color: #312e81;
+                border-color: #6366f1;
+                color: #ffffff;
+            }
+        """)
+        self.sidebar_new_btn.clicked.connect(self._create_new_session)
+        sidebar_layout.addWidget(self.sidebar_new_btn)
 
-        # Navigation Buttons
+        # Recent Chats Section
+        sess_hdr = QLabel("RECENT CONVERSATIONS")
+        sess_hdr.setStyleSheet("color: #475569; font-size: 9px; font-weight: 800; letter-spacing: 0.8px; margin-top: 4px;")
+        sidebar_layout.addWidget(sess_hdr)
+
+        self.session_list = QListWidget()
+        self.session_list.setStyleSheet("""
+            QListWidget {
+                background: transparent;
+                border: none;
+                color: #94a3b8;
+                font-size: 11px;
+                font-weight: 500;
+            }
+            QListWidget::item {
+                padding: 7px 10px;
+                border-radius: 6px;
+                margin-bottom: 2px;
+            }
+            QListWidget::item:selected {
+                background-color: #151528;
+                color: #38bdf8;
+                font-weight: 700;
+                border-left: 3px solid #38bdf8;
+            }
+            QListWidget::item:hover:!selected {
+                background-color: #0f0f1c;
+                color: #f1f5f9;
+            }
+        """)
+        self.session_list.currentRowChanged.connect(self._on_session_list_row_changed)
+        sidebar_layout.addWidget(self.session_list, 1)
+
+        # Navigation Workspaces
+        nav_sep = QFrame()
+        nav_sep.setFixedHeight(1)
+        nav_sep.setStyleSheet("background-color: #1a1a2b;")
+        sidebar_layout.addWidget(nav_sep)
+
+        ws_lbl = QLabel("WORKSPACES")
+        ws_lbl.setStyleSheet("color: #475569; font-size: 9px; font-weight: 800; letter-spacing: 0.8px;")
+        sidebar_layout.addWidget(ws_lbl)
+
         self.nav_btns = []
-
         self.nav_chat = self._create_nav_button("Chat Console", 0)
         sidebar_layout.addWidget(self.nav_chat)
 
@@ -2791,103 +2847,29 @@ class MainWindow(QWidget):
         self.nav_settings = self._create_nav_button("Settings", 4)
         sidebar_layout.addWidget(self.nav_settings)
 
-        # Backward compatibility aliases
         self.tasks_btn = self.nav_tasks
         self.conn_btn = self.nav_conn
         self.settings_btn = self.nav_settings
 
-        sidebar_layout.addStretch()
+        # Quick Mode Toggles
+        quick_toggles_row = QHBoxLayout()
+        quick_toggles_row.setSpacing(6)
 
-        # Sidebar Bottom Controls (Voice, Vision)
-        ctrl_title = QLabel("SYSTEM MODES")
-        ctrl_title.setStyleSheet("color: #475569; font-size: 9px; font-weight: 800; letter-spacing: 0.6px;")
-        sidebar_layout.addWidget(ctrl_title)
-
-        # Screen Vision Toggle
         self.screen_vision_btn = QPushButton("Vision: OFF")
         self.screen_vision_btn.setCursor(Qt.PointingHandCursor)
-        self.screen_vision_btn.setFixedHeight(26)
+        self.screen_vision_btn.setFixedHeight(24)
         self._style_quick_button(self.screen_vision_btn, active=self.config.ui.screen_observing)
         self.screen_vision_btn.clicked.connect(self._toggle_screen_vision)
-        sidebar_layout.addWidget(self.screen_vision_btn)
+        quick_toggles_row.addWidget(self.screen_vision_btn)
 
-        # Hands-Free Voice Mode Toggle
         self.hands_free_btn = QPushButton("Mic: OFF")
         self.hands_free_btn.setCursor(Qt.PointingHandCursor)
-        self.hands_free_btn.setFixedHeight(26)
+        self.hands_free_btn.setFixedHeight(24)
         self._style_quick_button(self.hands_free_btn, active=False)
         self.hands_free_btn.clicked.connect(self._toggle_hands_free_mode)
-        sidebar_layout.addWidget(self.hands_free_btn)
+        quick_toggles_row.addWidget(self.hands_free_btn)
 
-        # Speech Toggle Button
-        self.speak_toggle_btn = QPushButton("Speech: ON" if self.config.voice.auto_speak else "Speech: OFF")
-        self.speak_toggle_btn.setCursor(Qt.PointingHandCursor)
-        self.speak_toggle_btn.setFixedHeight(26)
-        self._style_quick_button(self.speak_toggle_btn, active=self.config.voice.auto_speak)
-        self.speak_toggle_btn.clicked.connect(self._toggle_auto_speak)
-        sidebar_layout.addWidget(self.speak_toggle_btn)
-
-        # Real-time System Telemetry Card
-        self.telemetry_card = QFrame()
-        self.telemetry_card.setStyleSheet("""
-            QFrame {
-                background-color: #0c0c14;
-                border: 1px solid #1c1c28;
-                border-radius: 6px;
-                padding: 6px 8px;
-            }
-        """)
-        telem_layout = QVBoxLayout(self.telemetry_card)
-        telem_layout.setContentsMargins(2, 2, 2, 2)
-        telem_layout.setSpacing(4)
-
-        telem_hdr = QHBoxLayout()
-        telem_title = QLabel("TELEMETRY")
-        telem_title.setStyleSheet("color: #475569; font-size: 8px; font-weight: 800; letter-spacing: 0.6px;")
-        telem_hdr.addWidget(telem_title)
-        telem_hdr.addStretch()
-        self.telem_live_dot = QLabel("●")
-        self.telem_live_dot.setStyleSheet("color: #10b981; font-size: 8px;")
-        telem_hdr.addWidget(self.telem_live_dot)
-        telem_layout.addLayout(telem_hdr)
-
-        # CPU Row
-        cpu_row = QHBoxLayout()
-        self.cpu_lbl = QLabel("CPU: --%")
-        self.cpu_lbl.setStyleSheet("color: #cbd5e1; font-size: 10px; font-weight: 600; font-family: Consolas, monospace;")
-        cpu_row.addWidget(self.cpu_lbl)
-        telem_layout.addLayout(cpu_row)
-
-        self.cpu_bar = QProgressBar()
-        self.cpu_bar.setFixedHeight(3)
-        self.cpu_bar.setTextVisible(False)
-        self.cpu_bar.setRange(0, 100)
-        self.cpu_bar.setValue(0)
-        self.cpu_bar.setStyleSheet("QProgressBar { background: #1a1a26; border-radius: 1px; } QProgressBar::chunk { background: #38bdf8; border-radius: 1px; }")
-        telem_layout.addWidget(self.cpu_bar)
-
-        # RAM Row
-        ram_row = QHBoxLayout()
-        self.ram_lbl = QLabel("RAM: --%")
-        self.ram_lbl.setStyleSheet("color: #cbd5e1; font-size: 10px; font-weight: 600; font-family: Consolas, monospace;")
-        ram_row.addWidget(self.ram_lbl)
-        telem_layout.addLayout(ram_row)
-
-        self.ram_bar = QProgressBar()
-        self.ram_bar.setFixedHeight(3)
-        self.ram_bar.setTextVisible(False)
-        self.ram_bar.setRange(0, 100)
-        self.ram_bar.setValue(0)
-        self.ram_bar.setStyleSheet("QProgressBar { background: #1a1a26; border-radius: 1px; } QProgressBar::chunk { background: #10b981; border-radius: 1px; }")
-        telem_layout.addWidget(self.ram_bar)
-
-        sidebar_layout.addWidget(self.telemetry_card)
-
-        # Version Pill
-        ver_lbl = QLabel("Nova AI • v2.5 Pro")
-        ver_lbl.setStyleSheet("color: #475569; font-size: 10px; font-weight: 600; margin-top: 4px;")
-        ver_lbl.setAlignment(Qt.AlignCenter)
-        sidebar_layout.addWidget(ver_lbl)
+        sidebar_layout.addLayout(quick_toggles_row)
 
         root.addWidget(self.sidebar)
 
@@ -2898,118 +2880,78 @@ class MainWindow(QWidget):
         main_vbox.setContentsMargins(14, 12, 14, 12)
         main_vbox.setSpacing(8)
 
-        # Top Bar
+        # ── TOP BAR (Clean, spacious, uncrowded) ──────────────────────
         top_bar = QHBoxLayout()
-        top_bar.setSpacing(8)
+        top_bar.setContentsMargins(0, 0, 0, 4)
+        top_bar.setSpacing(10)
 
         self.view_title = QLabel("Chat & Autonomous Code Console")
-        self.view_title.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: 700;")
-        top_bar.addWidget(self.view_title)
+        self.view_title.setVisible(False)
 
-        # Quick Command Palette Button
-        self.palette_btn = QPushButton("Quick Command (Ctrl+K)")
-        self.palette_btn.setToolTip("Open Command Palette (Ctrl+K)")
-        self.palette_btn.setCursor(Qt.PointingHandCursor)
-        self.palette_btn.setFixedHeight(24)
-        self.palette_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #12121a;
-                color: #64748b;
-                border: 1px solid {_BORDER};
-                border-radius: 5px;
-                padding: 0 10px;
-                font-size: 10px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                border-color: {_ACCENT_CYAN};
-                color: #cbd5e1;
-                background-color: #181826;
-            }}
-        """)
-        self.palette_btn.clicked.connect(self._open_command_palette)
-        top_bar.addWidget(self.palette_btn)
-
-        # Session Switcher Dropdown
-        self.session_combo = QComboBox()
-        self.session_combo.setCursor(Qt.PointingHandCursor)
-        self.session_combo.setFixedHeight(24)
-        self.session_combo.setMinimumWidth(125)
-        self.session_combo.setMaximumWidth(190)
-        self.session_combo.setToolTip("Active Chat Session / Thread")
-        self.session_combo.setStyleSheet(f"""
-            QComboBox {{
-                background-color: #12121a;
-                color: #e2e8f0;
-                border: 1px solid {_BORDER};
-                border-radius: 5px;
-                padding: 1px 8px;
-                font-size: 10px;
-                font-weight: 600;
-            }}
-            QComboBox:hover {{
-                border-color: {_ACCENT_CYAN};
-                color: #ffffff;
-            }}
-            QComboBox::drop-down {{
+        # Mode / Persona Selector Pill (Left)
+        self.mode_combo = QComboBox()
+        self.mode_combo.setCursor(Qt.PointingHandCursor)
+        self.mode_combo.setFixedHeight(28)
+        self.mode_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #0d0d1a;
+                color: #a5b4fc;
+                border: 1px solid #282845;
+                border-radius: 6px;
+                padding: 2px 10px;
+                font-size: 11px;
+                font-weight: 700;
+                font-family: Consolas, monospace;
+            }
+            QComboBox:hover {
+                border-color: #6366f1;
+                background-color: #14142b;
+            }
+            QComboBox::drop-down {
                 border: none;
                 width: 14px;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: #0b0b12;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #0b0b14;
                 color: #e2e8f0;
-                border: 1px solid {_BORDER};
-                selection-background-color: {_ACCENT_BLUE};
+                border: 1px solid #282845;
+                selection-background-color: #4f46e5;
                 selection-color: #ffffff;
                 outline: none;
                 padding: 4px;
-            }}
+            }
         """)
-        self.session_combo.currentIndexChanged.connect(self._on_session_combo_changed)
-        top_bar.addWidget(self.session_combo)
+        mode_choices = [
+            ("SUPERAGENT", "Mode: SuperAgent"),
+            ("ENGINEER", "Mode: Engineer"),
+            ("RESEARCH", "Mode: Research"),
+            ("SYSADMIN", "Mode: SysAdmin"),
+            ("GENERAL", "Mode: General"),
+        ]
+        for m_id, m_label in mode_choices:
+            self.mode_combo.addItem(m_label, m_id)
+        self.mode_combo.setCurrentIndex(0)
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        top_bar.addWidget(self.mode_combo)
 
-        # New Chat Session Button (Ctrl+N)
-        new_chat_btn = QPushButton("+ New Chat")
-        new_chat_btn.setToolTip("Start New Isolated Chat Session (Ctrl+N)")
-        new_chat_btn.setCursor(Qt.PointingHandCursor)
-        new_chat_btn.setFixedHeight(24)
-        new_chat_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {_ACCENT_BLUE};
-                color: #ffffff;
-                border: 1px solid #0369a1;
-                border-radius: 5px;
-                padding: 0 9px;
-                font-size: 10px;
-                font-weight: 700;
-            }}
-            QPushButton:hover {{
-                background-color: #0369a1;
-            }}
-        """)
-        new_chat_btn.clicked.connect(self._create_new_session)
-        top_bar.addWidget(new_chat_btn)
-
-        top_bar.addStretch()
-
-        # Interactive Model Switcher Dropdown
+        # Model Selector Pill (Left)
         self.model_combo = QComboBox()
         self.model_combo.setCursor(Qt.PointingHandCursor)
-        self.model_combo.setFixedHeight(26)
+        self.model_combo.setFixedHeight(28)
         self.model_combo.setStyleSheet("""
             QComboBox {
-                background-color: #0f172a;
+                background-color: #0d0d1a;
                 color: #38bdf8;
                 border: 1px solid #1e3a5f;
                 border-radius: 6px;
                 padding: 2px 10px;
-                font-size: 10px;
+                font-size: 11px;
                 font-weight: 700;
                 font-family: Consolas, monospace;
             }
             QComboBox:hover {
                 border-color: #38bdf8;
-                background-color: #16243d;
+                background-color: #132238;
             }
             QComboBox::drop-down {
                 border: none;
@@ -3046,193 +2988,77 @@ class MainWindow(QWidget):
         self.model_badge = self.model_combo
         top_bar.addWidget(self.model_combo)
 
-        # Persona Operating Mode Switcher Dropdown
-        self.mode_combo = QComboBox()
-        self.mode_combo.setCursor(Qt.PointingHandCursor)
-        self.mode_combo.setFixedHeight(26)
-        self.mode_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #0f172a;
-                color: #38bdf8;
-                border: 1px solid #1e3a5f;
-                border-radius: 6px;
-                padding: 2px 10px;
-                font-size: 10px;
-                font-weight: 700;
-                font-family: Consolas, monospace;
-            }
-            QComboBox:hover {
-                border-color: #38bdf8;
-                background-color: #16243d;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 14px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #090d16;
-                color: #e2e8f0;
-                border: 1px solid #1e3a5f;
-                selection-background-color: #0284c7;
-                selection-color: #ffffff;
-                outline: none;
-                padding: 4px;
-            }
-        """)
-        mode_choices = [
-            ("ENGINEER", "Mode: Engineer"),
-            ("RESEARCH", "Mode: Research"),
-            ("SYSADMIN", "Mode: SysAdmin"),
-            ("SUPERAGENT", "Mode: SuperAgent"),
-            ("GENERAL", "Mode: General"),
-        ]
-        for m_id, m_label in mode_choices:
-            self.mode_combo.addItem(m_label, m_id)
-        self.mode_combo.setCurrentIndex(0)
-        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
-        top_bar.addWidget(self.mode_combo)
-
+        # Status Pill
         self.status_pill = QLabel("READY")
         self.status_pill.setStyleSheet("""
-            color: #38bdf8;
+            color: #10b981;
             font-size: 9px;
             font-weight: 800;
             letter-spacing: 0.6px;
-            padding: 3px 10px;
+            padding: 4px 10px;
             border-radius: 9px;
-            background: #111118;
-            border: 1px solid #272735;
+            background: #061a12;
+            border: 1px solid #065f46;
         """)
         top_bar.addWidget(self.status_pill)
 
-        # Find in Chat Button (Ctrl+F)
-        find_btn = QPushButton("Find")
-        find_btn.setToolTip("Find in conversation (Ctrl+F)")
-        find_btn.setCursor(Qt.PointingHandCursor)
-        find_btn.setFixedHeight(24)
-        find_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #12121a;
-                color: #94a3b8;
-                border: 1px solid {_BORDER};
-                border-radius: 4px;
-                padding: 0 8px;
-                font-size: 10px;
+        top_bar.addStretch()
+
+        # Hidden backwards-compatibility session_combo
+        self.session_combo = QComboBox()
+        self.session_combo.setVisible(False)
+
+        # Sleek Action Button Styler helper
+        btn_style = """
+            QPushButton {
+                background-color: #0e0e1a;
+                color: #cbd5e1;
+                border: 1px solid #1e1e30;
+                border-radius: 6px;
+                padding: 0 11px;
+                font-size: 11px;
                 font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: #1e293b;
-                color: #38bdf8;
-                border-color: #38bdf8;
-            }}
-        """)
-        find_btn.clicked.connect(self._toggle_search_bar)
-        top_bar.addWidget(find_btn)
+            }
+            QPushButton:hover {
+                background-color: #1a1a2e;
+                color: #ffffff;
+                border-color: #6366f1;
+            }
+        """
 
-        # Export Button
-        export_btn = QPushButton("Export")
-        export_btn.setToolTip("Export conversation to Markdown (.md)")
-        export_btn.setCursor(Qt.PointingHandCursor)
-        export_btn.setFixedHeight(24)
-        export_btn.setStyleSheet(find_btn.styleSheet())
-        export_btn.clicked.connect(self._export_conversation)
-        top_bar.addWidget(export_btn)
+        # Right Action Buttons
+        self.skills_btn = QPushButton("Skills")
+        self.skills_btn.setToolTip("Antigravity Skills Manager (Ctrl+Shift+S)")
+        self.skills_btn.setCursor(Qt.PointingHandCursor)
+        self.skills_btn.setFixedHeight(28)
+        self.skills_btn.setStyleSheet(btn_style)
+        self.skills_btn.clicked.connect(self._open_skills_manager)
+        top_bar.addWidget(self.skills_btn)
 
-        # Attach File Button (Ctrl+O)
-        attach_btn = QPushButton("Attach")
-        attach_btn.setToolTip("Attach File, Code, Logs, or Image Context (Ctrl+O)")
-        attach_btn.setCursor(Qt.PointingHandCursor)
-        attach_btn.setFixedHeight(24)
-        attach_btn.setStyleSheet(find_btn.styleSheet())
-        attach_btn.clicked.connect(self._on_attach_file)
-        top_bar.addWidget(attach_btn)
+        self.git_btn = QPushButton("Git")
+        self.git_btn.setToolTip("Git Workspace Manager (Ctrl+G)")
+        self.git_btn.setCursor(Qt.PointingHandCursor)
+        self.git_btn.setFixedHeight(28)
+        self.git_btn.setStyleSheet(btn_style)
+        self.git_btn.clicked.connect(self._open_git_manager)
+        top_bar.addWidget(self.git_btn)
 
-        # Snip Button
-        snip_btn = QPushButton("Snip Screen")
-        snip_btn.setToolTip("Snip Screen (Ctrl+Shift+D)")
-        snip_btn.setCursor(Qt.PointingHandCursor)
-        snip_btn.setFixedHeight(24)
-        snip_btn.setStyleSheet(find_btn.styleSheet())
-        snip_btn.clicked.connect(self.snipper.start_snip)
-        top_bar.addWidget(snip_btn)
+        self.terminal_btn = QPushButton("Terminal")
+        self.terminal_btn.setToolTip("Quick PowerShell Terminal (Ctrl+T)")
+        self.terminal_btn.setCursor(Qt.PointingHandCursor)
+        self.terminal_btn.setFixedHeight(28)
+        self.terminal_btn.setStyleSheet(btn_style)
+        self.terminal_btn.clicked.connect(self._open_terminal_runner)
+        top_bar.addWidget(self.terminal_btn)
 
-        # Clear Chat Button
-        clear_btn = QPushButton("Clear Chat")
-        clear_btn.setToolTip("Clear conversation history")
-        clear_btn.setCursor(Qt.PointingHandCursor)
-        clear_btn.setFixedHeight(24)
-        clear_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #12121a;
-                color: #94a3b8;
-                border: 1px solid {_BORDER};
-                border-radius: 4px;
-                padding: 0 8px;
-                font-size: 10px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: #450a0a;
-                color: #fca5a5;
-                border-color: #991b1b;
-            }}
-        """)
-        clear_btn.clicked.connect(self._clear_conversation)
-        top_bar.addWidget(clear_btn)
-
-        # Shortcuts Guide Button (F1)
-        help_btn = QPushButton("Shortcuts")
-        help_btn.setToolTip("Keyboard shortcuts reference (F1)")
-        help_btn.setCursor(Qt.PointingHandCursor)
-        help_btn.setFixedHeight(24)
-        help_btn.setStyleSheet(find_btn.styleSheet())
-        help_btn.clicked.connect(self._show_shortcuts_dialog)
-        top_bar.addWidget(help_btn)
-
-        # Prompts Library Button (Ctrl+P)
-        prompts_btn = QPushButton("Prompts")
-        prompts_btn.setToolTip("Prompt & Automation Library (Ctrl+P)")
-        prompts_btn.setCursor(Qt.PointingHandCursor)
-        prompts_btn.setFixedHeight(24)
-        prompts_btn.setStyleSheet(find_btn.styleSheet())
-        prompts_btn.clicked.connect(self._open_prompt_library)
-        top_bar.addWidget(prompts_btn)
-
-        # Code Artifacts Drawer Button (Ctrl+B)
-        self.artifacts_btn = QPushButton("Artifacts (0)")
-        self.artifacts_btn.setToolTip("Code Artifacts & Scripts Drawer (Ctrl+B)")
-        self.artifacts_btn.setCursor(Qt.PointingHandCursor)
-        self.artifacts_btn.setFixedHeight(24)
-        self.artifacts_btn.setStyleSheet(find_btn.styleSheet())
-        self.artifacts_btn.clicked.connect(self._open_artifacts_drawer)
-        top_bar.addWidget(self.artifacts_btn)
-
-        # Quick PowerShell Terminal Button (Ctrl+T)
-        terminal_btn = QPushButton("Terminal")
-        terminal_btn.setToolTip("Quick PowerShell Terminal Runner (Ctrl+T)")
-        terminal_btn.setCursor(Qt.PointingHandCursor)
-        terminal_btn.setFixedHeight(24)
-        terminal_btn.setStyleSheet(find_btn.styleSheet())
-        terminal_btn.clicked.connect(self._open_terminal_runner)
-        top_bar.addWidget(terminal_btn)
-
-        # Git Workspace Manager Button (Ctrl+G)
-        git_btn = QPushButton("Git")
-        git_btn.setToolTip("Git Workspace Manager (Ctrl+G)")
-        git_btn.setCursor(Qt.PointingHandCursor)
-        git_btn.setFixedHeight(24)
-        git_btn.setStyleSheet(find_btn.styleSheet())
-        git_btn.clicked.connect(self._open_git_manager)
-        top_bar.addWidget(git_btn)
-
-        # Antigravity Skills Manager Button (Ctrl+Shift+S)
-        skills_btn = QPushButton("Skills")
-        skills_btn.setToolTip("Antigravity Skills & Customizations Manager (Ctrl+Shift+S)")
-        skills_btn.setCursor(Qt.PointingHandCursor)
-        skills_btn.setFixedHeight(24)
-        skills_btn.setStyleSheet(find_btn.styleSheet())
-        skills_btn.clicked.connect(self._open_skills_manager)
-        top_bar.addWidget(skills_btn)
+        # Unified Tools Dropdown Menu
+        self.tools_menu_btn = QPushButton("Tools ▾")
+        self.tools_menu_btn.setCursor(Qt.PointingHandCursor)
+        self.tools_menu_btn.setFixedHeight(28)
+        self.tools_menu_btn.setStyleSheet(btn_style)
+        self._setup_tools_dropdown_menu()
+        self.tools_menu_btn.clicked.connect(self._show_tools_dropdown_menu)
+        top_bar.addWidget(self.tools_menu_btn)
 
         main_vbox.addLayout(top_bar)
 
@@ -3677,20 +3503,105 @@ class MainWindow(QWidget):
         pos = self.plus_btn.mapToGlobal(QPoint(0, -self.plus_menu.sizeHint().height() - 4))
         self.plus_menu.exec(pos)
 
+    def _setup_tools_dropdown_menu(self):
+        """Unified clean tools menu dropdown (Find, Attach, Snip, Prompts, Artifacts, Export, Clear, Shortcuts)."""
+        self._tools_menu = QMenu(self)
+        self._tools_menu.setStyleSheet("""
+            QMenu {
+                background-color: #0b0b14;
+                color: #e2e8f0;
+                border: 1px solid #222238;
+                border-radius: 8px;
+                padding: 6px;
+                font-size: 11px;
+            }
+            QMenu::item {
+                padding: 7px 20px 7px 10px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #4f46e5;
+                color: #ffffff;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #1e1e2f;
+                margin: 4px 6px;
+            }
+        """)
+
+        act_find = self._tools_menu.addAction("Find in Chat (Ctrl+F)")
+        act_find.triggered.connect(self._toggle_search_bar)
+
+        act_attach = self._tools_menu.addAction("Attach File Context (Ctrl+O)")
+        act_attach.triggered.connect(self._on_attach_file)
+
+        act_snip = self._tools_menu.addAction("Snip Desktop Screen (Ctrl+Shift+D)")
+        act_snip.triggered.connect(self.snipper.start_snip)
+
+        self._tools_menu.addSeparator()
+
+        act_prompts = self._tools_menu.addAction("Prompt Library (Ctrl+P)")
+        act_prompts.triggered.connect(self._open_prompt_library)
+
+        act_artifacts = self._tools_menu.addAction("Code Artifacts Drawer (Ctrl+B)")
+        act_artifacts.triggered.connect(self._open_artifacts_drawer)
+
+        act_export = self._tools_menu.addAction("Export Conversation (Ctrl+E)")
+        act_export.triggered.connect(self._export_conversation)
+
+        self._tools_menu.addSeparator()
+
+        act_clear = self._tools_menu.addAction("Clear Active Chat")
+        act_clear.triggered.connect(self._clear_conversation)
+
+        act_help = self._tools_menu.addAction("Keyboard Shortcuts (F1)")
+        act_help.triggered.connect(self._show_shortcuts_dialog)
+
+    def _show_tools_dropdown_menu(self):
+        if hasattr(self, "_tools_menu") and hasattr(self, "tools_menu_btn"):
+            pos = self.tools_menu_btn.mapToGlobal(self.tools_menu_btn.rect().bottomLeft())
+            self._tools_menu.exec(pos)
+
     def _refresh_session_combo(self, selected_id: str | None = None):
-        if not hasattr(self, "session_combo"):
-            return
         target_id = selected_id or getattr(self, "_active_session_id", "default")
-        self.session_combo.blockSignals(True)
-        self.session_combo.clear()
         sessions = db.get_all_sessions()
-        active_index = 0
-        for idx, sess in enumerate(sessions):
-            self.session_combo.addItem(sess["title"], sess["id"])
-            if sess["id"] == target_id:
-                active_index = idx
-        self.session_combo.setCurrentIndex(active_index)
-        self.session_combo.blockSignals(False)
+
+        if hasattr(self, "session_combo"):
+            self.session_combo.blockSignals(True)
+            self.session_combo.clear()
+            active_index = 0
+            for idx, sess in enumerate(sessions):
+                self.session_combo.addItem(sess["title"], sess["id"])
+                if sess["id"] == target_id:
+                    active_index = idx
+            self.session_combo.setCurrentIndex(active_index)
+            self.session_combo.blockSignals(False)
+
+        if hasattr(self, "session_list"):
+            self.session_list.blockSignals(True)
+            self.session_list.clear()
+            active_row = 0
+            for idx, sess in enumerate(sessions):
+                title = sess.get("title") or f"Chat {sess['id'][:8]}"
+                item = QListWidgetItem(f"  {title}")
+                item.setData(Qt.UserRole, sess["id"])
+                self.session_list.addItem(item)
+                if sess["id"] == target_id:
+                    active_row = idx
+            if self.session_list.count() > 0:
+                self.session_list.setCurrentRow(active_row)
+            self.session_list.blockSignals(False)
+
+    def _on_session_list_row_changed(self, row: int):
+        if row < 0 or not hasattr(self, "session_list"):
+            return
+        item = self.session_list.item(row)
+        if not item:
+            return
+        sid = item.data(Qt.UserRole)
+        if sid and sid != getattr(self, "_active_session_id", "default"):
+            self._switch_session(sid)
 
     def _on_session_combo_changed(self, index: int):
         if index < 0 or index >= self.session_combo.count():
