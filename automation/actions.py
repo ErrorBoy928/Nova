@@ -1835,6 +1835,226 @@ def action_schedule_once(arg: str) -> ActionResult:
         return False, f"Failed to schedule one-off task: {exc}"
 
 
+def generate_chart(arg: str) -> ActionResult:
+    """
+    Generates an interactive Obsidian-themed Chart.js data visualization.
+    Accepts:
+    1. JSON string: {"title": "Monthly Revenue", "type": "bar", "labels": ["Jan", "Feb", ...], "datasets": [{"label": "2026", "data": [10, 20, ...]}]}
+    2. Pipe syntax: "Title|chart_type|label1,label2,label3|val1,val2,val3|DatasetName"
+    """
+    try:
+        title = "Data Visualization"
+        chart_type = "bar"
+        labels = []
+        datasets = []
+        clean_arg = (arg or "").strip()
+
+        if clean_arg.startswith("{") and clean_arg.endswith("}"):
+            payload = json.loads(clean_arg)
+            title = payload.get("title", "Data Visualization")
+            chart_type = payload.get("type", "bar").lower()
+            labels = payload.get("labels", [])
+            datasets = payload.get("datasets", [])
+            if not datasets and "data" in payload:
+                datasets = [{
+                    "label": payload.get("dataset_name", "Values"),
+                    "data": payload["data"],
+                    "backgroundColor": "#38bdf8",
+                    "borderColor": "#0284c7",
+                }]
+        elif "|" in clean_arg:
+            parts = [p.strip() for p in clean_arg.split("|")]
+            title = parts[0] if len(parts) > 0 and parts[0] else "Data Analysis"
+            chart_type = parts[1].lower() if len(parts) > 1 and parts[1] else "bar"
+            if len(parts) > 2:
+                labels = [x.strip() for x in parts[2].split(",") if x.strip()]
+            raw_vals = [float(x.strip()) for x in parts[3].split(",") if x.strip()] if len(parts) > 3 else []
+            ds_label = parts[4] if len(parts) > 4 else "Metrics"
+            datasets = [{"label": ds_label, "data": raw_vals}]
+        else:
+            return False, "Usage: generate_chart:Title|type|labels|values or JSON string"
+
+        # Color schemes
+        palette = [
+            "#38bdf8", "#818cf8", "#34d399", "#f472b6", "#fbbf24",
+            "#60a5fa", "#a78bfa", "#4ade80", "#f87171", "#fb923c"
+        ]
+        border_palette = [
+            "#0284c7", "#4f46e5", "#059669", "#db2777", "#d97706",
+            "#2563eb", "#7c3aed", "#16a34a", "#dc2626", "#ea580c"
+        ]
+
+        for i, ds in enumerate(datasets):
+            if "backgroundColor" not in ds:
+                if chart_type in ("pie", "doughnut", "polarArea"):
+                    ds["backgroundColor"] = palette[:len(labels)]
+                    ds["borderColor"] = "#09090b"
+                    ds["borderWidth"] = 2
+                else:
+                    c = palette[i % len(palette)]
+                    bc = border_palette[i % len(border_palette)]
+                    ds["backgroundColor"] = c if chart_type == "bar" else f"{c}33"
+                    ds["borderColor"] = bc
+                    ds["borderWidth"] = 2
+                    if chart_type == "line":
+                        ds["fill"] = True
+                        ds["tension"] = 0.35
+
+        chart_config = {
+            "type": chart_type,
+            "data": {
+                "labels": labels,
+                "datasets": datasets
+            },
+            "options": {
+                "responsive": True,
+                "maintainAspectRatio": False,
+                "plugins": {
+                    "legend": {
+                        "labels": {
+                            "color": "#cbd5e1",
+                            "font": {"family": "Consolas, sans-serif", "size": 12}
+                        }
+                    },
+                    "title": {
+                        "display": True,
+                        "text": title,
+                        "color": "#f8fafc",
+                        "font": {"size": 16, "weight": "bold"}
+                    }
+                },
+                "scales": {
+                    "x": {
+                        "grid": {"color": "#1e2430"},
+                        "ticks": {"color": "#94a3b8"}
+                    },
+                    "y": {
+                        "grid": {"color": "#1e2430"},
+                        "ticks": {"color": "#94a3b8"}
+                    }
+                } if chart_type not in ("pie", "doughnut", "polarArea", "radar") else {}
+            }
+        }
+
+        html_code = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{title}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body {{
+    background-color: #09090e;
+    color: #f8fafc;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 90vh;
+  }}
+  .card {{
+    background-color: #111118;
+    border: 1px solid #1f2430;
+    border-radius: 12px;
+    padding: 24px;
+    width: 92%;
+    max-width: 900px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  }}
+  .header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #1f2430;
+    padding-bottom: 12px;
+  }}
+  h2 {{
+    margin: 0;
+    color: #38bdf8;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+  }}
+  .btn {{
+    background: #1e1b4b;
+    color: #a5b4fc;
+    border: 1px solid #4338ca;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 700;
+  }}
+  .btn:hover {{
+    background: #312e81;
+    color: #ffffff;
+  }}
+  .chart-box {{
+    position: relative;
+    height: 480px;
+    width: 100%;
+  }}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <h2>{title}</h2>
+    <div>
+      <button class="btn" onclick="downloadImage()">Save Image</button>
+      <button class="btn" onclick="window.print()">Print</button>
+    </div>
+  </div>
+  <div class="chart-box">
+    <canvas id="mainChart"></canvas>
+  </div>
+</div>
+<script>
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  const chartInstance = new Chart(ctx, {json.dumps(chart_config)});
+
+  function downloadImage() {{
+    const a = document.createElement('a');
+    a.href = chartInstance.toBase64Image();
+    a.download = '{title.lower().replace(" ", "_")}.png';
+    a.click();
+  }}
+</script>
+</body>
+</html>
+"""
+        # Save to Desktop and Temp
+        desktop = Path(os.environ.get("USERPROFILE", "")) / "Desktop"
+        clean_title = re.sub(r'[\/:*?"<>|]', '_', title)
+        out_file = desktop / f"Chart_{clean_title}_{int(time.time())}.html"
+        out_file.write_text(html_code, encoding="utf-8")
+
+        # Open in application or OS
+        try:
+            from PySide6.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app:
+                for widget in app.topLevelWidgets():
+                    if hasattr(widget, "open_claude_artifact"):
+                        widget.open_claude_artifact(f"Chart: {title}", html_code, "html")
+                        break
+        except Exception:
+            pass
+
+        try:
+            os.startfile(str(out_file))
+        except Exception:
+            pass
+
+        return True, f"Successfully generated interactive chart: '{title}'. File saved to Desktop: {out_file}"
+    except Exception as exc:
+        return False, f"Failed to generate chart: {exc}"
+
+
+
 
 
 

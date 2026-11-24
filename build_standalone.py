@@ -52,6 +52,7 @@ def run_build():
         "--hidden-import", "PySide6.QtWebEngineWidgets",
         "--hidden-import", "PySide6.QtWebEngineCore",
         "--hidden-import", "anthropic",
+        "--hidden-import", "openai",
         str(ROOT_DIR / "main.py")
     ]
     

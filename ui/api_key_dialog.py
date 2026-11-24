@@ -53,6 +53,9 @@ class _KeyVerificationWorker(QThread):
         if k.startswith("sk-ant-"):
             from ai.llm_manager import verify_anthropic_key
             ok, msg, mod = verify_anthropic_key(k)
+        elif k.startswith("sk-proj-") or (k.startswith("sk-") and not k.startswith("sk-ant-")):
+            from ai.llm_manager import verify_openai_key
+            ok, msg, mod = verify_openai_key(k)
         else:
             ok, msg, mod = verify_groq_key(k)
         self.finished_verify.emit(ok, msg, mod)
@@ -327,12 +330,20 @@ class ApiKeyDialog(QDialog):
             return
 
         is_anthropic = key.startswith("sk-ant-")
+        is_openai = key.startswith("sk-proj-") or (key.startswith("sk-") and not is_anthropic)
+
         if is_anthropic:
             self.config.llm.api_key = key
             self.config.llm.provider = "anthropic"
             self.config.llm.api_key_env_var = "ANTHROPIC_API_KEY"
             self.config.llm.model = self._tested_working_model or "claude-3-7-sonnet-20250219"
             env_var = "ANTHROPIC_API_KEY"
+        elif is_openai:
+            self.config.llm.api_key = key
+            self.config.llm.provider = "openai"
+            self.config.llm.api_key_env_var = "OPENAI_API_KEY"
+            self.config.llm.model = self._tested_working_model or "gpt-4o"
+            env_var = "OPENAI_API_KEY"
         else:
             self.config.llm.api_key = key
             self.config.llm.provider = "groq"

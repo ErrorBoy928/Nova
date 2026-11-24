@@ -480,14 +480,35 @@ def _render_message_html(content: str) -> str:
     return "".join(pieces) if pieces else _render_prose(content)
 
 
+_MD_IMAGE_RE = re.compile(r"!\[(.*?)\]\((.*?)\)")
+
+
 def _render_images(html_content: str) -> str:
     def replace_tag(match):
         path_str = match.group(1).strip()
         path = Path(path_str)
         if path.exists():
-            return f'<div style="margin:6px 0;"><img src="{path.resolve().as_uri()}" style="border-radius:6px;border:1px solid #2d2d38;max-width:320px;" width="320"></div>'
+            return f'<div style="margin:6px 0;"><img src="{path.resolve().as_uri()}" style="border-radius:6px;border:1px solid #2d2d38;max-width:480px;" width="480"></div>'
         return f"[Image: {path_str}]"
-    return IMAGE_TAG_RE.sub(replace_tag, html_content)
+
+    def replace_md_image(match):
+        alt = match.group(1).strip()
+        url_or_path = match.group(2).strip()
+        if url_or_path.startswith("file:///"):
+            clean_p = url_or_path[8:]
+            p = Path(clean_p)
+            if p.exists():
+                return f'<div style="margin:6px 0;"><img src="{p.resolve().as_uri()}" alt="{alt}" style="border-radius:6px;border:1px solid #2d2d38;max-width:480px;" width="480"></div>'
+        elif Path(url_or_path).exists():
+            p = Path(url_or_path)
+            return f'<div style="margin:6px 0;"><img src="{p.resolve().as_uri()}" alt="{alt}" style="border-radius:6px;border:1px solid #2d2d38;max-width:480px;" width="480"></div>'
+        elif url_or_path.startswith("http://") or url_or_path.startswith("https://"):
+            return f'<div style="margin:6px 0;"><img src="{url_or_path}" alt="{alt}" style="border-radius:6px;border:1px solid #2d2d38;max-width:480px;" width="480"></div>'
+        return match.group(0)
+
+    res = IMAGE_TAG_RE.sub(replace_tag, html_content)
+    res = _MD_IMAGE_RE.sub(replace_md_image, res)
+    return res
 
 
 SYSTEM_PROMPT_TEMPLATE = """
@@ -2089,7 +2110,7 @@ class MainWindow(QWidget):
 
     def _find_mode_index(self, name: str) -> int:
         name_lower = name.strip().lower()
-        mode_keys = ["claude", "superagent", "engineer", "research", "sysadmin", "general"]
+        mode_keys = ["chatgpt", "claude", "superagent", "engineer", "research", "sysadmin", "general"]
         for idx, key in enumerate(mode_keys):
             if name_lower in key or key in name_lower:
                 return idx
@@ -2112,6 +2133,8 @@ class MainWindow(QWidget):
             self.config.llm.model = m_id
             if m_id.startswith("claude-"):
                 self.config.llm.provider = "anthropic"
+            elif any(m_id.startswith(p) for p in ["gpt-", "o1", "o3", "chatgpt"]):
+                self.config.llm.provider = "openai"
             else:
                 self.config.llm.provider = "groq"
             save_config(self.config)
@@ -2533,6 +2556,7 @@ class MainWindow(QWidget):
             self.mode_combo.setCurrentIndex(index)
             self.mode_combo.blockSignals(False)
         mode_names = {
+            "CHATGPT": "ChatGPT 4o & Data Analyst",
             "CLAUDE": "Claude 3.7 Sonnet & Artifacts",
             "SUPERAGENT": "Autonomous Base44 SuperAgent",
             "ENGINEER": "Senior Software Architect",
@@ -2540,7 +2564,19 @@ class MainWindow(QWidget):
             "SYSADMIN": "Windows System Administrator",
             "GENERAL": "Executive General Assistant",
         }
-        if self._operating_mode == "CLAUDE":
+        if self._operating_mode == "CHATGPT":
+            self.status_pill.setText("CHATGPT 4o READY")
+            self.status_pill.setStyleSheet("""
+                color: #34d399;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.6px;
+                padding: 3px 10px;
+                border-radius: 9px;
+                background: #062b1b;
+                border: 1px solid #059669;
+            """)
+        elif self._operating_mode == "CLAUDE":
             self.status_pill.setText("CLAUDE 3.7 READY")
             self.status_pill.setStyleSheet("""
                 color: #c084fc;
@@ -3078,6 +3114,7 @@ class MainWindow(QWidget):
             }
         """)
         mode_choices = [
+            ("CHATGPT", "Mode: ChatGPT 4o"),
             ("CLAUDE", "Mode: Claude 3.7"),
             ("SUPERAGENT", "Mode: SuperAgent"),
             ("ENGINEER", "Mode: Engineer"),
@@ -3125,6 +3162,10 @@ class MainWindow(QWidget):
             }
         """)
         model_choices = [
+            ("gpt-4o", "OpenAI: GPT-4o (Omni)"),
+            ("gpt-4o-mini", "OpenAI: GPT-4o Mini"),
+            ("o3-mini", "OpenAI: o3-mini (Reasoning)"),
+            ("o1", "OpenAI: o1 (Reasoning)"),
             ("claude-3-7-sonnet-20250219", "Claude: 3.7 Sonnet (Anthropic)"),
             ("claude-3-5-sonnet-20241022", "Claude: 3.5 Sonnet (Anthropic)"),
             ("claude-3-5-haiku-20241022", "Claude: 3.5 Haiku (Anthropic)"),
@@ -4391,7 +4432,17 @@ class MainWindow(QWidget):
 
         # Operating Persona Steering
         mode = getattr(self, "_operating_mode", "ENGINEER")
-        if mode == "CLAUDE":
+        if mode == "CHATGPT":
+            system_prompt += (
+                "\n[Operating Mode: ChatGPT 4o & Advanced Data Analyst]\n"
+                "- You possess the full intelligence, speed, and analytical power of OpenAI ChatGPT 4o.\n"
+                "- Advanced Data Analysis & Charting: When the user asks for charts, plots, data analysis, or metrics, execute [action:generate_chart:Title|type|labels|values] or [action:generate_chart:{\"title\": \"...\", \"type\": \"bar|line|pie\", \"labels\": [...], \"datasets\": [...]}] to produce an interactive visual dashboard.\n"
+                "- Excel & Documents: When asked for spreadsheets, execute [action:create_excel:filename.xlsx|{\"Sheet1\": [[\"A\",\"B\"], [1,2]]}] directly.\n"
+                "- Interactive Canvas & Web Apps: When writing web applications, dashboards, or calculators, output full HTML/CSS/JS inside ```html ``` code blocks for live Chromium preview.\n"
+                "- Rich Formatting: Format tabular data with clean markdown tables. Use clear headings, LaTeX math when appropriate, and crisp executive takeaways.\n"
+                "- Zero fluff, extreme precision, production-ready code. Zero emojis.\n"
+            )
+        elif mode == "CLAUDE":
             system_prompt += (
                 "\n[Operating Mode: Claude 3.7 Sonnet & Artifacts Engine]\n"
                 "- You possess the full analytical, coding, and architectural intelligence of Claude 3.7 Sonnet.\n"

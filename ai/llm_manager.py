@@ -140,6 +140,30 @@ def verify_anthropic_key(api_key: str) -> tuple[bool, str, str]:
         return False, f"Verification error: {exc}", ""
 
 
+def verify_openai_key(api_key: str) -> tuple[bool, str, str]:
+    """Tests an API key against OpenAI API."""
+    key = (api_key or "").strip().strip('"\'')
+    if not key:
+        return False, "OpenAI API key cannot be empty.", ""
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=key, timeout=12.0)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=5,
+        )
+        if resp and resp.choices:
+            return True, "OpenAI ChatGPT key verified!", "gpt-4o"
+        return False, "OpenAI returned empty verification response.", ""
+    except Exception as exc:
+        err = str(exc).lower()
+        if "insufficient_quota" in err or "quota" in err:
+            return True, "OpenAI key valid (Quota exceeded on account)", "gpt-4o"
+        return False, f"Verification error: {exc}", ""
+
+
 def verify_gemini_key(api_key: str) -> tuple[bool, str, str]:
     """Tests an API key against Google Gemini API."""
     key = (api_key or "").strip().strip('"\'')
@@ -468,33 +492,75 @@ class LLMManager:
 
         api_key = get_api_key(self.config)
         if not api_key:
-            raise LLMError("No API key found for OpenAI.")
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+        if not api_key:
+            raise LLMError("No API key found for OpenAI. Please configure your key in Settings or set OPENAI_API_KEY in .env.")
         base_url = self.config.llm.openai_base_url or None
         client = OpenAI(api_key=api_key.strip(), base_url=base_url, timeout=40.0)
 
-        chat_messages = []
-        if system_prompt:
-            chat_messages.append({"role": "system", "content": system_prompt})
-        chat_messages.extend([{"role": m.role, "content": m.content} for m in messages])
+        model = self.config.llm.model
+        if not model or not any(k in model.lower() for k in ["gpt", "o1", "o3", "chatgpt"]):
+            model = "gpt-4o"
 
-        temp = getattr(self.config.llm, "temperature", 0.6)
-        if temp < 0.4:
-            temp = 0.6
+        candidate_models = [
+            model,
+            "gpt-4o",
+            "gpt-4o-mini",
+            "o3-mini",
+            "o1-mini",
+        ]
+        seen = set()
+        ordered_models = []
+        for m in candidate_models:
+            if m not in seen:
+                seen.add(m)
+                ordered_models.append(m)
 
-        stream = client.chat.completions.create(
-            model=self.config.llm.model,
-            messages=chat_messages,
-            temperature=temp,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-            top_p=0.9,
-            max_tokens=4096,
-            stream=True,
-        )
-        for chunk in stream:
-            delta = chunk.choices[0].delta.content if chunk.choices else ""
-            if delta:
-                yield delta
+        last_exc = None
+        for mod_name in ordered_models:
+            is_reasoning = any(mod_name.startswith(p) for p in ["o1", "o3"])
+            chat_messages = []
+            if system_prompt:
+                role = "developer" if is_reasoning else "system"
+                chat_messages.append({"role": role, "content": system_prompt})
+            chat_messages.extend([{"role": m.role, "content": m.content} for m in messages])
+
+            call_kwargs = {
+                "model": mod_name,
+                "messages": chat_messages,
+                "stream": True,
+            }
+            if is_reasoning:
+                call_kwargs["max_completion_tokens"] = 4096
+            else:
+                call_kwargs["max_tokens"] = 4096
+                call_kwargs["temperature"] = 0.6
+
+            try:
+                stream = client.chat.completions.create(**call_kwargs)
+                yielded_any = False
+                for chunk in stream:
+                    delta = chunk.choices[0].delta.content if chunk.choices else ""
+                    if delta:
+                        yield delta
+                        yielded_any = True
+                if yielded_any:
+                    if mod_name != self.config.llm.model:
+                        self.config.llm.model = mod_name
+                        try:
+                            save_config(self.config)
+                        except Exception:
+                            pass
+                    return
+            except Exception as exc:
+                last_exc = exc
+                err_str = str(exc).lower()
+                if any(k in err_str for k in ["invalid_api_key", "incorrect api key", "authentication_error", "401"]):
+                    raise LLMError(f"Invalid OpenAI API Key: {exc}") from exc
+                log.warning("OpenAI model '{}' error: {}, trying next...", mod_name, exc)
+                continue
+
+        raise last_exc or LLMError("OpenAI generation failed across all candidate models.")
 
     def describe_screen(self, image_path: str, question: str, system_prompt: str = "") -> str:
         """Sends a screenshot to the vision model and returns the response."""
