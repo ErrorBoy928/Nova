@@ -53,6 +53,8 @@ def run_build():
         "--hidden-import", "PySide6.QtWebEngineCore",
         "--hidden-import", "anthropic",
         "--hidden-import", "openai",
+        "--hidden-import", "google.genai",
+        "--hidden-import", "google.generativeai",
         str(ROOT_DIR / "main.py")
     ]
     

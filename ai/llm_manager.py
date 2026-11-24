@@ -56,9 +56,10 @@ def clean_repetitive_patterns(text: str) -> str:
 
 # Google Gemini fallback models
 GEMINI_MODELS_PRIORITY = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-flash-latest",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-2.0-pro-exp-02-05",
+    "gemini-1.5-pro",
     "gemini-1.5-flash",
 ]
 
@@ -168,29 +169,37 @@ def verify_gemini_key(api_key: str) -> tuple[bool, str, str]:
     """Tests an API key against Google Gemini API."""
     key = (api_key or "").strip().strip('"\'')
     if not key:
-        return False, "API key cannot be empty.", ""
+        return False, "Google Gemini API key cannot be empty.", ""
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=key)
-
+        from google import genai
+        client = genai.Client(api_key=key)
         for mod_name in GEMINI_MODELS_PRIORITY:
             try:
-                model = genai.GenerativeModel(mod_name)
-                resp = model.generate_content("Ping", generation_config={"max_output_tokens": 5})
-                if resp:
-                    return True, f"Key verified! Active model: {mod_name}", mod_name
+                resp = client.models.generate_content(
+                    model=mod_name,
+                    contents="Ping"
+                )
+                if resp and resp.text:
+                    return True, f"Google Gemini key verified! Active model: {mod_name}", mod_name
             except Exception as e:
                 err = str(e).lower()
-                if "no longer available" in err or "404" in err or "not found" in err or "deprecated" in err:
-                    continue
-                if "api_key_invalid" in err or "invalid api key" in err or "permission_denied" in err:
-                    return False, f"Invalid API Key: {e}", ""
+                if "invalid" in err or "api_key" in err or "permission" in err or "unauthenticated" in err:
+                    return False, f"Invalid Google Gemini API key: {e}", ""
                 if "quota" in err or "resource_exhausted" in err:
-                    return True, f"Key recognized: {mod_name}", mod_name
-
-        return False, "Key could not connect to Gemini models.", ""
+                    return True, f"Key recognized (Quota limited): {mod_name}", mod_name
+                continue
+        return True, "Google Gemini key recognized.", "gemini-2.0-flash"
     except Exception as exc:
+        try:
+            import google.generativeai as legacy_genai
+            legacy_genai.configure(api_key=key)
+            m = legacy_genai.GenerativeModel("gemini-1.5-flash")
+            r = m.generate_content("Ping")
+            if r and r.text:
+                return True, "Google Gemini key verified!", "gemini-1.5-flash"
+        except Exception:
+            pass
         return False, f"Verification error: {exc}", ""
 
 
@@ -426,66 +435,133 @@ class LLMManager:
         raise last_exc or LLMError("Anthropic Claude generation failed.")
 
     def _chat_gemini_stream(self, messages: Iterable[ChatMessage], system_prompt: str) -> Generator[str, None, None]:
-        import google.generativeai as genai
-
-        api_key = get_api_key(self.config)
+        api_key = get_api_key(self.config) or os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")
         if not api_key:
-            raise LLMError("No Google Gemini API key found.")
+            raise LLMError("No Google Gemini API key found. Please open Settings to enter your key or set GEMINI_API_KEY in .env.")
         api_key = api_key.strip().strip('"\'')
-        genai.configure(api_key=api_key)
+
+        model = self.config.llm.model
+        if not model or "gemini" not in model.lower():
+            model = "gemini-2.0-flash"
+
+        candidate_models = [
+            model,
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-2.0-pro-exp-02-05",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+        ]
+        seen = set()
+        ordered_models = []
+        for m in candidate_models:
+            if m not in seen:
+                seen.add(m)
+                ordered_models.append(m)
 
         from PIL import Image
-        raw_history = []
+        formatted_contents = []
         for m in messages:
             role = "model" if m.role == "assistant" else "user"
             parts = []
             if m.content:
                 parts.append(m.content)
-            if m.image_path:
+            if getattr(m, "image_path", None) and Path(m.image_path).exists():
                 try:
-                    img = Image.open(m.image_path)
-                    parts.append(img)
+                    parts.append(Image.open(m.image_path))
                 except Exception as e:
                     log.warning("Could not open image for Gemini: {}", e)
             if not parts:
                 parts.append("")
-            raw_history.append({"role": role, "parts": parts})
+            formatted_contents.append({"role": role, "parts": parts})
 
-        while raw_history and raw_history[0]["role"] == "model":
-            raw_history.pop(0)
+        while formatted_contents and formatted_contents[0]["role"] == "model":
+            formatted_contents.pop(0)
 
-        history = []
-        for turn in raw_history:
-            if not history:
-                history.append({"role": turn["role"], "parts": list(turn["parts"])})
-            elif history[-1]["role"] == turn["role"]:
-                history[-1]["parts"].extend(turn["parts"])
-            else:
-                history.append({"role": turn["role"], "parts": list(turn["parts"])})
-
-        candidate_models = GEMINI_MODELS_PRIORITY
-        gen_config = genai.types.GenerationConfig(temperature=0.2, max_output_tokens=4096)
+        if not formatted_contents:
+            formatted_contents.append({"role": "user", "parts": ["Hello"]})
 
         last_exc = None
-        for mod_name in candidate_models:
-            try:
-                cur_model = genai.GenerativeModel(mod_name, system_instruction=system_prompt or None)
-                resp_stream = cur_model.generate_content(history, generation_config=gen_config, stream=True)
-                yielded_any = False
-                for chunk in resp_stream:
-                    if chunk.text:
-                        yield chunk.text
-                        yielded_any = True
-                if yielded_any:
-                    return
-            except Exception as exc:
-                last_exc = exc
-                err_str = str(exc).lower()
-                if any(x in err_str for x in ["not found", "404", "no longer available", "deprecated"]):
-                    continue
-                raise
 
-        raise last_exc or LLMError("Failed to generate content with available Gemini models.")
+        # 1. Try modern google.genai client
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=api_key)
+            for mod_name in ordered_models:
+                try:
+                    config = types.GenerateContentConfig(
+                        temperature=0.6,
+                        max_output_tokens=4096,
+                    )
+                    if system_prompt:
+                        config.system_instruction = system_prompt
+
+                    stream = client.models.generate_content_stream(
+                        model=mod_name,
+                        contents=formatted_contents,
+                        config=config
+                    )
+                    yielded_any = False
+                    for chunk in stream:
+                        txt = chunk.text or ""
+                        if txt:
+                            yield txt
+                            yielded_any = True
+                    if yielded_any:
+                        if mod_name != self.config.llm.model:
+                            self.config.llm.model = mod_name
+                            try:
+                                save_config(self.config)
+                            except Exception:
+                                pass
+                        return
+                except Exception as exc:
+                    last_exc = exc
+                    err = str(exc).lower()
+                    if any(k in err for k in ["invalid_api_key", "unauthenticated", "401"]):
+                        raise LLMError(f"Invalid Gemini API Key: {exc}") from exc
+                    log.warning("Gemini modern SDK model '{}' error: {}, trying next...", mod_name, exc)
+                    continue
+        except ImportError:
+            pass
+
+        # 2. Fallback to legacy google.generativeai if needed
+        try:
+            import google.generativeai as legacy_genai
+            legacy_genai.configure(api_key=api_key)
+
+            legacy_history = []
+            for item in formatted_contents:
+                legacy_history.append({"role": item["role"], "parts": item["parts"]})
+
+            for mod_name in ordered_models:
+                try:
+                    m = legacy_genai.GenerativeModel(
+                        mod_name,
+                        system_instruction=system_prompt if system_prompt else None
+                    )
+                    resp = m.generate_content(
+                        legacy_history,
+                        generation_config={"temperature": 0.6, "max_output_tokens": 4096},
+                        stream=True
+                    )
+                    yielded_any = False
+                    for chunk in resp:
+                        if chunk.text:
+                            yield chunk.text
+                            yielded_any = True
+                    if yielded_any:
+                        return
+                except Exception as exc:
+                    last_exc = exc
+                    log.warning("Legacy Gemini model '{}' error: {}, trying next...", mod_name, exc)
+                    continue
+        except Exception:
+            pass
+
+        raise last_exc or LLMError("Google Gemini generation failed across all candidate models.")
 
     def _chat_openai_stream(self, messages: Iterable[ChatMessage], system_prompt: str) -> Generator[str, None, None]:
         from openai import OpenAI

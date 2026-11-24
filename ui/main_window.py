@@ -2110,7 +2110,7 @@ class MainWindow(QWidget):
 
     def _find_mode_index(self, name: str) -> int:
         name_lower = name.strip().lower()
-        mode_keys = ["chatgpt", "claude", "superagent", "engineer", "research", "sysadmin", "general"]
+        mode_keys = ["gemini", "chatgpt", "claude", "superagent", "engineer", "research", "sysadmin", "general"]
         for idx, key in enumerate(mode_keys):
             if name_lower in key or key in name_lower:
                 return idx
@@ -2135,6 +2135,8 @@ class MainWindow(QWidget):
                 self.config.llm.provider = "anthropic"
             elif any(m_id.startswith(p) for p in ["gpt-", "o1", "o3", "chatgpt"]):
                 self.config.llm.provider = "openai"
+            elif m_id.startswith("gemini-"):
+                self.config.llm.provider = "gemini"
             else:
                 self.config.llm.provider = "groq"
             save_config(self.config)
@@ -2556,6 +2558,7 @@ class MainWindow(QWidget):
             self.mode_combo.setCurrentIndex(index)
             self.mode_combo.blockSignals(False)
         mode_names = {
+            "GEMINI": "Google Gemini 2.0 & Multimodal",
             "CHATGPT": "ChatGPT 4o & Data Analyst",
             "CLAUDE": "Claude 3.7 Sonnet & Artifacts",
             "SUPERAGENT": "Autonomous Base44 SuperAgent",
@@ -2564,7 +2567,19 @@ class MainWindow(QWidget):
             "SYSADMIN": "Windows System Administrator",
             "GENERAL": "Executive General Assistant",
         }
-        if self._operating_mode == "CHATGPT":
+        if self._operating_mode == "GEMINI":
+            self.status_pill.setText("GEMINI 2.0 READY")
+            self.status_pill.setStyleSheet("""
+                color: #38bdf8;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.6px;
+                padding: 3px 10px;
+                border-radius: 9px;
+                background: #082f49;
+                border: 1px solid #0284c7;
+            """)
+        elif self._operating_mode == "CHATGPT":
             self.status_pill.setText("CHATGPT 4o READY")
             self.status_pill.setStyleSheet("""
                 color: #34d399;
@@ -3114,6 +3129,7 @@ class MainWindow(QWidget):
             }
         """)
         mode_choices = [
+            ("GEMINI", "Mode: Gemini 2.0"),
             ("CHATGPT", "Mode: ChatGPT 4o"),
             ("CLAUDE", "Mode: Claude 3.7"),
             ("SUPERAGENT", "Mode: SuperAgent"),
@@ -3162,6 +3178,10 @@ class MainWindow(QWidget):
             }
         """)
         model_choices = [
+            ("gemini-2.0-flash", "Gemini: 2.0 Flash (Google)"),
+            ("gemini-2.0-pro-exp-02-05", "Gemini: 2.0 Pro (Google)"),
+            ("gemini-1.5-pro", "Gemini: 1.5 Pro (2M Context)"),
+            ("gemini-1.5-flash", "Gemini: 1.5 Flash (Google)"),
             ("gpt-4o", "OpenAI: GPT-4o (Omni)"),
             ("gpt-4o-mini", "OpenAI: GPT-4o Mini"),
             ("o3-mini", "OpenAI: o3-mini (Reasoning)"),
@@ -4432,7 +4452,16 @@ class MainWindow(QWidget):
 
         # Operating Persona Steering
         mode = getattr(self, "_operating_mode", "ENGINEER")
-        if mode == "CHATGPT":
+        if mode == "GEMINI":
+            system_prompt += (
+                "\n[Operating Mode: Google Gemini 2.0 & Multimodal Intelligence]\n"
+                "- You possess the extreme speed, multimodal perception, and 2M context synthesis of Google Gemini 2.0.\n"
+                "- Multimodal Vision: Analyze active desktop screenshots, user images, UI elements, documents, and camera inputs with pixel-perfect precision.\n"
+                "- Google Search Grounding: For real-time news, current events, latest documentation, or factual verification, utilize [action:web_search:query] or [action:fetch_webpage:url] to retrieve live, grounded sources.\n"
+                "- Interactive Canvas & Charts: Execute [action:generate_chart:Title|type|labels|values] for visual metrics and generate interactive HTML5 applications inside ```html ``` code blocks.\n"
+                "- Speed & Conciseness: Provide lightning-fast, structured, and factual answers. Zero emojis.\n"
+            )
+        elif mode == "CHATGPT":
             system_prompt += (
                 "\n[Operating Mode: ChatGPT 4o & Advanced Data Analyst]\n"
                 "- You possess the full intelligence, speed, and analytical power of OpenAI ChatGPT 4o.\n"

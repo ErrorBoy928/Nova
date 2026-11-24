@@ -50,7 +50,10 @@ class _KeyVerificationWorker(QThread):
 
     def run(self):
         k = (self.key or "").strip()
-        if k.startswith("sk-ant-"):
+        if k.startswith("AIzaSy"):
+            from ai.llm_manager import verify_gemini_key
+            ok, msg, mod = verify_gemini_key(k)
+        elif k.startswith("sk-ant-"):
             from ai.llm_manager import verify_anthropic_key
             ok, msg, mod = verify_anthropic_key(k)
         elif k.startswith("sk-proj-") or (k.startswith("sk-") and not k.startswith("sk-ant-")):
@@ -329,10 +332,17 @@ class ApiKeyDialog(QDialog):
             self._set_status("Cannot save empty API key.", _ACCENT_RED)
             return
 
+        is_gemini = key.startswith("AIzaSy")
         is_anthropic = key.startswith("sk-ant-")
-        is_openai = key.startswith("sk-proj-") or (key.startswith("sk-") and not is_anthropic)
+        is_openai = key.startswith("sk-proj-") or (key.startswith("sk-") and not is_anthropic and not is_gemini)
 
-        if is_anthropic:
+        if is_gemini:
+            self.config.llm.api_key = key
+            self.config.llm.provider = "gemini"
+            self.config.llm.api_key_env_var = "GEMINI_API_KEY"
+            self.config.llm.model = self._tested_working_model or "gemini-2.0-flash"
+            env_var = "GEMINI_API_KEY"
+        elif is_anthropic:
             self.config.llm.api_key = key
             self.config.llm.provider = "anthropic"
             self.config.llm.api_key_env_var = "ANTHROPIC_API_KEY"
