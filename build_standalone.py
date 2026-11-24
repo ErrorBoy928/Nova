@@ -26,6 +26,7 @@ def run_build():
         "--onedir",
         "--windowed",
         "--name", "Nova_AI",
+        "--icon", str(ROOT_DIR / "nova.ico"),
         "--distpath", str(DIST_DIR),
         "--workpath", str(BUILD_DIR),
         "--exclude-module", "torch",
@@ -81,6 +82,13 @@ def run_build():
     data_dir = APP_DIR / "data"
     for sub in ["database", "logs", "temp", "temp_audio"]:
         (data_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    # Copy branding icons
+    for icon_file in ["nova.ico", "nova.png"]:
+        src_icon = ROOT_DIR / icon_file
+        if src_icon.exists():
+            shutil.copy2(src_icon, APP_DIR / icon_file)
+            print(f"Copied branding icon {icon_file} -> {APP_DIR}")
 
     # Copy template .env or clean .env
     env_dst = APP_DIR / ".env"

@@ -58,7 +58,17 @@ log = get_logger(__name__)
 
 
 def _create_app_icon() -> QIcon:
-    """Generates a sleek, minimalist geometric monogram vector app icon."""
+    """Loads the official high-resolution Nova app icon or falls back to vector monogram."""
+    from utils.app_paths import project_root
+    for cand in [
+        project_root() / "nova.ico",
+        project_root() / "nova.png",
+        Path(__file__).resolve().parent / "nova.ico",
+        Path(__file__).resolve().parent / "nova.png",
+    ]:
+        if cand.exists():
+            return QIcon(str(cand))
+
     pixmap = QPixmap(64, 64)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)

@@ -72,6 +72,15 @@ _TEXT_MUTED = "#94a3b8"
 
 
 def _create_setup_icon() -> QIcon:
+    for cand in [
+        Path(getattr(sys, "_MEIPASS", ".")) / "nova.ico",
+        Path(getattr(sys, "_MEIPASS", ".")) / "nova.png",
+        Path(__file__).resolve().parent / "nova.ico",
+        Path(__file__).resolve().parent / "nova.png",
+    ]:
+        if cand.exists():
+            return QIcon(str(cand))
+
     pixmap = QPixmap(64, 64)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)
@@ -187,10 +196,11 @@ class InstallWorker(QThread):
             time.sleep(0.2)
 
             nova_exe = self.target_dir / "Nova_AI.exe"
+            nova_ico = self.target_dir / "nova.ico"
             if nova_exe.exists():
                 target_exec = str(nova_exe.resolve())
                 args = ""
-                icon_target = f"{target_exec},0"
+                icon_target = str(nova_ico.resolve()) if nova_ico.exists() else f"{target_exec},0"
             else:
                 # Fallback to pythonw
                 pythonw_candidates = [
@@ -205,7 +215,7 @@ class InstallWorker(QThread):
                         break
                 target_exec = pythonw_path or sys.executable
                 args = f'"{self.target_dir / "main.py"}"'
-                icon_target = "shell32.dll,14"
+                icon_target = str(nova_ico.resolve()) if nova_ico.exists() else "shell32.dll,14"
 
                 # Generate run.bat and AI_Assistant.vbs
                 vbs_file = self.target_dir / "AI_Assistant.vbs"
