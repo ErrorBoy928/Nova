@@ -97,9 +97,11 @@ class ClaudeArtifactViewer(QFrame):
         header.addStretch()
 
         # View Switcher Tabs: [Preview] | [Code]
-        tab_box = QHBoxLayout()
+        tab_frame = QFrame()
+        tab_frame.setStyleSheet("background: #13131c; border-radius: 6px;")
+        tab_box = QHBoxLayout(tab_frame)
+        tab_box.setContentsMargins(2, 2, 2, 2)
         tab_box.setSpacing(2)
-        tab_box.setStyleSheet("background: #13131c; border-radius: 6px; padding: 2px;")
 
         self.btn_tab_preview = QPushButton("Live Preview")
         self.btn_tab_preview.setFixedHeight(26)
@@ -115,7 +117,7 @@ class ClaudeArtifactViewer(QFrame):
         self.btn_tab_code.clicked.connect(lambda: self._set_active_tab(1))
         tab_box.addWidget(self.btn_tab_code)
 
-        header.addLayout(tab_box)
+        header.addWidget(tab_frame)
 
         # Action Buttons
         self.btn_browser = QPushButton("Open in Browser")
