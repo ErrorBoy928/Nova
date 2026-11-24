@@ -119,6 +119,27 @@ def verify_groq_key(api_key: str) -> tuple[bool, str, str]:
         return False, f"Verification error: {exc}", ""
 
 
+def verify_anthropic_key(api_key: str) -> tuple[bool, str, str]:
+    """Tests an API key against Anthropic API."""
+    key = (api_key or "").strip().strip('"\'')
+    if not key:
+        return False, "Anthropic API key cannot be empty.", ""
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=key, timeout=12.0)
+        resp = client.messages.create(
+            model="claude-3-5-haiku-20241022",
+            max_tokens=10,
+            messages=[{"role": "user", "content": "ping"}]
+        )
+        if resp and resp.content:
+            return True, "Anthropic Claude key verified!", "claude-3-7-sonnet-20250219"
+        return False, "Anthropic returned empty verification response.", ""
+    except Exception as exc:
+        return False, f"Verification error: {exc}", ""
+
+
 def verify_gemini_key(api_key: str) -> tuple[bool, str, str]:
     """Tests an API key against Google Gemini API."""
     key = (api_key or "").strip().strip('"\'')
@@ -170,6 +191,8 @@ class LLMManager:
         try:
             if provider == "groq":
                 yield from self._chat_groq_stream(messages, system_prompt)
+            elif provider == "anthropic":
+                yield from self._chat_anthropic_stream(messages, system_prompt)
             elif provider == "gemini":
                 yield from self._chat_gemini_stream(messages, system_prompt)
             elif provider == "openai":
@@ -302,6 +325,81 @@ class LLMManager:
                 continue
 
         raise last_exc or LLMError("Failed to generate content with available Groq models.")
+
+    def _chat_anthropic_stream(self, messages: Iterable[ChatMessage], system_prompt: str) -> Generator[str, None, None]:
+        """Streams text chunks from Anthropic Claude (Claude 3.7 Sonnet, Claude 3.5 Sonnet, Claude 3.5 Haiku)."""
+        import anthropic
+
+        api_key = get_api_key(self.config)
+        if not api_key:
+            api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            raise LLMError(
+                "No Anthropic API key found. Please open Settings to enter your key or set ANTHROPIC_API_KEY in .env."
+            )
+
+        api_key = api_key.strip().strip('"\'')
+        client = anthropic.Anthropic(api_key=api_key, timeout=45.0)
+
+        chat_messages = []
+        for m in messages:
+            role = "assistant" if m.role == "assistant" else "user"
+            chat_messages.append({"role": role, "content": m.content})
+
+        if not chat_messages:
+            chat_messages.append({"role": "user", "content": "Hello"})
+        while chat_messages and chat_messages[0]["role"] == "assistant":
+            chat_messages.pop(0)
+
+        model = self.config.llm.model
+        if not model or "claude" not in model.lower():
+            model = "claude-3-7-sonnet-20250219"
+
+        candidate_models = [
+            model,
+            "claude-3-7-sonnet-20250219",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022",
+        ]
+        seen = set()
+        ordered_models = []
+        for m in candidate_models:
+            if m not in seen:
+                seen.add(m)
+                ordered_models.append(m)
+
+        last_exc = None
+        for mod_name in ordered_models:
+            try:
+                with client.messages.stream(
+                    model=mod_name,
+                    max_tokens=4096,
+                    temperature=0.6,
+                    system=system_prompt or "You are Claude, an AI by Anthropic.",
+                    messages=chat_messages,
+                ) as stream:
+                    yielded_any = False
+                    for text in stream.text_stream:
+                        if text:
+                            yield text
+                            yielded_any = True
+                    if yielded_any:
+                        if mod_name != self.config.llm.model:
+                            self.config.llm.model = mod_name
+                            try:
+                                save_config(self.config)
+                            except Exception:
+                                pass
+                        return
+            except Exception as exc:
+                last_exc = exc
+                err_str = str(exc).lower()
+                if any(k in err_str for k in ["invalid_api_key", "authentication_error", "401"]):
+                    raise LLMError(f"Invalid Anthropic API Key: {exc}") from exc
+                log.warning("Anthropic model '{}' error: {}, trying next...", mod_name, exc)
+                continue
+
+        raise last_exc or LLMError("Anthropic Claude generation failed.")
 
     def _chat_gemini_stream(self, messages: Iterable[ChatMessage], system_prompt: str) -> Generator[str, None, None]:
         import google.generativeai as genai

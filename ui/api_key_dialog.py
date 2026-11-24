@@ -49,7 +49,12 @@ class _KeyVerificationWorker(QThread):
         self.key = key
 
     def run(self):
-        ok, msg, mod = verify_groq_key(self.key)
+        k = (self.key or "").strip()
+        if k.startswith("sk-ant-"):
+            from ai.llm_manager import verify_anthropic_key
+            ok, msg, mod = verify_anthropic_key(k)
+        else:
+            ok, msg, mod = verify_groq_key(k)
         self.finished_verify.emit(ok, msg, mod)
 
 
@@ -321,14 +326,23 @@ class ApiKeyDialog(QDialog):
             self._set_status("Cannot save empty API key.", _ACCENT_RED)
             return
 
-        # 1. Update in-memory config
-        self.config.llm.api_key = key
-        self.config.llm.provider = "groq"
-        self.config.llm.api_key_env_var = "GROQ_API_KEY"
-        if self._tested_working_model:
-            self.config.llm.model = self._tested_working_model
+        is_anthropic = key.startswith("sk-ant-")
+        if is_anthropic:
+            self.config.llm.api_key = key
+            self.config.llm.provider = "anthropic"
+            self.config.llm.api_key_env_var = "ANTHROPIC_API_KEY"
+            self.config.llm.model = self._tested_working_model or "claude-3-7-sonnet-20250219"
+            env_var = "ANTHROPIC_API_KEY"
         else:
-            self.config.llm.model = "qwen/qwen3.8-27b"
+            self.config.llm.api_key = key
+            self.config.llm.provider = "groq"
+            self.config.llm.api_key_env_var = "GROQ_API_KEY"
+            if self._tested_working_model:
+                self.config.llm.model = self._tested_working_model
+            else:
+                self.config.llm.model = "qwen/qwen3.8-27b"
+            env_var = "GROQ_API_KEY"
+
         save_config(self.config)
 
         # 2. Update .env file
@@ -342,16 +356,16 @@ class ApiKeyDialog(QDialog):
             found = False
             new_lines = []
             for line in lines:
-                if line.startswith("GROQ_API_KEY="):
-                    new_lines.append(f"GROQ_API_KEY={key}")
+                if line.startswith(f"{env_var}="):
+                    new_lines.append(f"{env_var}={key}")
                     found = True
                 else:
                     new_lines.append(line)
             if not found:
-                new_lines.append(f"GROQ_API_KEY={key}")
+                new_lines.append(f"{env_var}={key}")
 
             env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-            os.environ["GROQ_API_KEY"] = key
+            os.environ[env_var] = key
         except Exception:
             pass
 

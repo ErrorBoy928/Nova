@@ -51,6 +51,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSplitter,
     QStackedWidget,
     QSystemTrayIcon,
     QTextEdit,
@@ -618,6 +619,60 @@ class _CodeRunnerWorker(QThread):
         self.finished_run.emit(ok, msg)
 
 
+class ThinkingBlockWidget(QFrame):
+    """Collapsible Claude 3.7-style Extended Thinking card."""
+
+    def __init__(self, thinking_text: str):
+        super().__init__()
+        self.thinking_text = thinking_text.strip()
+        self._expanded = False
+
+        self.setStyleSheet("""
+            QFrame {
+                background-color: #0c0d14;
+                border: 1px solid #1e202e;
+                border-left: 3px solid #6366f1;
+                border-radius: 6px;
+            }
+        """)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 6, 10, 6)
+        layout.setSpacing(4)
+
+        self.toggle_btn = QPushButton("▶ Thought Process (Extended Thinking)")
+        self.toggle_btn.setCursor(Qt.PointingHandCursor)
+        self.toggle_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: #818cf8;
+                font-size: 11px;
+                font-weight: 700;
+                text-align: left;
+                padding: 0;
+            }
+            QPushButton:hover {
+                color: #a5b4fc;
+            }
+        """)
+        self.toggle_btn.clicked.connect(self._toggle)
+        layout.addWidget(self.toggle_btn)
+
+        self.body = QLabel(self.thinking_text)
+        self.body.setWordWrap(True)
+        self.body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.body.setStyleSheet("color: #94a3b8; font-size: 11px; font-family: Consolas, monospace; line-height: 1.4; padding-top: 4px;")
+        self.body.setVisible(False)
+        layout.addWidget(self.body)
+
+    def _toggle(self):
+        self._expanded = not self._expanded
+        self.body.setVisible(self._expanded)
+        self.toggle_btn.setText(
+            "▼ Thought Process (Extended Thinking)" if self._expanded else "▶ Thought Process (Extended Thinking)"
+        )
+
+
 class CodeBlockWidget(QFrame):
     """Interactive Code Block card featuring 1-click Run, Copy, Save, and Live Console Output."""
 
@@ -659,6 +714,29 @@ class CodeBlockWidget(QFrame):
         h_layout.addWidget(lang_lbl)
 
         h_layout.addStretch()
+
+        # Claude Live Artifact Preview button (for HTML/SVG/Web apps)
+        if self.lang in ("html", "htm", "svg") or ("<html" in self.code.lower() or "<svg" in self.code.lower()):
+            self.preview_btn = QPushButton("▶ Artifact Preview")
+            self.preview_btn.setFixedHeight(22)
+            self.preview_btn.setCursor(Qt.PointingHandCursor)
+            self.preview_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #1e1b4b;
+                    color: #a5b4fc;
+                    border: 1px solid #4338ca;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: 700;
+                    padding: 0 8px;
+                }
+                QPushButton:hover {
+                    background-color: #312e81;
+                    color: #ffffff;
+                }
+            """)
+            self.preview_btn.clicked.connect(self._on_preview_clicked)
+            h_layout.addWidget(self.preview_btn)
 
         # Run button (for runnable scripts)
         can_run = self.lang in ("python", "py", "powershell", "ps", "ps1", "cmd", "bat", "batch", "node", "js", "javascript")
@@ -808,6 +886,17 @@ class CodeBlockWidget(QFrame):
         color = "#10b981" if success else "#ef4444"
         self.console_out.setStyleSheet(f"color: {color}; font-size: 11px; font-family: Consolas, monospace;")
         self.console_out.setText(output)
+
+    def _on_preview_clicked(self):
+        top = self.window()
+        if hasattr(top, "open_claude_artifact"):
+            top.open_claude_artifact("Interactive Web App", self.code, self.lang)
+        else:
+            import tempfile, os
+            tmp = tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8")
+            tmp.write(self.code)
+            tmp.close()
+            os.startfile(tmp.name)
 
 
 class _LLMWorker(QThread):
@@ -1565,7 +1654,7 @@ class _MessageBubble(QWidget):
         self.stream_label.setText(_render_images(_render_prose(text)))
 
     def finalize_content(self, text: str):
-        """Parses finished text into prose sections and interactive CodeBlockWidgets."""
+        """Parses finished text into prose sections, ThinkingBlockWidgets, and interactive CodeBlockWidgets."""
         self.content = text
         if self.is_user:
             self.stream_label.setText(_render_images(_render_message_html(text)))
@@ -1576,6 +1665,15 @@ class _MessageBubble(QWidget):
             item = self.content_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+        # Claude Extended Thinking CoT Detection
+        think_match = re.search(r"<(think|thinking|reasoning)>(.*?)</\1>", text, re.DOTALL | re.IGNORECASE)
+        if think_match:
+            thinking_content = think_match.group(2).strip()
+            text = re.sub(r"<(think|thinking|reasoning)>.*?</\1>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+            if thinking_content:
+                think_widget = ThinkingBlockWidget(thinking_content)
+                self.content_layout.addWidget(think_widget)
 
         # Parse markdown code fences
         last_end = 0
@@ -1596,6 +1694,23 @@ class _MessageBubble(QWidget):
             code_text = m.group(2).rstrip("\n")
             code_widget = CodeBlockWidget(lang, code_text)
             self.content_layout.addWidget(code_widget)
+
+            # If HTML or SVG, attach inline Claude Artifact Card
+            if lang.lower() in ("html", "htm", "svg") or ("<html" in code_text.lower() or "<svg" in code_text.lower()):
+                try:
+                    from ui.claude_artifacts_widget import ClaudeArtifactCard
+                    card_title = "Interactive Web Artifact"
+                    title_m = re.search(r"<title>(.*?)</title>", code_text, re.I)
+                    if title_m:
+                        card_title = title_m.group(1).strip()
+                    artifact_card = ClaudeArtifactCard(card_title, code_text, lang)
+                    artifact_card.open_requested.connect(
+                        lambda t, c, l: self.window().open_claude_artifact(t, c, l) if hasattr(self.window(), "open_claude_artifact") else None
+                    )
+                    self.content_layout.addWidget(artifact_card)
+                except Exception as e:
+                    log.warning("Could not instantiate ClaudeArtifactCard: {}", e)
+
             last_end = m.end()
 
         tail = text[last_end:].strip()
@@ -1974,11 +2089,20 @@ class MainWindow(QWidget):
 
     def _find_mode_index(self, name: str) -> int:
         name_lower = name.strip().lower()
-        mode_keys = ["engineer", "research", "sysadmin", "superagent", "general"]
+        mode_keys = ["claude", "superagent", "engineer", "research", "sysadmin", "general"]
         for idx, key in enumerate(mode_keys):
             if name_lower in key or key in name_lower:
                 return idx
         return -1
+
+    def open_claude_artifact(self, title: str, content: str, lang: str = "html"):
+        """Displays interactive artifact in the Claude Artifacts dual-view panel."""
+        if hasattr(self, "claude_artifact_viewer"):
+            self.claude_artifact_viewer.load_artifact(title, content, lang)
+            self.claude_artifact_viewer.setVisible(True)
+            if hasattr(self, "chat_splitter"):
+                self.chat_splitter.setSizes([550, 450])
+            self.show_toast(f"Artifact loaded: {title}", "SUCCESS")
 
     def _on_top_model_changed(self, index: int):
         if index < 0 or index >= self.model_combo.count():
@@ -1986,6 +2110,10 @@ class MainWindow(QWidget):
         m_id = self.model_combo.itemData(index)
         if m_id and m_id != self.config.llm.model:
             self.config.llm.model = m_id
+            if m_id.startswith("claude-"):
+                self.config.llm.provider = "anthropic"
+            else:
+                self.config.llm.provider = "groq"
             save_config(self.config)
             self.status_pill.setText("ENGINE SWITCHED")
             short_name = m_id.split("/")[-1]
@@ -2396,45 +2524,60 @@ class MainWindow(QWidget):
         self._swarm_worker.start()
 
     def _on_mode_changed(self, index: int):
-        mode_keys = ["ENGINEER", "RESEARCH", "SYSADMIN", "SUPERAGENT", "GENERAL"]
-        if 0 <= index < len(mode_keys):
-            self._operating_mode = mode_keys[index]
-            if hasattr(self, "mode_combo") and self.mode_combo.currentIndex() != index:
-                self.mode_combo.blockSignals(True)
-                self.mode_combo.setCurrentIndex(index)
-                self.mode_combo.blockSignals(False)
-            mode_names = {
-                "ENGINEER": "Senior Software Architect",
-                "RESEARCH": "Deep Research Analyst",
-                "SYSADMIN": "Windows System Administrator",
-                "SUPERAGENT": "Autonomous Base44 SuperAgent",
-                "GENERAL": "Executive General Assistant",
-            }
-            if self._operating_mode == "SUPERAGENT":
-                self.status_pill.setText("SUPERAGENT READY")
-                self.status_pill.setStyleSheet("""
-                    color: #a5b4fc;
-                    font-size: 9px;
-                    font-weight: 800;
-                    letter-spacing: 0.6px;
-                    padding: 3px 10px;
-                    border-radius: 9px;
-                    background: #1e1b4b;
-                    border: 1px solid #4338ca;
-                """)
-            else:
-                self.status_pill.setText("READY")
-                self.status_pill.setStyleSheet("""
-                    color: #38bdf8;
-                    font-size: 9px;
-                    font-weight: 800;
-                    letter-spacing: 0.6px;
-                    padding: 3px 10px;
-                    border-radius: 9px;
-                    background: #111118;
-                    border: 1px solid #272735;
-                """)
-            self.show_toast(f"Mode: {mode_names[self._operating_mode]}", "SYSTEM")
+        if index < 0 or index >= self.mode_combo.count():
+            return
+        m_id = self.mode_combo.itemData(index) or "ENGINEER"
+        self._operating_mode = m_id
+        if hasattr(self, "mode_combo") and self.mode_combo.currentIndex() != index:
+            self.mode_combo.blockSignals(True)
+            self.mode_combo.setCurrentIndex(index)
+            self.mode_combo.blockSignals(False)
+        mode_names = {
+            "CLAUDE": "Claude 3.7 Sonnet & Artifacts",
+            "SUPERAGENT": "Autonomous Base44 SuperAgent",
+            "ENGINEER": "Senior Software Architect",
+            "RESEARCH": "Deep Research Analyst",
+            "SYSADMIN": "Windows System Administrator",
+            "GENERAL": "Executive General Assistant",
+        }
+        if self._operating_mode == "CLAUDE":
+            self.status_pill.setText("CLAUDE 3.7 READY")
+            self.status_pill.setStyleSheet("""
+                color: #c084fc;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.6px;
+                padding: 3px 10px;
+                border-radius: 9px;
+                background: #2e1065;
+                border: 1px solid #7e22ce;
+            """)
+        elif self._operating_mode == "SUPERAGENT":
+            self.status_pill.setText("SUPERAGENT READY")
+            self.status_pill.setStyleSheet("""
+                color: #a5b4fc;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.6px;
+                padding: 3px 10px;
+                border-radius: 9px;
+                background: #1e1b4b;
+                border: 1px solid #4338ca;
+            """)
+        else:
+            self.status_pill.setText("READY")
+            self.status_pill.setStyleSheet("""
+                color: #38bdf8;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.6px;
+                padding: 3px 10px;
+                border-radius: 9px;
+                background: #111118;
+                border: 1px solid #272735;
+            """)
+        display_name = mode_names.get(self._operating_mode, self._operating_mode)
+        self.show_toast(f"Mode: {display_name}", "SYSTEM")
 
     def _register_code_artifact(self, lang: str, code: str):
         lines = code.splitlines()
@@ -2935,6 +3078,7 @@ class MainWindow(QWidget):
             }
         """)
         mode_choices = [
+            ("CLAUDE", "Mode: Claude 3.7"),
             ("SUPERAGENT", "Mode: SuperAgent"),
             ("ENGINEER", "Mode: Engineer"),
             ("RESEARCH", "Mode: Research"),
@@ -2981,6 +3125,9 @@ class MainWindow(QWidget):
             }
         """)
         model_choices = [
+            ("claude-3-7-sonnet-20250219", "Claude: 3.7 Sonnet (Anthropic)"),
+            ("claude-3-5-sonnet-20241022", "Claude: 3.5 Sonnet (Anthropic)"),
+            ("claude-3-5-haiku-20241022", "Claude: 3.5 Haiku (Anthropic)"),
             ("qwen/qwen3.8-27b", "Groq: Qwen 3.8 (27B)"),
             ("deepseek-r1-distill-llama-70b", "Groq: DeepSeek R1 (70B)"),
             ("llama-3.3-70b-versatile", "Groq: Llama 3.3 (70B)"),
@@ -3107,7 +3254,19 @@ class MainWindow(QWidget):
         self.message_layout.addWidget(self.hero_widget)
         self.message_layout.addStretch()
         self.scroll.setWidget(self.message_container)
-        chat_vbox.addWidget(self.scroll, 1)
+
+        # Claude Artifacts Live Dual Pane Splitter
+        self.chat_splitter = QSplitter(Qt.Horizontal)
+        self.chat_splitter.setStyleSheet("QSplitter::handle { background: #1e2430; width: 2px; }")
+        self.chat_splitter.addWidget(self.scroll)
+
+        from ui.claude_artifacts_widget import ClaudeArtifactViewer
+        self.claude_artifact_viewer = ClaudeArtifactViewer(self)
+        self.claude_artifact_viewer.setVisible(False)
+        self.claude_artifact_viewer.closed.connect(lambda: self.claude_artifact_viewer.setVisible(False))
+        self.chat_splitter.addWidget(self.claude_artifact_viewer)
+        self.chat_splitter.setSizes([600, 400])
+        chat_vbox.addWidget(self.chat_splitter, 1)
 
         # Attachment preview bar
         self.attachment_preview = QLabel()
@@ -4232,7 +4391,16 @@ class MainWindow(QWidget):
 
         # Operating Persona Steering
         mode = getattr(self, "_operating_mode", "ENGINEER")
-        if mode == "ENGINEER":
+        if mode == "CLAUDE":
+            system_prompt += (
+                "\n[Operating Mode: Claude 3.7 Sonnet & Artifacts Engine]\n"
+                "- You possess the full analytical, coding, and architectural intelligence of Claude 3.7 Sonnet.\n"
+                "- Extended Thinking: For complex queries, architecture, math, or coding, wrap your reasoning inside <thinking>...</thinking> tags.\n"
+                "- Claude Artifacts: When generating self-contained web apps, Canvas games, single-page dashboards, SVG graphics, or visual widgets, output full, runnable HTML/CSS/JS inside an ```html ``` code block. Nova AI will automatically open an interactive live preview pane beside the chat.\n"
+                "- Excel & Data: When asked to create Excel sheets, do NOT just dump Python code. Execute [action:create_excel:filename.xlsx|{\"Sheet1\": [[\"Col1\",\"Col2\"], [\"Val1\",\"Val2\"]]}] directly so the user gets an actual formatted Excel file opened immediately.\n"
+                "- Autonomous Execution: Always provide working, complete, production-grade solutions. Zero emojis.\n"
+            )
+        elif mode == "ENGINEER":
             system_prompt += (
                 "\n[Operating Mode: Senior Software Engineer & Architect]\n"
                 "- Write modular, production-grade, typed code with robust architecture.\n"

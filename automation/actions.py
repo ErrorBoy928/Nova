@@ -1245,6 +1245,68 @@ def run_routine(routine_name: str) -> ActionResult:
 
 
 # ── 8. Coding & Developer Actions ──────────────────────────────────────────
+def create_html_app(arg: str) -> ActionResult:
+    r"""Creates an interactive HTML5 / CSS / JavaScript web application or game.
+    Syntax:
+        [action:create_html_app:<title_or_filename>:<html_content>]
+    Saves to Desktop as <title>.html and opens in browser.
+    """
+    arg = arg.strip()
+    if not arg:
+        return False, "No HTML app content provided."
+
+    if ":" in arg:
+        title_part, html_content = arg.split(":", 1)
+    else:
+        title_part = "WebApp.html"
+        html_content = arg
+
+    title = title_part.strip()
+    if not title.lower().endswith((".html", ".htm")):
+        title += ".html"
+
+    target_path = Path.home() / "Desktop" / title
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(html_content.strip(), encoding="utf-8")
+
+    try:
+        os.startfile(str(target_path))
+    except Exception:
+        pass
+
+    return True, f"Claude Interactive Web App '{target_path.name}' created at {target_path} and opened in browser."
+
+
+def read_document(path_str: str) -> ActionResult:
+    """Reads text, PDF, CSV, JSON, Markdown, or Code documents."""
+    p = Path(os.path.expandvars(path_str.strip()))
+    if not p.is_absolute():
+        p_desk = Path.home() / "Desktop" / p
+        p = p_desk if p_desk.exists() else p
+
+    if not p.exists():
+        return False, f"File not found: {p}"
+
+    suffix = p.suffix.lower()
+
+    if suffix == ".pdf":
+        try:
+            content_bytes = p.read_bytes()
+            import re
+            text_matches = re.findall(rb"\((.*?)\)Tj", content_bytes)
+            if text_matches:
+                extracted = b" ".join(text_matches).decode("latin-1", errors="ignore")
+                return True, f"PDF Document text ({p.name}):\n{extracted[:4000]}"
+        except Exception:
+            pass
+
+    try:
+        text = p.read_text(encoding="utf-8", errors="replace")
+        return True, f"Document Content ({p.name}, {len(text)} chars):\n{text[:6000]}"
+    except Exception as e:
+        return False, f"Could not read document: {e}"
+
+
 def create_excel(arg: str) -> ActionResult:
     r"""Creates a beautifully styled, production-grade Excel (.xlsx) file.
     Syntax:

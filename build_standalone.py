@@ -49,6 +49,9 @@ def run_build():
         "--hidden-import", "PySide6.QtCore",
         "--hidden-import", "PySide6.QtGui",
         "--hidden-import", "PySide6.QtWidgets",
+        "--hidden-import", "PySide6.QtWebEngineWidgets",
+        "--hidden-import", "PySide6.QtWebEngineCore",
+        "--hidden-import", "anthropic",
         str(ROOT_DIR / "main.py")
     ]
     
