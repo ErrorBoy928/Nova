@@ -31,16 +31,19 @@ _UNCLOSED_THINK_RE = re.compile(
 # Groq production models prioritized for guaranteed access, speed & coding reasoning
 GROQ_MODELS_PRIORITY = [
     "qwen/qwen3.8-27b",
-    "llama-3.1-8b-instant",
-    "llama-3.3-70b-versatile",
+    "allam-2-7b",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
     "llama-3.2-3b-preview",
     "llama-3.2-1b-preview",
-    "allam-2-7b",
     "mixtral-8x7b-32768",
     "gemma2-9b-it",
 ]
+
+_GROQ_MODELS_CACHE: list[str] = []
+_GROQ_MODELS_CACHE_TIME: float = 0.0
 
 
 def clean_repetitive_patterns(text: str) -> str:
@@ -76,7 +79,7 @@ def verify_groq_key(api_key: str) -> tuple[bool, str, str]:
 
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=key, base_url="https://api.groq.com/openai/v1")
+        client = OpenAI(api_key=key, base_url="https://api.groq.com/openai/v1", timeout=12.0)
 
         # Discover live models available on this account
         live_models = []
@@ -191,6 +194,9 @@ class LLMManager:
     def _chat_groq_stream(self, messages: Iterable[ChatMessage], system_prompt: str) -> Generator[str, None, None]:
         """Ultra-fast streaming via Groq LPU API (<200ms latency) with automatic model fallback."""
         from openai import OpenAI
+        import time
+
+        global _GROQ_MODELS_CACHE, _GROQ_MODELS_CACHE_TIME
 
         api_key = get_api_key(self.config)
         if not api_key:
@@ -199,19 +205,23 @@ class LLMManager:
             )
         api_key = api_key.strip().strip('"\'')
         base_url = "https://api.groq.com/openai/v1"
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        client = OpenAI(api_key=api_key, base_url=base_url, timeout=40.0)
 
         chat_messages = []
         if system_prompt:
             chat_messages.append({"role": "system", "content": system_prompt})
         chat_messages.extend([{"role": m.role, "content": m.content} for m in messages])
 
-        # Discover live models available on this user's account
-        live_models = []
-        try:
-            live_models = [m.id for m in client.models.list().data]
-        except Exception as e:
-            log.warning("Could not query Groq models list: {}", e)
+        # Discover or use cached live models
+        now = time.time()
+        if not _GROQ_MODELS_CACHE or (now - _GROQ_MODELS_CACHE_TIME > 600):
+            try:
+                _GROQ_MODELS_CACHE = [m.id for m in client.models.list().data]
+                _GROQ_MODELS_CACHE_TIME = now
+            except Exception as e:
+                log.warning("Could not query Groq models list: {}", e)
+
+        live_models = _GROQ_MODELS_CACHE
 
         current_model = (self.config.llm.model or "").strip()
         if "gemini" in current_model or not current_model:
@@ -219,14 +229,12 @@ class LLMManager:
             self.config.llm.model = current_model
 
         candidate_models = []
-        # If live models discovered, match preferred models that actually exist
         if live_models:
             if current_model in live_models:
                 candidate_models.append(current_model)
             for m in GROQ_MODELS_PRIORITY:
                 if m in live_models and m not in candidate_models:
                     candidate_models.append(m)
-            # Add any other chat models
             for m in live_models:
                 if m not in candidate_models and "whisper" not in m:
                     candidate_models.append(m)
@@ -286,25 +294,12 @@ class LLMManager:
             except Exception as exc:
                 last_exc = exc
                 err_str = str(exc).lower()
-                is_model_unavailable = any(term in err_str for term in [
-                    "does not exist",
-                    "model_not_found",
-                    "not found",
-                    "404",
-                    "do not have access",
-                    "decommissioned",
-                    "deprecated",
-                    "unsupported",
-                    "not available",
-                    "invalid model",
-                    "permission_denied",
-                ])
-                if is_model_unavailable:
-                    log.warning("Groq model '{}' unavailable ({}), falling back to next...", mod_name, exc)
-                    continue
                 if any(term in err_str for term in ["invalid_api_key", "unauthorized", "401", "forbidden"]):
                     raise LLMError(f"Invalid Groq API Key: {exc}") from exc
-                raise
+                
+                # Auto-fallback on rate limits, model unavailability, timeouts, or 503
+                log.warning("Groq model '{}' issue ({}), auto-falling back to next model...", mod_name, exc)
+                continue
 
         raise last_exc or LLMError("Failed to generate content with available Groq models.")
 
@@ -377,7 +372,7 @@ class LLMManager:
         if not api_key:
             raise LLMError("No API key found for OpenAI.")
         base_url = self.config.llm.openai_base_url or None
-        client = OpenAI(api_key=api_key.strip(), base_url=base_url)
+        client = OpenAI(api_key=api_key.strip(), base_url=base_url, timeout=40.0)
 
         chat_messages = []
         if system_prompt:

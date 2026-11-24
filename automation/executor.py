@@ -172,6 +172,8 @@ def run_action(name: str, arg: str) -> tuple[bool, str]:
         return True, f"Image generation requested: {arg}"
 
     # 8. Coding & Developer Actions
+    elif name in ("create_excel", "make_excel", "excel", "spreadsheet", "create_spreadsheet"):
+        return actions.create_excel(arg)
     elif name in ("run_code", "execute_code", "run_python", "run_script"):
         return actions.run_code(arg)
     elif name in ("save_code_file", "save_code", "write_code"):

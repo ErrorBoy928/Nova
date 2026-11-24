@@ -30,6 +30,7 @@ You operate in a continuous autonomous loop: (Thought -> Action -> Observation -
 WORKSPACE ROOT: E:\\Nova_AI
 
 AVAILABLE AUTONOMOUS TOOLS:
+- [action:create_excel:PATH:DATA] - Generate a styled Excel spreadsheet (.xlsx) directly on Desktop.
 - [action:run_command:COMMAND] - Run PowerShell, batch, python, git, pip, or pytest commands.
 - [action:read_file:PATH] - Read local files, scripts, logs, or configs.
 - [action:create_file:PATH:CONTENT] - Write a full file (syntax checked).

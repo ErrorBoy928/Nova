@@ -38,6 +38,8 @@ def run_build():
         "--exclude-module", "IPython",
         "--exclude-module", "notebook",
         "--hidden-import", "groq",
+        "--hidden-import", "openpyxl",
+        "--hidden-import", "et_xmlfile",
         "--hidden-import", "dotenv",
         "--hidden-import", "loguru",
         "--hidden-import", "sqlite3",

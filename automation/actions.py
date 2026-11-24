@@ -1245,9 +1245,166 @@ def run_routine(routine_name: str) -> ActionResult:
 
 
 # ── 8. Coding & Developer Actions ──────────────────────────────────────────
+def create_excel(arg: str) -> ActionResult:
+    r"""Creates a beautifully styled, production-grade Excel (.xlsx) file.
+    Syntax:
+        [action:create_excel:<filepath_or_filename>:<content>]
+    Content can be:
+        - CSV-like text with commas, semicolons, tabs, or pipes
+        - JSON array of objects
+    Saves to Desktop by default if relative path.
+    Applies elegant headers, bold text, colored navy header styling, and auto-fit column widths.
+    """
+    arg = arg.strip()
+    if not arg:
+        return False, "No Excel data provided. Usage: [action:create_excel:filename.xlsx:Header1,Header2\\nVal1,Val2]"
+
+    if ":" in arg:
+        path_part, data_part = arg.split(":", 1)
+    else:
+        path_part = "Report.xlsx"
+        data_part = arg
+
+    filename = path_part.strip()
+    if not filename.lower().endswith((".xlsx", ".xls", ".csv")):
+        filename += ".xlsx"
+
+    target_path = Path(filename)
+    if not target_path.is_absolute():
+        desktop = Path.home() / "Desktop"
+        desktop.mkdir(parents=True, exist_ok=True)
+        target_path = desktop / filename
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    data_str = data_part.strip()
+
+    # 1. Parse JSON format
+    if data_str.startswith("[") and data_str.endswith("]"):
+        try:
+            import json
+            json_data = json.loads(data_str)
+            if json_data and isinstance(json_data, list):
+                if isinstance(json_data[0], dict):
+                    headers = list(json_data[0].keys())
+                    rows.append(headers)
+                    for item in json_data:
+                        rows.append([item.get(h, "") for h in headers])
+                elif isinstance(json_data[0], list):
+                    rows = json_data
+        except Exception:
+            pass
+
+    # 2. Parse CSV / delimited text format
+    if not rows:
+        lines = [line.strip() for line in data_str.splitlines() if line.strip()]
+        for line in lines:
+            if "|" in line:
+                row = [c.strip() for c in line.split("|") if c.strip() != ""]
+            elif "\t" in line:
+                row = [c.strip() for c in line.split("\t")]
+            elif ";" in line:
+                row = [c.strip() for c in line.split(";")]
+            else:
+                import csv
+                reader = csv.reader([line])
+                row = next(reader, [line])
+            if row:
+                rows.append(row)
+
+    if not rows:
+        return False, "Could not parse data rows for Excel file."
+
+    # Try openpyxl for native .xlsx with professional styling
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = target_path.stem[:31]
+
+        header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        alt_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+        header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+        data_font = Font(name="Segoe UI", size=10)
+
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+
+        for r_idx, row in enumerate(rows, 1):
+            for c_idx, val in enumerate(row, 1):
+                cell = ws.cell(row=r_idx, column=c_idx)
+                str_val = str(val).strip()
+                try:
+                    if "." in str_val and str_val.replace(".", "", 1).lstrip("-").isdigit():
+                        cell.value = float(str_val)
+                    elif str_val.lstrip("-").isdigit():
+                        cell.value = int(str_val)
+                    else:
+                        cell.value = str_val
+                except Exception:
+                    cell.value = str_val
+
+                cell.border = thin_border
+                if r_idx == 1:
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                else:
+                    cell.font = data_font
+                    if r_idx % 2 == 0:
+                        cell.fill = alt_fill
+                    cell.alignment = Alignment(vertical="center")
+
+        # Auto-fit column widths
+        for col in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                v = str(cell.value or "")
+                if len(v) > max_len:
+                    max_len = len(v)
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+        ws.freeze_panes = "A2"
+        wb.save(target_path)
+
+        # Launch in Excel / default viewer
+        try:
+            os.startfile(str(target_path))
+        except Exception:
+            pass
+
+        return True, f"Excel file '{target_path.name}' successfully created at {target_path} and opened in Excel."
+
+    except Exception as e:
+        # Fallback to UTF-8 BOM CSV (Excel opens it cleanly)
+        try:
+            import csv
+            csv_path = target_path.with_suffix(".csv")
+            with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f)
+                writer.writerows(rows)
+            try:
+                os.startfile(str(csv_path))
+            except Exception:
+                pass
+            return True, f"Spreadsheet file '{csv_path.name}' created at {csv_path} and opened."
+        except Exception as e2:
+            return False, f"Failed to create spreadsheet: {e} / {e2}"
+
+
 def run_code(arg: str) -> ActionResult:
     """Executes code snippet in Python, PowerShell, CMD, or Node.
     Syntax: 'python:code' or 'powershell:code' or just Python code.
+    Runs Python in-process for ultra-fast, zero-timeout execution without requiring python.exe.
     """
     arg = arg.strip()
     if not arg:
@@ -1261,40 +1418,59 @@ def run_code(arg: str) -> ActionResult:
             lang = possible_lang.strip().lower()
             code = rest.strip()
 
-    import tempfile
     import sys
 
     try:
         if lang in ("python", "py"):
-            py_bin = sys.executable or "E:\\python\\python.exe"
-            with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as f:
-                f.write(code)
-                tmp_path = f.name
+            import io
+            import traceback
+
+            stdout_buf = io.StringIO()
+            stderr_buf = io.StringIO()
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
+            sys.stdout = stdout_buf
+            sys.stderr = stderr_buf
+            success = True
             try:
-                proc = subprocess.run(
-                    [py_bin, tmp_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=25,
-                    creationflags=0x08000000 if os.name == "nt" else 0,
-                )
-                stdout = proc.stdout.strip()
-                stderr = proc.stderr.strip()
-                out = stdout or stderr or "(Execution completed with no output)"
-                status = "Success" if proc.returncode == 0 else f"Failed (exit {proc.returncode})"
-                return (proc.returncode == 0), f"Python [{status}]:\n{out}"
-            finally:
+                import os, math, time, shutil, pathlib, csv
+                exec_globals = {
+                    "__builtins__": __builtins__,
+                    "os": os,
+                    "sys": sys,
+                    "math": math,
+                    "pathlib": pathlib,
+                    "Path": pathlib.Path,
+                    "time": time,
+                    "shutil": shutil,
+                    "csv": csv,
+                }
                 try:
-                    os.unlink(tmp_path)
-                except OSError:
+                    import openpyxl
+                    exec_globals["openpyxl"] = openpyxl
+                except Exception:
                     pass
+
+                exec(code, exec_globals)
+            except Exception as e:
+                success = False
+                traceback.print_exc(file=stderr_buf)
+            finally:
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+
+            out = stdout_buf.getvalue().strip()
+            err = stderr_buf.getvalue().strip()
+            res = out or err or ("(Executed successfully with no output)" if success else "(Execution failed)")
+            status = "Success" if success else "Failed"
+            return success, f"Python [{status}]:\n{res}"
 
         elif lang in ("powershell", "ps", "ps1"):
             proc = subprocess.run(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", code],
+                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", code],
                 capture_output=True,
                 text=True,
-                timeout=25,
+                timeout=60,
                 creationflags=0x08000000 if os.name == "nt" else 0,
             )
             out = proc.stdout.strip() or proc.stderr.strip() or "(Finished)"
@@ -1305,7 +1481,7 @@ def run_code(arg: str) -> ActionResult:
                 ["cmd.exe", "/c", code],
                 capture_output=True,
                 text=True,
-                timeout=25,
+                timeout=60,
                 creationflags=0x08000000 if os.name == "nt" else 0,
             )
             out = proc.stdout.strip() or proc.stderr.strip() or "(Finished)"
@@ -1316,7 +1492,7 @@ def run_code(arg: str) -> ActionResult:
                 ["node", "-e", code],
                 capture_output=True,
                 text=True,
-                timeout=25,
+                timeout=60,
                 creationflags=0x08000000 if os.name == "nt" else 0,
             )
             out = proc.stdout.strip() or proc.stderr.strip() or "(Finished)"
@@ -1324,7 +1500,7 @@ def run_code(arg: str) -> ActionResult:
 
         return False, f"Unsupported language: {lang}"
     except subprocess.TimeoutExpired:
-        return False, "Code execution timed out (limit: 25s)."
+        return False, "Code execution timed out (limit: 60s)."
     except Exception as exc:
         return False, f"Code execution error: {exc}"
 
@@ -1364,8 +1540,15 @@ def pip_install(package: str) -> ActionResult:
     pkg = package.strip()
     if not pkg:
         return False, "No package specified."
+    import shutil
     import sys
-    py_bin = sys.executable or "E:\\python\\python.exe"
+    if getattr(sys, "frozen", False):
+        py_bin = shutil.which("python") or shutil.which("py") or r"E:\python\python.exe"
+        if not py_bin or not Path(py_bin).exists():
+            return False, f"Cannot install '{pkg}': Running in standalone compiled mode without an external Python installation on PATH."
+    else:
+        py_bin = sys.executable or "E:\\python\\python.exe"
+
     try:
         proc = _subp_run(
             [py_bin, "-m", "pip", "install", pkg],
