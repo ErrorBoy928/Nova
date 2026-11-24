@@ -572,6 +572,15 @@ When given any multi-step, complex, or large task (e.g. building an application,
 AVAILABLE COMPUTER & CODING ACTIONS:
 Embed one or more [action:NAME:ARG] tags when needed:
 - [action:create_excel:<filename.xlsx>:<csv_or_data>] — Creates a beautifully formatted Excel (.xlsx) file on Desktop and opens it immediately
+- [action:create_pdf:<filename.pdf>:<content>] — Creates a styled, publication-grade PDF report on Desktop
+- [action:create_word:<filename.docx>:<content>] — Creates a formatted Microsoft Word (.docx) document on Desktop
+- [action:create_presentation:<filename.pptx>:<content>] — Creates a widescreen PowerPoint (.pptx) presentation on Desktop
+- [action:generate_image:<prompt>] — Generates a 1024x1024 high-resolution AI image and saves to Desktop
+- [action:create_qrcode:<url_or_text>] — Generates a styled QR code image on Desktop
+- [action:deep_research:<query>] — Multi-source autonomous deep web research with article synthesis
+- [action:optimize_system] — Deep Windows system cleanup (Temp files, DNS flush, RAM trimming)
+- [action:remember_fact:<fact>] — Permanently saves user preference or project fact in long-term memory
+- [action:list_memory] — Displays all stored user memories
 - [action:enable_vision] — Activates Screen Vision and captures current screen
 - [action:save_task:<title>:<step1|step2|...>] — Saves structured multi-step agent task
 - [action:update_task:<task_id>:<step_num>] — Updates agent task progress
@@ -3357,6 +3366,8 @@ class MainWindow(QWidget):
         strip_pills = [
             ("PDF Report", lambda: self._send_quick_prompt("Generate an executive styled PDF report on: ")),
             ("Word Doc", lambda: self._send_quick_prompt("Create a professional Word document (.docx) covering: ")),
+            ("AI Image", lambda: self._send_quick_prompt("Generate a high-resolution AI image of: ")),
+            ("QR Code", lambda: self._send_quick_prompt("Generate a styled QR code for: ")),
             ("PowerPoint", lambda: self._send_quick_prompt("Create a PowerPoint presentation (.pptx) with slides on: ")),
             ("Deep Research", lambda: self._send_quick_prompt("Conduct deep autonomous web research and synthesize a report on: ")),
             ("PC Optimizer", lambda: self._send_quick_prompt("Optimize my system: clean temp, flush DNS, and trim memory.")),
@@ -4558,6 +4569,16 @@ class MainWindow(QWidget):
                 system_prompt += f"\n{skills_injection}"
         except Exception as e:
             log.warning(f"Skills injection error: {e}")
+
+        # Long-Term Persistent Memory Recall Injection
+        try:
+            import memory.database as mem_db
+            facts = mem_db.get_all_facts()
+            if facts:
+                facts_str = "\n".join(f"- {f}" for f in facts[-20:])
+                system_prompt += f"\n[User Persistent Long-Term Memory & Profile]:\n{facts_str}\n"
+        except Exception as e:
+            log.warning(f"Memory injection error: {e}")
 
         # Antigravity Steps & Focus Protocol
         system_prompt += (

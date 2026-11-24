@@ -2098,6 +2098,129 @@ def action_deep_research(query: str) -> ActionResult:
         return False, f"Deep research failed: {exc}"
 
 
+def action_generate_image(prompt: str) -> ActionResult:
+    """Generates a high-resolution AI image via Pollinations and saves to Desktop."""
+    prompt = prompt.strip()
+    if not prompt:
+        return False, "No prompt provided for image generation."
+    try:
+        from ai.image_gen import generate_image
+        saved_path = generate_image(prompt)
+        desktop = Path.home() / "Desktop"
+        desktop.mkdir(parents=True, exist_ok=True)
+        desktop_path = desktop / saved_path.name
+        import shutil
+        shutil.copy2(saved_path, desktop_path)
+        try:
+            os.startfile(str(desktop_path))
+        except Exception:
+            pass
+        return True, f"Generated AI image for '{prompt[:40]}...': Saved to {desktop_path}"
+    except Exception as exc:
+        return False, f"Image generation failed: {exc}"
+
+
+def create_qrcode(arg: str) -> ActionResult:
+    """Generates a styled QR code image saved to Desktop.
+    Syntax:
+        [action:create_qrcode:content_or_url:optional_filename.png]
+        [action:create_qrcode:content_or_url]
+    """
+    arg = arg.strip()
+    if not arg:
+        return False, "No content or URL provided for QR code."
+
+    if ":" in arg:
+        parts = arg.split(":", 1)
+        if parts[0].lower() in ("http", "https"):
+            content = arg
+            filename = "Nova_QRCode.png"
+        else:
+            filename = parts[0].strip()
+            content = parts[1].strip()
+    else:
+        content = arg
+        filename = "Nova_QRCode.png"
+
+    if not filename.lower().endswith(".png"):
+        filename += ".png"
+
+    desktop = Path.home() / "Desktop"
+    desktop.mkdir(parents=True, exist_ok=True)
+    target_path = desktop / filename
+
+    try:
+        import qrcode
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(content)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
+        img.save(str(target_path))
+        try:
+            os.startfile(str(target_path))
+        except Exception:
+            pass
+        return True, f"Generated QR code for '{content[:50]}': Saved to {target_path}"
+    except Exception as exc:
+        return False, f"Failed to generate QR code: {exc}"
+
+
+def action_remember_fact(fact: str) -> ActionResult:
+    """Permanently saves a user preference, note, or fact to long-term memory."""
+    fact = fact.strip()
+    if not fact:
+        return False, "No fact provided to remember."
+    try:
+        import memory.database as db
+        db.add_fact(fact)
+        return True, f"Remembered in long-term memory: '{fact}'"
+    except Exception as exc:
+        return False, f"Failed to save memory: {exc}"
+
+
+def action_list_memory() -> ActionResult:
+    """Lists all remembered facts and user preferences from long-term memory."""
+    try:
+        import memory.database as db
+        facts = db.get_all_facts()
+        if not facts:
+            return True, "No long-term memories currently stored."
+        lines = ["User Long-Term Memory:"]
+        for i, f in enumerate(facts, 1):
+            lines.append(f"{i}. {f}")
+        return True, "\n".join(lines)
+    except Exception as exc:
+        return False, f"Failed to retrieve memory: {exc}"
+
+
+def action_clear_memory() -> ActionResult:
+    """Clears all stored user facts from long-term memory."""
+    try:
+        import memory.database as db
+        db.clear_facts()
+        return True, "Long-term user memory has been cleared."
+    except Exception as exc:
+        return False, f"Failed to clear memory: {exc}"
+
+
+def action_speak(text: str) -> ActionResult:
+    """Speaks the provided text aloud using Microsoft Edge Neural TTS or offline TTS."""
+    text = text.strip()
+    if not text:
+        return False, "No text provided to speak."
+    try:
+        from voice.tts import speak
+        speak(text)
+        return True, f"Spoken aloud: '{text[:60]}...'"
+    except Exception as exc:
+        return False, f"Speech playback failed: {exc}"
+
+
 def action_send_email(arg: str) -> ActionResult:
     """Sends an email formatted as '<to>:<subject>:<body>'."""
     try:

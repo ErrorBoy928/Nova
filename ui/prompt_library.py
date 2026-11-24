@@ -61,6 +61,28 @@ _PROMPT_TEMPLATES = [
         "desc": "Generate a styled .xlsx spreadsheet with headers, calculations, formulas, and auto-fit columns.",
         "prompt": "Create a styled production Excel spreadsheet (.xlsx) with formulas and summary rows for: ",
     },
+    # ── Creative & Media ──
+    {
+        "id": "ai_image",
+        "category": "CREATIVE",
+        "title": "High-Resolution AI Concept Art",
+        "desc": "Generate a photorealistic or artistic 1024x1024 AI concept image delivered to Desktop.",
+        "prompt": "Generate a high-resolution, photorealistic AI image of: ",
+    },
+    {
+        "id": "qr_generator",
+        "category": "CREATIVE",
+        "title": "Branded Vector QR Code",
+        "desc": "Generate a high-contrast, clean QR code for URLs, contact cards, or WiFi networks.",
+        "prompt": "Generate a high-contrast QR code image saved to Desktop for: ",
+    },
+    {
+        "id": "memory_anchor",
+        "category": "CREATIVE",
+        "title": "Permanent Long-Term Memory Anchor",
+        "desc": "Store user preferences, project paths, and personal facts in persistent memory.",
+        "prompt": "Remember this permanent fact about me and my project in your long-term memory: ",
+    },
     # ── Code Engineering ──
     {
         "id": "fullstack_api",
@@ -237,6 +259,7 @@ class PromptLibraryDialog(QDialog):
         categories = [
             ("ALL", "All Templates"),
             ("DOCS", "Docs & Office"),
+            ("CREATIVE", "Creative & Media"),
             ("CODE", "Code & Architecture"),
             ("SYSTEM", "System Admin"),
             ("RESEARCH", "Deep Research"),
@@ -249,6 +272,7 @@ class PromptLibraryDialog(QDialog):
             b.setFixedHeight(26)
             b.setCheckable(True)
             b.setChecked(cat_id == "ALL")
+            b.setProperty("cat_id", cat_id)
             b.setStyleSheet(f"""
                 QPushButton {{
                     background-color: #12121a;
@@ -293,9 +317,8 @@ class PromptLibraryDialog(QDialog):
 
     def _set_category(self, cat: str):
         self._active_category = cat
-        cats = ["ALL", "CODE", "SYSTEM", "RESEARCH", "WORKFLOW"]
-        for btn, c in zip(self.cat_buttons, cats):
-            btn.setChecked(c == cat)
+        for btn in self.cat_buttons:
+            btn.setChecked(btn.property("cat_id") == cat)
         self._render_cards()
 
     def _on_search_changed(self, text: str):

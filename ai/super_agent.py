@@ -36,6 +36,9 @@ AVAILABLE AUTONOMOUS TOOLS:
 - [action:create_excel:PATH:DATA] - Generate a styled Excel spreadsheet (.xlsx) directly on Desktop.
 - [action:deep_research:QUERY] - Autonomous multi-source deep research with article excerpt synthesis.
 - [action:optimize_system] - Deep Windows system cleanup, DNS flush, and memory optimization.
+- [action:generate_image:PROMPT] - Generate high-resolution AI art saved to Desktop.
+- [action:create_qrcode:URL_OR_TEXT] - Generate a styled QR code saved to Desktop.
+- [action:remember_fact:FACT] - Store permanent user preference or fact into long-term memory.
 - [action:run_command:COMMAND] - Run PowerShell, batch, python, git, pip, or pytest commands.
 - [action:read_file:PATH] - Read local files, scripts, logs, or configs.
 - [action:create_file:PATH:CONTENT] - Write a full file (syntax checked).

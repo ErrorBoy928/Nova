@@ -42,6 +42,7 @@ def run_build():
         "--hidden-import", "et_xmlfile",
         "--hidden-import", "docx",
         "--hidden-import", "pptx",
+        "--hidden-import", "qrcode",
         "--hidden-import", "dotenv",
         "--hidden-import", "loguru",
         "--hidden-import", "sqlite3",

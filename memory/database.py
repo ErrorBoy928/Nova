@@ -78,11 +78,18 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
 """
 
 
+_initialized = False
+
+
 @contextmanager
 def _connection() -> Iterator[sqlite3.Connection]:
+    global _initialized
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    if not _initialized:
+        conn.executescript(SCHEMA)
+        _initialized = True
     try:
         yield conn
         conn.commit()

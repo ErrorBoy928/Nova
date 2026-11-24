@@ -168,8 +168,18 @@ def run_action(name: str, arg: str) -> tuple[bool, str]:
         return actions.google_search(arg)
     elif name in ("youtube_search", "youtube", "play_song"):
         return actions.youtube_search(arg)
-    elif name in ("generate_image",):
-        return True, f"Image generation requested: {arg}"
+    elif name in ("generate_image", "create_image", "make_image", "ai_image", "draw"):
+        return actions.action_generate_image(arg)
+    elif name in ("create_qrcode", "make_qrcode", "qrcode", "qr"):
+        return actions.create_qrcode(arg)
+    elif name in ("speak", "say", "tts", "voice_speak"):
+        return actions.action_speak(arg)
+    elif name in ("remember_fact", "save_memory", "remember", "add_fact"):
+        return actions.action_remember_fact(arg)
+    elif name in ("list_memory", "get_memory", "show_facts", "saved_facts"):
+        return actions.action_list_memory()
+    elif name in ("clear_memory", "forget_all", "delete_memory"):
+        return actions.action_clear_memory()
 
     # 8. Coding & Developer Actions
     elif name in ("create_html_app", "html_app", "webapp", "create_app"):
