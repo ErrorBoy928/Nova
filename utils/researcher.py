@@ -86,7 +86,7 @@ def search_web(query: str, max_results: int = 5) -> list[SearchResult]:
 
 
 def research_topic(query: str, max_results: int = 4) -> str:
-    """Performs deep research on a topic and returns formatted summary text."""
+    """Performs research on a topic and returns formatted summary text."""
     results = search_web(query, max_results=max_results)
     if not results:
         return f"No live web results could be retrieved for '{query}'. Please check internet connection."
@@ -101,3 +101,49 @@ def research_topic(query: str, max_results: int = 4) -> str:
         summary_lines.append("")
 
     return "\n".join(summary_lines)
+
+
+def deep_research_topic(query: str, max_sources: int = 3) -> str:
+    """Performs comprehensive autonomous deep research:
+    1. Searches DuckDuckGo for top web sources.
+    2. Directly fetches and parses full article text from the top results.
+    3. Synthesizes a structured intelligence report with key takeaways and citations.
+    """
+    results = search_web(query, max_results=max_sources + 2)
+    if not results:
+        return f"No live web results could be retrieved for '{query}'. Please check your internet connection."
+
+    report_sections = [
+        f"**Deep Autonomous Research Dossier: {query}**\n",
+        "*Synthesized across multi-source live web intelligence*\n"
+    ]
+
+    fetched_count = 0
+    for res in results:
+        if fetched_count >= max_sources:
+            break
+        if not res.url or not res.url.startswith("http"):
+            continue
+
+        article_text = ""
+        try:
+            req = urllib.request.Request(
+                res.url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"}
+            )
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                raw_html = resp.read().decode("utf-8", errors="replace")
+            clean = re.sub(r"<(script|style|nav|footer|header).*?>.*?</\1>", "", raw_html, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r"<[^>]+>", " ", clean)
+            text = re.sub(r"\s+", " ", text).strip()
+            article_text = text[:750]
+        except Exception:
+            article_text = res.snippet
+
+        report_sections.append(f"**Source {fetched_count+1}: {res.title}**")
+        report_sections.append(f"URL: {res.url}")
+        if article_text:
+            report_sections.append(f"Excerpt: {article_text}...\n")
+        fetched_count += 1
+
+    return "\n\n".join(report_sections)

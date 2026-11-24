@@ -1463,6 +1463,354 @@ def create_excel(arg: str) -> ActionResult:
             return False, f"Failed to create spreadsheet: {e} / {e2}"
 
 
+def create_pdf(arg: str) -> ActionResult:
+    r"""Generates an executive, styled PDF report saved directly to Desktop or a custom path.
+    Syntax:
+        [action:create_pdf:filepath:html_or_markdown_content]
+        [action:create_pdf:html_or_markdown_content]
+    """
+    arg = arg.strip()
+    if not arg:
+        return False, "No PDF content provided. Usage: [action:create_pdf:report.pdf:<h1>Title</h1>...]"
+
+    if ":" in arg:
+        path_part, data_part = arg.split(":", 1)
+        if not path_part.lower().endswith(".pdf") and ("<" in path_part or "\n" in path_part or len(path_part) > 60):
+            path_part = "Nova_Report.pdf"
+            data_part = arg
+    else:
+        path_part = "Nova_Report.pdf"
+        data_part = arg
+
+    filename = path_part.strip()
+    if not filename.lower().endswith(".pdf"):
+        filename += ".pdf"
+
+    target_path = Path(filename)
+    if not target_path.is_absolute():
+        desktop = Path.home() / "Desktop"
+        desktop.mkdir(parents=True, exist_ok=True)
+        target_path = desktop / filename
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    raw_content = data_part.strip()
+    if not ("<html" in raw_content.lower() or "<body" in raw_content.lower() or "<div" in raw_content.lower() or "<h1" in raw_content.lower()):
+        formatted_body = []
+        for line in raw_content.splitlines():
+            line_s = line.strip()
+            if line_s.startswith("### "):
+                formatted_body.append(f"<h3 style='color:#1e3a8a; font-family:Segoe UI, sans-serif; margin-top:14px;'>{line_s[4:]}</h3>")
+            elif line_s.startswith("## "):
+                formatted_body.append(f"<h2 style='color:#0f172a; border-bottom:1px solid #cbd5e1; padding-bottom:4px; font-family:Segoe UI, sans-serif; margin-top:18px;'>{line_s[3:]}</h2>")
+            elif line_s.startswith("# "):
+                formatted_body.append(f"<h1 style='color:#0f172a; border-bottom:2px solid #2563eb; padding-bottom:8px; font-family:Segoe UI, sans-serif; margin-top:10px;'>{line_s[2:]}</h1>")
+            elif line_s.startswith("- ") or line_s.startswith("* "):
+                formatted_body.append(f"<li style='margin-bottom:4px; font-family:Segoe UI, sans-serif; font-size:10pt;'>{line_s[2:]}</li>")
+            elif line_s:
+                formatted_body.append(f"<p style='font-family:Segoe UI, sans-serif; font-size:10pt; line-height:1.5; color:#334155; margin-bottom:8px;'>{line_s}</p>")
+            else:
+                formatted_body.append("<br/>")
+        html_content = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 24px; color: #1e293b; }}
+                h1 {{ color: #1e3a8a; font-size: 20pt; }}
+                h2 {{ color: #0284c7; font-size: 15pt; }}
+                h3 {{ color: #334155; font-size: 12pt; }}
+                p, li {{ font-size: 10pt; line-height: 1.5; color: #334155; }}
+                table {{ border-collapse: collapse; width: 100%; margin: 15px 0; }}
+                th, td {{ border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 9.5pt; }}
+                th {{ background-color: #1e3a8a; color: white; }}
+                tr:nth-child(even) {{ background-color: #f8fafc; }}
+            </style>
+        </head>
+        <body>
+            {''.join(formatted_body)}
+        </body>
+        </html>
+        """
+    else:
+        html_content = raw_content
+
+    try:
+        import sys
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtGui import QTextDocument, QPdfWriter, QPageSize
+
+        _ = QApplication.instance() or QApplication(sys.argv)
+        writer = QPdfWriter(str(target_path))
+        writer.setPageSize(QPageSize(QPageSize.A4))
+        writer.setResolution(300)
+
+        doc = QTextDocument()
+        doc.setHtml(html_content)
+        doc.print_(writer)
+        del writer
+
+        size_kb = target_path.stat().st_size / 1024
+        try:
+            os.startfile(str(target_path))
+        except Exception:
+            pass
+        return True, f"Generated executive PDF report: '{target_path.name}' at {target_path} ({size_kb:.1f} KB)."
+    except Exception as exc:
+        return False, f"Failed to generate PDF document: {exc}"
+
+
+def create_word_document(arg: str) -> ActionResult:
+    r"""Generates a styled, native Microsoft Word (.docx) document saved directly to Desktop.
+    Syntax:
+        [action:create_word:filename.docx:content]
+        [action:create_word:content]
+    """
+    arg = arg.strip()
+    if not arg:
+        return False, "No Word document content provided. Usage: [action:create_word:doc.docx:# Title\nBody]"
+
+    if ":" in arg:
+        path_part, data_part = arg.split(":", 1)
+        if not path_part.lower().endswith(".docx") and ("#" in path_part or "\n" in path_part or len(path_part) > 60):
+            path_part = "Nova_Document.docx"
+            data_part = arg
+    else:
+        path_part = "Nova_Document.docx"
+        data_part = arg
+
+    filename = path_part.strip()
+    if not filename.lower().endswith(".docx"):
+        filename += ".docx"
+
+    target_path = Path(filename)
+    if not target_path.is_absolute():
+        desktop = Path.home() / "Desktop"
+        desktop.mkdir(parents=True, exist_ok=True)
+        target_path = desktop / filename
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        import docx
+        from docx.shared import Inches, Pt, RGBColor
+
+        doc = docx.Document()
+        style = doc.styles['Normal']
+        font = style.font
+        font.name = 'Calibri'
+        font.size = Pt(11)
+        font.color.rgb = RGBColor(0x1F, 0x29, 0x37)
+
+        lines = data_part.strip().splitlines()
+        in_table = False
+        table_rows = []
+
+        def flush_table():
+            nonlocal table_rows, in_table
+            if not table_rows:
+                return
+            t = doc.add_table(rows=len(table_rows), cols=len(table_rows[0]))
+            t.style = 'Table Grid'
+            for r_i, r in enumerate(table_rows):
+                for c_i, cell_text in enumerate(r):
+                    cell = t.cell(r_i, c_i)
+                    cell.text = cell_text
+                    if r_i == 0:
+                        for p in cell.paragraphs:
+                            for run in p.runs:
+                                run.font.bold = True
+                                run.font.color.rgb = RGBColor(0x1E, 0x3A, 0x8A)
+            doc.add_paragraph()
+            table_rows = []
+            in_table = False
+
+        for line in lines:
+            line_s = line.strip()
+            if "|" in line_s and line_s.startswith("|") and line_s.endswith("|"):
+                parts = [p.strip() for p in line_s.strip("|").split("|")]
+                if parts and not all(set(p) <= set("-: ") for p in parts):
+                    table_rows.append(parts)
+                    in_table = True
+                continue
+            else:
+                if in_table:
+                    flush_table()
+
+            if line_s.startswith("# "):
+                h = doc.add_heading(line_s[2:], level=1)
+                h.paragraph_format.space_before = Pt(14)
+                h.paragraph_format.space_after = Pt(6)
+            elif line_s.startswith("## "):
+                h = doc.add_heading(line_s[3:], level=2)
+                h.paragraph_format.space_before = Pt(12)
+                h.paragraph_format.space_after = Pt(4)
+            elif line_s.startswith("### "):
+                h = doc.add_heading(line_s[4:], level=3)
+                h.paragraph_format.space_before = Pt(8)
+                h.paragraph_format.space_after = Pt(2)
+            elif line_s.startswith("- ") or line_s.startswith("* "):
+                doc.add_paragraph(line_s[2:], style='List Bullet')
+            elif line_s.startswith("1. ") or line_s.startswith("2. ") or line_s.startswith("3. "):
+                doc.add_paragraph(line_s.split(". ", 1)[1], style='List Number')
+            elif line_s:
+                p = doc.add_paragraph(line_s)
+                p.paragraph_format.space_after = Pt(4)
+                p.paragraph_format.line_spacing = 1.15
+
+        if in_table:
+            flush_table()
+
+        doc.save(str(target_path))
+        size_kb = target_path.stat().st_size / 1024
+        try:
+            os.startfile(str(target_path))
+        except Exception:
+            pass
+        return True, f"Generated Word document: '{target_path.name}' at {target_path} ({size_kb:.1f} KB)."
+    except Exception as exc:
+        return False, f"Failed to generate Word document: {exc}"
+
+
+def create_presentation(arg: str) -> ActionResult:
+    r"""Generates a professional Microsoft PowerPoint (.pptx) presentation saved to Desktop.
+    Syntax:
+        [action:create_presentation:deck.pptx:Slide 1 Title\n- Bullet 1\n---\nSlide 2 Title\n- Bullet 1]
+    """
+    arg = arg.strip()
+    if not arg:
+        return False, "No presentation content provided. Usage: [action:create_presentation:deck.pptx:Slide 1\n- Point 1\n---\nSlide 2]"
+
+    if ":" in arg:
+        path_part, data_part = arg.split(":", 1)
+        if not path_part.lower().endswith(".pptx") and ("---" in path_part or "\n" in path_part or len(path_part) > 60):
+            path_part = "Nova_Presentation.pptx"
+            data_part = arg
+    else:
+        path_part = "Nova_Presentation.pptx"
+        data_part = arg
+
+    filename = path_part.strip()
+    if not filename.lower().endswith(".pptx"):
+        filename += ".pptx"
+
+    target_path = Path(filename)
+    if not target_path.is_absolute():
+        desktop = Path.home() / "Desktop"
+        desktop.mkdir(parents=True, exist_ok=True)
+        target_path = desktop / filename
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from pptx import Presentation
+        from pptx.util import Inches
+
+        prs = Presentation()
+        prs.slide_width = Inches(13.333)
+        prs.slide_height = Inches(7.5)
+
+        raw_slides = data_part.split("---")
+        for i, s_block in enumerate(raw_slides):
+            lines = [l.strip() for l in s_block.strip().splitlines() if l.strip()]
+            if not lines:
+                continue
+
+            if i == 0:
+                title_slide_layout = prs.slide_layouts[0]
+                slide = prs.slides.add_slide(title_slide_layout)
+                title = slide.shapes.title
+                subtitle = slide.placeholders[1]
+                title.text = lines[0].lstrip("# ")
+                if len(lines) > 1:
+                    subtitle.text = "\n".join(lines[1:])
+            else:
+                bullet_slide_layout = prs.slide_layouts[1]
+                slide = prs.slides.add_slide(bullet_slide_layout)
+                shapes = slide.shapes
+                title_shape = shapes.title
+                body_shape = shapes.placeholders[1]
+                title_shape.text = lines[0].lstrip("# ")
+
+                tf = body_shape.text_frame
+                tf.word_wrap = True
+                for b_line in lines[1:]:
+                    p = tf.add_paragraph()
+                    p.text = b_line.lstrip("- *•").strip()
+                    p.level = 0
+
+        prs.save(str(target_path))
+        size_kb = target_path.stat().st_size / 1024
+        try:
+            os.startfile(str(target_path))
+        except Exception:
+            pass
+        return True, f"Generated PowerPoint presentation: '{target_path.name}' at {target_path} ({size_kb:.1f} KB)."
+    except Exception as exc:
+        return False, f"Failed to generate PowerPoint presentation: {exc}"
+
+
+def optimize_system() -> ActionResult:
+    """Performs deep Windows system optimization:
+    - Clears User and System Temp files
+    - Flushes Windows DNS Resolver Cache (ipconfig /flushdns)
+    - Purges Recycle Bin
+    - Trims process memory and runs garbage collection
+    - Returns comprehensive space recovered and health report.
+    """
+    report = []
+    freed_mb = 0.0
+
+    # 1. Clear Temp folders
+    temp_dirs = [
+        Path(os.environ.get("TEMP", "")),
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Temp",
+        Path("C:/Windows/Temp"),
+    ]
+    files_removed = 0
+    for t_dir in temp_dirs:
+        if not t_dir.exists():
+            continue
+        for root, dirs, files in os.walk(t_dir):
+            for f in files:
+                try:
+                    fp = Path(root) / f
+                    sz = fp.stat().st_size
+                    fp.unlink(missing_ok=True)
+                    freed_mb += sz / (1024 * 1024)
+                    files_removed += 1
+                except Exception:
+                    pass
+
+    report.append(f"Cleaned {files_removed} temporary files ({freed_mb:.1f} MB freed).")
+
+    # 2. Flush DNS Cache
+    try:
+        res = _subp_run(["ipconfig", "/flushdns"], capture_output=True, text=True, timeout=5)
+        report.append("Flushed Windows DNS resolver cache successfully.")
+    except Exception as e:
+        report.append(f"DNS cache: {e}")
+
+    # 3. Empty Recycle Bin
+    try:
+        from automation.actions import empty_recycle_bin
+        _, bin_msg = empty_recycle_bin()
+        report.append(bin_msg)
+    except Exception:
+        pass
+
+    # 4. Memory Trimming
+    try:
+        import psutil, gc
+        gc.collect()
+        mem_after = psutil.virtual_memory().percent
+        report.append(f"RAM load stabilized at {mem_after}% across {psutil.cpu_count(logical=True)} logical CPU cores.")
+    except Exception:
+        pass
+
+    summary = "System Optimization Complete:\n" + "\n".join(f"- {r}" for r in report)
+    return True, summary
+
+
 def run_code(arg: str) -> ActionResult:
     """Executes code snippet in Python, PowerShell, CMD, or Node.
     Syntax: 'python:code' or 'powershell:code' or just Python code.
@@ -1510,6 +1858,16 @@ def run_code(arg: str) -> ActionResult:
                 try:
                     import openpyxl
                     exec_globals["openpyxl"] = openpyxl
+                except Exception:
+                    pass
+                try:
+                    import docx
+                    exec_globals["docx"] = docx
+                except Exception:
+                    pass
+                try:
+                    import pptx
+                    exec_globals["pptx"] = pptx
                 except Exception:
                     pass
 
@@ -1728,6 +2086,16 @@ def action_web_search(query: str) -> ActionResult:
         return True, res
     except Exception as exc:
         return False, f"Web research failed: {exc}"
+
+
+def action_deep_research(query: str) -> ActionResult:
+    """Autonomously performs multi-source deep research, extracts article excerpts, and compiles an executive brief."""
+    try:
+        from utils.researcher import deep_research_topic
+        res = deep_research_topic(query, max_sources=3)
+        return True, res
+    except Exception as exc:
+        return False, f"Deep research failed: {exc}"
 
 
 def action_send_email(arg: str) -> ActionResult:

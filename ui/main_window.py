@@ -3355,14 +3355,15 @@ class MainWindow(QWidget):
         strip_layout.setSpacing(6)
 
         strip_pills = [
-            ("Web Research", lambda: self._send_quick_prompt("Search the web and provide an executive summary on: ")),
-            ("Interactive Chart", lambda: self._send_quick_prompt("Generate an interactive chart comparing ")),
-            ("Excel Sheet", lambda: self._send_quick_prompt("Create an Excel spreadsheet for ")),
-            ("Screen Vision", lambda: self._send_quick_prompt("Analyze my active screen and explain ")),
+            ("PDF Report", lambda: self._send_quick_prompt("Generate an executive styled PDF report on: ")),
+            ("Word Doc", lambda: self._send_quick_prompt("Create a professional Word document (.docx) covering: ")),
+            ("PowerPoint", lambda: self._send_quick_prompt("Create a PowerPoint presentation (.pptx) with slides on: ")),
+            ("Deep Research", lambda: self._send_quick_prompt("Conduct deep autonomous web research and synthesize a report on: ")),
+            ("PC Optimizer", lambda: self._send_quick_prompt("Optimize my system: clean temp, flush DNS, and trim memory.")),
+            ("Excel Sheet", lambda: self._send_quick_prompt("Create an Excel spreadsheet with formulas for: ")),
+            ("Interactive Chart", lambda: self._send_quick_prompt("Generate an interactive chart comparing: ")),
+            ("Screen Vision", lambda: self._send_quick_prompt("Analyze my active screen and explain: ")),
             ("Prompt Library", self._open_prompt_library),
-            ("Daily Briefing", lambda: self._send_quick_prompt("Provide my daily executive briefing and system health overview.")),
-            ("System Health", lambda: self._quick_action("system_stats")),
-            ("Clean Temp", lambda: self._quick_action("clear_temp")),
         ]
 
         for pill_label, pill_callback in strip_pills:

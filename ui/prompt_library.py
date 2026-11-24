@@ -32,6 +32,35 @@ _TEXT_MAIN = "#f8fafc"
 _TEXT_MUTED = "#94a3b8"
 
 _PROMPT_TEMPLATES = [
+    # ── Documents & Office Suites ──
+    {
+        "id": "pdf_report",
+        "category": "DOCS",
+        "title": "Executive PDF Intelligence Report",
+        "desc": "Generate a beautifully styled, publication-grade PDF report with headers, metrics, and tables.",
+        "prompt": "Generate a publication-grade executive PDF report saved directly to my Desktop covering: ",
+    },
+    {
+        "id": "word_document",
+        "category": "DOCS",
+        "title": "Microsoft Word (.docx) Documentation",
+        "desc": "Create a fully structured Word document with headers, bullet points, and styled tables.",
+        "prompt": "Create a professional Microsoft Word (.docx) document saved directly to my Desktop for: ",
+    },
+    {
+        "id": "pitch_presentation",
+        "category": "DOCS",
+        "title": "Widescreen PowerPoint (.pptx) Deck",
+        "desc": "Create a high-impact slide presentation deck with title slides, bullet items, and key takeaways.",
+        "prompt": "Create an executive PowerPoint presentation (.pptx) saved directly to my Desktop with structured slides for: ",
+    },
+    {
+        "id": "financial_excel",
+        "category": "DOCS",
+        "title": "Financial & Operational Excel Model",
+        "desc": "Generate a styled .xlsx spreadsheet with headers, calculations, formulas, and auto-fit columns.",
+        "prompt": "Create a styled production Excel spreadsheet (.xlsx) with formulas and summary rows for: ",
+    },
     # ── Code Engineering ──
     {
         "id": "fullstack_api",
@@ -67,29 +96,29 @@ _PROMPT_TEMPLATES = [
         "category": "SYSTEM",
         "title": "Windows Deep System Health Audit",
         "desc": "Inspect CPU, memory load, disk partitions, running processes, and event logs.",
-        "prompt": "[action:system_stats] Perform an exhaustive diagnostic audit of current machine hardware, memory pressure, active process tree, and disk health.",
+        "prompt": "Perform an exhaustive diagnostic audit of current machine hardware, memory pressure, active process tree, and disk health.",
     },
     {
-        "id": "disk_cleanup",
+        "id": "system_optimizer",
         "category": "SYSTEM",
-        "title": "Autonomous Disk Cache & Temp Cleanup",
-        "desc": "Safely clean Windows temp folders, browser caches, and orphaned crash dumps.",
-        "prompt": "[action:clear_temp] Safely purge Windows temporary cache directories, stale logs, and orphaned application artifacts to recover disk space.",
+        "title": "1-Click Windows Performance Optimizer",
+        "desc": "Flush DNS, clean temporary caches, empty Recycle Bin, and optimize memory working set.",
+        "prompt": "Run full system optimization: purge temporary files, flush DNS resolver cache, clean Recycle Bin, and report recovered space.",
     },
     {
         "id": "network_diagnostics",
         "category": "SYSTEM",
         "title": "Network Latency & Port Inspector",
         "desc": "Probe DNS resolution, socket connectivity, gateway ping, and listening local ports.",
-        "prompt": "[action:run_command:powershell -Command \"Test-NetConnection -ComputerName 8.8.8.8; Get-NetTCPConnection -State Listen | Select-Object -First 10 LocalAddress, LocalPort\"] Inspect network stack connectivity and active listening sockets.",
+        "prompt": "Inspect network stack connectivity, latency to primary gateways, and active listening sockets.",
     },
     # ── Autonomous Deep Research ──
     {
         "id": "deep_research",
         "category": "RESEARCH",
-        "title": "Multi-Source Autonomous Research",
-        "desc": "Query search engines, cross-validate sources, and synthesize findings into an executive brief.",
-        "prompt": "[action:web_search:] Conduct comprehensive autonomous web research and synthesize key technical findings, benchmarks, and executive takeaways on: ",
+        "title": "Multi-Source Autonomous Deep Research",
+        "desc": "Query search engines, fetch live article excerpts, and synthesize an intelligence dossier.",
+        "prompt": "Conduct comprehensive autonomous deep research across multi-source web intelligence, extracting article excerpts and key takeaways on: ",
     },
     {
         "id": "competitive_matrix",
@@ -205,7 +234,14 @@ class PromptLibraryDialog(QDialog):
         # Category Filter Pills
         cat_row = QHBoxLayout()
         cat_row.setSpacing(6)
-        categories = [("ALL", "All Templates"), ("CODE", "Code & Architecture"), ("SYSTEM", "System Admin"), ("RESEARCH", "Deep Research"), ("WORKFLOW", "Workflows")]
+        categories = [
+            ("ALL", "All Templates"),
+            ("DOCS", "Docs & Office"),
+            ("CODE", "Code & Architecture"),
+            ("SYSTEM", "System Admin"),
+            ("RESEARCH", "Deep Research"),
+            ("WORKFLOW", "Workflows"),
+        ]
         self.cat_buttons: list[QPushButton] = []
         for cat_id, cat_name in categories:
             b = QPushButton(cat_name)

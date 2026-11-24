@@ -178,6 +178,14 @@ def run_action(name: str, arg: str) -> tuple[bool, str]:
         return actions.read_document(arg)
     elif name in ("create_excel", "make_excel", "excel", "spreadsheet", "create_spreadsheet"):
         return actions.create_excel(arg)
+    elif name in ("create_pdf", "make_pdf", "pdf", "pdf_report"):
+        return actions.create_pdf(arg)
+    elif name in ("create_word", "create_docx", "word", "docx", "word_doc"):
+        return actions.create_word_document(arg)
+    elif name in ("create_presentation", "create_pptx", "presentation", "pptx", "slides", "make_slides"):
+        return actions.create_presentation(arg)
+    elif name in ("optimize_system", "pc_optimize", "clean_pc", "system_tuneup", "pc_optimizer"):
+        return actions.optimize_system()
     elif name in ("generate_chart", "create_chart", "plot_chart", "chart", "make_chart", "data_plot"):
         return actions.generate_chart(arg)
     elif name in ("run_code", "execute_code", "run_python", "run_script"):
@@ -211,7 +219,9 @@ def run_action(name: str, arg: str) -> tuple[bool, str]:
     elif name in ("list_tasks", "saved_tasks", "get_tasks"):
         return actions.list_agent_tasks()
     # 10. Autonomous Research, Email & Notifications
-    elif name in ("web_search", "research", "search_web", "deep_search"):
+    elif name in ("deep_research", "deep_search"):
+        return actions.action_deep_research(arg)
+    elif name in ("web_search", "research", "search_web"):
         return actions.action_web_search(arg)
     elif name in ("send_email", "email", "mail"):
         return actions.action_send_email(arg)

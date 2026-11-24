@@ -40,6 +40,8 @@ def run_build():
         "--hidden-import", "groq",
         "--hidden-import", "openpyxl",
         "--hidden-import", "et_xmlfile",
+        "--hidden-import", "docx",
+        "--hidden-import", "pptx",
         "--hidden-import", "dotenv",
         "--hidden-import", "loguru",
         "--hidden-import", "sqlite3",

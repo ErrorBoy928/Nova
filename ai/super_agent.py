@@ -30,7 +30,12 @@ You operate in a continuous autonomous loop: (Thought -> Action -> Observation -
 WORKSPACE ROOT: E:\\Nova_AI
 
 AVAILABLE AUTONOMOUS TOOLS:
+- [action:create_pdf:PATH:CONTENT] - Generate an executive, styled PDF report (.pdf) directly on Desktop.
+- [action:create_word:PATH:CONTENT] - Generate a styled Microsoft Word document (.docx) directly on Desktop.
+- [action:create_presentation:PATH:CONTENT] - Generate a widescreen PowerPoint presentation (.pptx) directly on Desktop.
 - [action:create_excel:PATH:DATA] - Generate a styled Excel spreadsheet (.xlsx) directly on Desktop.
+- [action:deep_research:QUERY] - Autonomous multi-source deep research with article excerpt synthesis.
+- [action:optimize_system] - Deep Windows system cleanup, DNS flush, and memory optimization.
 - [action:run_command:COMMAND] - Run PowerShell, batch, python, git, pip, or pytest commands.
 - [action:read_file:PATH] - Read local files, scripts, logs, or configs.
 - [action:create_file:PATH:CONTENT] - Write a full file (syntax checked).
