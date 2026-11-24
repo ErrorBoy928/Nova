@@ -71,8 +71,8 @@ class ApiKeyDialog(QDialog):
         self._verify_worker: _KeyVerificationWorker | None = None
         self._tested_working_model: str = ""
 
-        self.setWindowTitle("Groq API Key Setup - Nova AI")
-        self.setFixedWidth(520)
+        self.setWindowTitle("AI Provider & Key Setup - Nova AI")
+        self.setFixedWidth(540)
         self.setStyleSheet(f"""
             QDialog {{
                 background-color: {_BG_BLACK};
@@ -90,13 +90,13 @@ class ApiKeyDialog(QDialog):
         title_box = QVBoxLayout()
         title_box.setSpacing(4)
 
-        title_lbl = QLabel("Groq API Key (High-Speed Engine)")
+        title_lbl = QLabel("AI Provider & API Key Setup")
         title_lbl.setStyleSheet(f"font-size: 16px; font-weight: 800; color: {_TEXT_MAIN}; letter-spacing: 0.5px;")
         title_box.addWidget(title_lbl)
 
         sub_lbl = QLabel(
-            "Powered by Groq LPUs for extreme speed (300-500 tokens/sec).\n"
-            "Runs Qwen 3.8 and Llama 3.3 with near-instant streaming and zero lag."
+            "Supports Google Gemini (AIzaSy...), Anthropic Claude (sk-ant-...), OpenAI (sk-...), and Groq (gsk_...).\n"
+            "Nova automatically detects your provider, tests the connection, and activates the model instantly."
         )
         sub_lbl.setStyleSheet(f"font-size: 11px; color: {_TEXT_MUTED}; line-height: 1.4;")
         title_box.addWidget(sub_lbl)
@@ -115,7 +115,7 @@ class ApiKeyDialog(QDialog):
         input_layout.setContentsMargins(14, 12, 14, 12)
         input_layout.setSpacing(8)
 
-        lbl_input = QLabel("GROQ API KEY (starts with gsk_):")
+        lbl_input = QLabel("API KEY (Gemini, Claude, OpenAI, or Groq):")
         lbl_input.setStyleSheet(f"font-size: 10px; font-weight: 700; color: {_ACCENT_CYAN}; letter-spacing: 0.8px;")
         input_layout.addWidget(lbl_input)
 
@@ -125,7 +125,7 @@ class ApiKeyDialog(QDialog):
         self.key_edit = QLineEdit()
         current_key = get_api_key(self.config) or ""
         self.key_edit.setText(current_key)
-        self.key_edit.setPlaceholderText("Paste Groq API key here (gsk_...)")
+        self.key_edit.setPlaceholderText("Paste API key here (AIzaSy..., sk-ant-..., sk-..., gsk_...)")
         self.key_edit.setEchoMode(QLineEdit.Password)
         self.key_edit.setStyleSheet(f"""
             QLineEdit {{
@@ -200,9 +200,10 @@ class ApiKeyDialog(QDialog):
         actions_row = QHBoxLayout()
         actions_row.setSpacing(8)
 
-        get_key_btn = QPushButton("Get Free Groq Key")
+        get_key_btn = QPushButton("Get Free Key ↗")
         get_key_btn.setFixedHeight(32)
         get_key_btn.setCursor(Qt.PointingHandCursor)
+        get_key_btn.setToolTip("Get a free API key from Google AI Studio or Groq Console")
         get_key_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: transparent;
@@ -218,7 +219,7 @@ class ApiKeyDialog(QDialog):
                 background-color: #0c1c2e;
             }}
         """)
-        get_key_btn.clicked.connect(lambda: webbrowser.open("https://console.groq.com/keys"))
+        get_key_btn.clicked.connect(self._open_portal)
         actions_row.addWidget(get_key_btn)
 
         self.test_btn = QPushButton("Test Key")
@@ -305,14 +306,35 @@ class ApiKeyDialog(QDialog):
         self.status_lbl.setText(text)
         self.status_lbl.setStyleSheet(f"font-size: 11px; color: {color};")
 
+    def _open_portal(self):
+        k = self.key_edit.text().strip()
+        if k.startswith("AIzaSy"):
+            webbrowser.open("https://aistudio.google.com/app/apikey")
+        elif k.startswith("sk-ant-"):
+            webbrowser.open("https://console.anthropic.com/settings/keys")
+        elif k.startswith("sk-"):
+            webbrowser.open("https://platform.openai.com/api-keys")
+        elif k.startswith("gsk_"):
+            webbrowser.open("https://console.groq.com/keys")
+        else:
+            webbrowser.open("https://aistudio.google.com/app/apikey")
+
     def _test_key(self):
         key = self.key_edit.text().strip().strip('"\'')
         if not key:
-            self._set_status("Please enter a Groq API key first.", _ACCENT_RED)
+            self._set_status("Please enter an API key first.", _ACCENT_RED)
             return
 
         self.test_btn.setEnabled(False)
-        self._set_status("Connecting to Groq API...", _ACCENT_CYAN)
+        if key.startswith("AIzaSy"):
+            prov = "Google Gemini"
+        elif key.startswith("sk-ant-"):
+            prov = "Anthropic Claude"
+        elif key.startswith("sk-"):
+            prov = "OpenAI"
+        else:
+            prov = "Groq"
+        self._set_status(f"Connecting and verifying with {prov}...", _ACCENT_CYAN)
 
         self._verify_worker = _KeyVerificationWorker(key)
         self._verify_worker.finished_verify.connect(self._on_verification_result)

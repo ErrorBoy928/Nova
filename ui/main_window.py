@@ -1841,9 +1841,9 @@ class ChatHeroWidget(QFrame):
         self.greeting_lbl.setStyleSheet("color: #ffffff; font-size: 20px; font-weight: 800; letter-spacing: -0.2px;")
         hdr_box.addWidget(self.greeting_lbl)
 
-        sub_title = QLabel("Autonomous coding, deep research, and computer execution")
+        sub_title = QLabel("Powered by Gemini 2.0, ChatGPT 4o, Claude 3.7 & Autonomous SuperAgent")
         sub_title.setAlignment(Qt.AlignCenter)
-        sub_title.setStyleSheet("color: #94a3b8; font-size: 12px; font-weight: 500;")
+        sub_title.setStyleSheet("color: #94a3b8; font-size: 11px; font-weight: 500;")
         hdr_box.addWidget(sub_title)
         card_vbox.addLayout(hdr_box)
 
@@ -1854,10 +1854,10 @@ class ChatHeroWidget(QFrame):
         grid.setSpacing(10)
 
         actions_data = [
-            ("SuperAgent Loop", "Autonomous multi-step execution", "/super ", "AGENT", "#6366f1"),
-            ("Code Architect", "Write modular, typed Python software", "/code ", "CODE", "#06b6d4"),
-            ("Deep Research", "Multi-source web intelligence & citations", "/research ", "INTEL", "#a855f7"),
-            ("Windows SysAdmin", "Silent PowerShell diagnostics & controls", "/sysadmin ", "SYSTEM", "#10b981"),
+            ("Interactive Web App", "Live HTML5 app with Chromium live preview", "Create an interactive HTML5 web application with live preview controls and dashboard.", "ARTIFACT", "#818cf8"),
+            ("Data Analysis & Chart", "Build interactive Chart.js graphs & metrics", "Generate an interactive chart comparing annual business growth and revenue.", "CHART.JS", "#34d399"),
+            ("Financial Excel Sheet", "Generate styled spreadsheet with formulas", "Create a professionally styled Excel spreadsheet for monthly expense and budget tracking.", "EXCEL", "#38bdf8"),
+            ("Multimodal Screen Vision", "Inspect active desktop, OCR, and guidance", "Analyze my active screen, explain what is open, and guide me on next actions.", "VISION", "#f59e0b"),
         ]
 
         for idx, (title, subtitle, prompt, badge, color) in enumerate(actions_data):
@@ -3248,29 +3248,33 @@ class MainWindow(QWidget):
         """
 
         # Right Action Buttons
+        self.api_btn = QPushButton("API Keys")
+        self.api_btn.setToolTip("Configure Gemini, OpenAI, Claude, or Groq Keys")
+        self.api_btn.setCursor(Qt.PointingHandCursor)
+        self.api_btn.setFixedHeight(28)
+        self.api_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0b1f1c;
+                color: #34d399;
+                border: 1px solid #065f46;
+                border-radius: 6px;
+                padding: 0 12px;
+                font-size: 11px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background-color: #064e3b;
+                border-color: #10b981;
+                color: #ffffff;
+            }
+        """)
+        self.api_btn.clicked.connect(self._open_api_key_dialog)
+        top_bar.addWidget(self.api_btn)
+
+        # Retain references for compatibility
         self.skills_btn = QPushButton("Skills")
-        self.skills_btn.setToolTip("Antigravity Skills Manager (Ctrl+Shift+S)")
-        self.skills_btn.setCursor(Qt.PointingHandCursor)
-        self.skills_btn.setFixedHeight(28)
-        self.skills_btn.setStyleSheet(btn_style)
-        self.skills_btn.clicked.connect(self._open_skills_manager)
-        top_bar.addWidget(self.skills_btn)
-
         self.git_btn = QPushButton("Git")
-        self.git_btn.setToolTip("Git Workspace Manager (Ctrl+G)")
-        self.git_btn.setCursor(Qt.PointingHandCursor)
-        self.git_btn.setFixedHeight(28)
-        self.git_btn.setStyleSheet(btn_style)
-        self.git_btn.clicked.connect(self._open_git_manager)
-        top_bar.addWidget(self.git_btn)
-
         self.terminal_btn = QPushButton("Terminal")
-        self.terminal_btn.setToolTip("Quick PowerShell Terminal (Ctrl+T)")
-        self.terminal_btn.setCursor(Qt.PointingHandCursor)
-        self.terminal_btn.setFixedHeight(28)
-        self.terminal_btn.setStyleSheet(btn_style)
-        self.terminal_btn.clicked.connect(self._open_terminal_runner)
-        top_bar.addWidget(self.terminal_btn)
 
         # Unified Tools Dropdown Menu
         self.tools_menu_btn = QPushButton("Tools ▾")
@@ -3351,10 +3355,11 @@ class MainWindow(QWidget):
         strip_layout.setSpacing(6)
 
         strip_pills = [
-            ("Prompts Library", self._open_prompt_library),
-            ("Deep Research", lambda: self._send_quick_prompt("[action:web_search:] ")),
-            ("Run Code", lambda: self._send_quick_prompt("[action:run_code:python:] ")),
-            ("Screen Vision", lambda: self._send_quick_prompt("Analyze active screen and ")),
+            ("Web Research", lambda: self._send_quick_prompt("Search the web and provide an executive summary on: ")),
+            ("Interactive Chart", lambda: self._send_quick_prompt("Generate an interactive chart comparing ")),
+            ("Excel Sheet", lambda: self._send_quick_prompt("Create an Excel spreadsheet for ")),
+            ("Screen Vision", lambda: self._send_quick_prompt("Analyze my active screen and explain ")),
+            ("Prompt Library", self._open_prompt_library),
             ("Daily Briefing", lambda: self._send_quick_prompt("Provide my daily executive briefing and system health overview.")),
             ("System Health", lambda: self._quick_action("system_stats")),
             ("Clean Temp", lambda: self._quick_action("clear_temp")),
@@ -3386,24 +3391,28 @@ class MainWindow(QWidget):
         strip_layout.addStretch()
         chat_vbox.addWidget(action_strip)
 
-        # Input Card
+        # Input Card (Modern floating composer)
         input_card = QFrame()
+        input_card.setObjectName("composer_card")
         input_card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {_BG_PANEL};
-                border: 1px solid {_BORDER};
-                border-radius: 10px;
+            QFrame#composer_card {{
+                background-color: #0d0d14;
+                border: 1px solid #1f2030;
+                border-radius: 12px;
+            }}
+            QFrame#composer_card:hover {{
+                border-color: #2e3148;
             }}
         """)
         card_layout = QVBoxLayout(input_card)
-        card_layout.setContentsMargins(8, 8, 8, 8)
-        card_layout.setSpacing(4)
+        card_layout.setContentsMargins(10, 8, 10, 8)
+        card_layout.setSpacing(6)
 
         # Text input field
         self.input_edit = QTextEdit()
-        self.input_edit.setPlaceholderText("Ask Nova, /help for commands, Ctrl+K for palette... (Enter to send, Shift+Enter for newline)")
-        self.input_edit.setMaximumHeight(85)
-        self.input_edit.setMinimumHeight(40)
+        self.input_edit.setPlaceholderText("Message Nova AI... (Enter to send, Shift+Enter for new line)")
+        self.input_edit.setMaximumHeight(95)
+        self.input_edit.setMinimumHeight(44)
         self.input_edit.setStyleSheet(f"""
             QTextEdit {{
                 background: transparent;
@@ -3411,6 +3420,7 @@ class MainWindow(QWidget):
                 color: {_TEXT_MAIN};
                 font-size: 13px;
                 padding: 4px 6px;
+                line-height: 1.4;
             }}
         """)
         self.input_edit.installEventFilter(self)
@@ -3469,22 +3479,23 @@ class MainWindow(QWidget):
         controls_row.addStretch()
 
         # Send Button
-        self.send_btn = QPushButton("Send")
+        self.send_btn = QPushButton("Send ↑")
         self.send_btn.setFixedHeight(28)
         self.send_btn.setCursor(Qt.PointingHandCursor)
-        self.send_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {_ACCENT_BLUE};
-                color: white;
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4f46e5, stop:1 #0284c7);
+                color: #ffffff;
                 border: none;
                 border-radius: 6px;
                 font-weight: 700;
                 padding: 0 16px;
                 font-size: 11px;
-            }}
-            QPushButton:hover {{
-                background-color: #1d4ed8;
-            }}
+                letter-spacing: 0.3px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4338ca, stop:1 #0369a1);
+            }
         """)
         self.send_btn.clicked.connect(self._send_message)
         controls_row.addWidget(self.send_btn)
@@ -3622,7 +3633,15 @@ class MainWindow(QWidget):
             self.hero_widget.setVisible(True)
 
     def _open_api_key_dialog(self):
-        self._switch_nav(4)
+        try:
+            from ui.api_key_dialog import ApiKeyDialog
+            dlg = ApiKeyDialog(self.config, self)
+            if dlg.exec():
+                self.show_toast(f"Active Provider: {self.config.llm.provider.upper()}", "SUCCESS")
+                if hasattr(self, "status_pill"):
+                    self.status_pill.setText("READY")
+        except Exception:
+            self._switch_nav(4)
 
     def _open_settings_dialog(self):
         self._switch_nav(4)
@@ -3774,6 +3793,17 @@ class MainWindow(QWidget):
 
         self._tools_menu.addSeparator()
 
+        act_terminal = self._tools_menu.addAction("PowerShell Terminal (Ctrl+T)")
+        act_terminal.triggered.connect(self._open_terminal_runner)
+
+        act_git = self._tools_menu.addAction("Git Workspace Manager (Ctrl+G)")
+        act_git.triggered.connect(self._open_git_manager)
+
+        act_skills = self._tools_menu.addAction("Antigravity Skills (Ctrl+Shift+S)")
+        act_skills.triggered.connect(self._open_skills_manager)
+
+        self._tools_menu.addSeparator()
+
         act_prompts = self._tools_menu.addAction("Prompt Library (Ctrl+P)")
         act_prompts.triggered.connect(self._open_prompt_library)
 
@@ -3784,6 +3814,9 @@ class MainWindow(QWidget):
         act_export.triggered.connect(self._export_conversation)
 
         self._tools_menu.addSeparator()
+
+        act_api = self._tools_menu.addAction("API Keys Setup (Gemini / OpenAI / Claude / Groq)")
+        act_api.triggered.connect(self._open_api_key_dialog)
 
         act_clear = self._tools_menu.addAction("Clear Active Chat")
         act_clear.triggered.connect(self._clear_conversation)
