@@ -1086,6 +1086,15 @@ class CodeBlockWidget(QFrame):
         save_btn.clicked.connect(self._on_save_clicked)
         h_layout.addWidget(save_btn)
 
+        # 1-Click Desktop Export Button
+        self.desktop_btn = QPushButton("Desktop")
+        self.desktop_btn.setToolTip("1-Click Instant Save to Desktop")
+        self.desktop_btn.setFixedHeight(22)
+        self.desktop_btn.setCursor(Qt.PointingHandCursor)
+        self.desktop_btn.setStyleSheet(save_btn.styleSheet())
+        self.desktop_btn.clicked.connect(self._on_desktop_export_clicked)
+        h_layout.addWidget(self.desktop_btn)
+
         # Copy button
         self.copy_btn = QPushButton("Copy")
         self.copy_btn.setFixedHeight(22)
@@ -1200,6 +1209,60 @@ class CodeBlockWidget(QFrame):
                 self.console_frame.setVisible(True)
                 self.console_out.setText(f"[ERROR] Save error: {e}")
                 self.console_out.setStyleSheet("color: #ef4444; font-size: 11px; font-family: Consolas, monospace;")
+
+    def _on_desktop_export_clicked(self):
+        ext_map = {
+            "python": "py", "py": "py", "javascript": "js", "js": "js",
+            "typescript": "ts", "ts": "ts", "html": "html", "css": "css",
+            "powershell": "ps1", "ps1": "ps1", "bash": "sh", "sh": "sh",
+            "sql": "sql", "json": "json", "c": "c", "cpp": "cpp", "c++": "cpp",
+            "csharp": "cs", "cs": "cs", "markdown": "md", "md": "md"
+        }
+        ext = ext_map.get(self.lang, "txt")
+        dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        desktop_dir = Path.home() / "Desktop"
+        target_path = desktop_dir / f"nova_{self.lang}_{dt_str}.{ext}"
+        try:
+            target_path.write_text(self.code, encoding="utf-8")
+            self.console_frame.setVisible(True)
+            self.console_out.setText(f"[OK] 1-Click Exported to Desktop: {target_path.name}")
+            self.console_out.setStyleSheet("color: #10b981; font-size: 11px; font-family: Consolas, monospace;")
+            self.desktop_btn.setText("✓ Desktop")
+            self.desktop_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #064e3b;
+                    color: #a7f3d0;
+                    border: 1px solid #10b981;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: 700;
+                    padding: 0 8px;
+                }
+            """)
+            QTimer.singleShot(1800, self._reset_desktop_btn)
+        except Exception as e:
+            self.console_frame.setVisible(True)
+            self.console_out.setText(f"[ERROR] Desktop export error: {e}")
+            self.console_out.setStyleSheet("color: #ef4444; font-size: 11px; font-family: Consolas, monospace;")
+
+    def _reset_desktop_btn(self):
+        self.desktop_btn.setText("Desktop")
+        self.desktop_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #15151f;
+                color: {_TEXT_MUTED};
+                border: 1px solid {_BORDER};
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 600;
+                padding: 0 8px;
+            }}
+            QPushButton:hover {{
+                color: #ffffff;
+                border-color: {_BORDER_LIGHT};
+                background-color: #1e1e2c;
+            }}
+        """)
 
     def _on_run_clicked(self):
         self.run_btn.setEnabled(False)
@@ -2007,6 +2070,88 @@ class _SystemPulseWidget(QFrame):
         """)
 
 
+_THEME_PALETTES = {
+    "indigo": {
+        "name": "Obsidian Indigo",
+        "primary": "#4f46e5",
+        "primary_hover": "#4338ca",
+        "accent": "#38bdf8",
+        "accent_glow": "#6366f1",
+        "badge_bg": "#1e1b4b",
+        "badge_border": "#4338ca",
+        "badge_text": "#a5b4fc",
+    },
+    "emerald": {
+        "name": "Emerald Matrix",
+        "primary": "#059669",
+        "primary_hover": "#047857",
+        "accent": "#10b981",
+        "accent_glow": "#34d399",
+        "badge_bg": "#062e24",
+        "badge_border": "#059669",
+        "badge_text": "#6ee7b7",
+    },
+    "cyan": {
+        "name": "Cyber Cyan",
+        "primary": "#0891b2",
+        "primary_hover": "#0e7490",
+        "accent": "#06b6d4",
+        "accent_glow": "#22d3ee",
+        "badge_bg": "#082f49",
+        "badge_border": "#0284c7",
+        "badge_text": "#7dd3fc",
+    },
+    "purple": {
+        "name": "Royal Amethyst",
+        "primary": "#7c3aed",
+        "primary_hover": "#6d28d9",
+        "accent": "#a855f7",
+        "accent_glow": "#c084fc",
+        "badge_bg": "#2e1065",
+        "badge_border": "#7c3aed",
+        "badge_text": "#d8b4fe",
+    },
+    "crimson": {
+        "name": "Rose Crimson",
+        "primary": "#e11d48",
+        "primary_hover": "#be123c",
+        "accent": "#f43f5e",
+        "accent_glow": "#fb7185",
+        "badge_bg": "#4c0519",
+        "badge_border": "#e11d48",
+        "badge_text": "#fda4af",
+    },
+}
+
+
+class _PromptRefineWorker(QThread):
+    refined = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, llm_manager, raw_prompt: str):
+        super().__init__()
+        self.llm_manager = llm_manager
+        self.raw_prompt = raw_prompt
+
+    def run(self):
+        try:
+            from ai.llm_manager import ChatMessage, clean_repetitive_patterns
+            system_prompt = (
+                "You are an elite AI prompt engineer. Rewrite the user's raw prompt draft into a world-class, "
+                "well-structured prompt with clear context, core objectives, constraints, and expected output format. "
+                "Output ONLY the enhanced prompt directly. Do not include introductory remarks, meta-commentary, or code blocks."
+            )
+            messages = [ChatMessage(role="user", content=f"Refine this prompt draft:\n\n{self.raw_prompt}")]
+            res = self.llm_manager.chat(messages, system_prompt=system_prompt)
+            res = clean_repetitive_patterns(res).strip()
+            if res:
+                self.refined.emit(res)
+            else:
+                self.failed.emit("Empty result")
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
 class _SlashCommandsMenuWidget(QFrame):
     """Sleek obsidian popup suggesting available slash commands when user types '/' in input."""
     command_selected = Signal(str)
@@ -2016,6 +2161,8 @@ class _SlashCommandsMenuWidget(QFrame):
         ("/accounts", "Discover connected online web accounts & platforms", "ACCOUNTS", "#a855f7"),
         ("/clean", "1-Click PC cleanup, temp cache flush & RAM trim", "OPTIMIZE", "#10b981"),
         ("/excel", "Create formatted Excel spreadsheet with formulas", "EXCEL", "#34d399"),
+        ("/refine", "Refine & structure current draft into an expert prompt", "PROMPT", "#38bdf8"),
+        ("/theme", "Toggle obsidian UI accent theme (Indigo, Emerald, Cyan, Purple)", "THEME", "#ec4899"),
         ("/rename", "Rename current active conversation session", "SESSION", "#f59e0b"),
         ("/sys", "View live CPU, RAM, and hardware telemetry diagnostics", "HARDWARE", "#60a5fa"),
         ("/super", "Launch autonomous multi-step SuperAgent task", "AUTONOMOUS", "#ec4899"),
@@ -2334,8 +2481,14 @@ class _MessageBubble(QWidget):
 
     def set_meta(self, time_str: str, latency_sec: float = 0.0, model_name: str = ""):
         parts = [time_str]
+        words = len((self.content or "").split())
+        if words > 0:
+            parts.append(f"{words} words")
+            read_sec = max(1, round(words / 4.0))
+            if read_sec >= 3:
+                parts.append(f"~{read_sec}s read")
         if latency_sec > 0:
-            parts.append(f"{latency_sec:.1f}s")
+            parts.append(f"{latency_sec:.1f}s gen")
         if model_name:
             short_model = model_name.split("/")[-1]
             parts.append(short_model)
@@ -3551,10 +3704,7 @@ class MainWindow(QWidget):
             if urls:
                 file_path = Path(urls[0].toLocalFile())
                 if file_path.exists():
-                    self._attached_path = file_path
-                    self.attachment_preview.setText(f"[Attached: {file_path.name}]")
-                    self.attachment_preview.setVisible(True)
-                    self.show_toast(f"Attached: {file_path.name}", "SUCCESS")
+                    self._process_attached_file(file_path)
                     event.acceptProposedAction()
                     return
         super().dropEvent(event)
@@ -3694,6 +3844,27 @@ class MainWindow(QWidget):
         sess_hdr = QLabel("RECENT CONVERSATIONS")
         sess_hdr.setStyleSheet("color: #475569; font-size: 9px; font-weight: 800; letter-spacing: 0.8px; margin-top: 4px;")
         sidebar_layout.addWidget(sess_hdr)
+
+        # Instant Search / Filter bar for conversation sessions
+        self.session_search = QLineEdit()
+        self.session_search.setPlaceholderText("Filter chats...")
+        self.session_search.setFixedHeight(25)
+        self.session_search.setStyleSheet("""
+            QLineEdit {
+                background-color: #0b0b14;
+                color: #e2e8f0;
+                border: 1px solid #1a1a2b;
+                border-radius: 5px;
+                padding: 2px 8px;
+                font-size: 11px;
+            }
+            QLineEdit:focus {
+                border-color: #4338ca;
+                background-color: #10101f;
+            }
+        """)
+        self.session_search.textChanged.connect(self._filter_sessions)
+        sidebar_layout.addWidget(self.session_search)
 
         self.session_list = QListWidget()
         self.session_list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -3985,6 +4156,16 @@ class MainWindow(QWidget):
         self.tools_menu_btn.clicked.connect(self._show_tools_dropdown_menu)
         top_bar.addWidget(self.tools_menu_btn)
 
+        # Export Dropdown Menu
+        self.export_menu_btn = QPushButton("Export ▾")
+        self.export_menu_btn.setToolTip("Export conversation to Markdown, HTML, or Clipboard")
+        self.export_menu_btn.setCursor(Qt.PointingHandCursor)
+        self.export_menu_btn.setFixedHeight(28)
+        self.export_menu_btn.setStyleSheet(btn_style)
+        self._setup_export_dropdown_menu()
+        self.export_menu_btn.clicked.connect(self._show_export_dropdown_menu)
+        top_bar.addWidget(self.export_menu_btn)
+
         main_vbox.addLayout(top_bar)
 
         # Stacked Pages
@@ -4212,6 +4393,30 @@ class MainWindow(QWidget):
         """)
         self.send_btn.clicked.connect(self._send_message)
         controls_row.addWidget(self.send_btn)
+
+        # Prompt Refiner / Enhancer button
+        self.refine_btn = QPushButton("✨ Refine")
+        self.refine_btn.setToolTip("Enhance and polish prompt draft into an expert prompt (Shift+Alt+E)")
+        self.refine_btn.setFixedHeight(28)
+        self.refine_btn.setCursor(Qt.PointingHandCursor)
+        self.refine_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1e1b4b;
+                color: #c7d2fe;
+                border: 1px solid #4338ca;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 700;
+                padding: 0 10px;
+            }
+            QPushButton:hover {
+                background-color: #312e81;
+                border-color: #6366f1;
+                color: #ffffff;
+            }
+        """)
+        self.refine_btn.clicked.connect(self._refine_current_prompt)
+        controls_row.addWidget(self.refine_btn)
 
         card_layout.addLayout(controls_row)
 
@@ -4548,6 +4753,199 @@ class MainWindow(QWidget):
             pos = self.tools_menu_btn.mapToGlobal(self.tools_menu_btn.rect().bottomLeft())
             self._tools_menu.exec(pos)
 
+    def _setup_export_dropdown_menu(self):
+        """Dedicated quick-export dropdown menu (Markdown, HTML, Clipboard)."""
+        self._export_menu = QMenu(self)
+        self._export_menu.setStyleSheet("""
+            QMenu {
+                background-color: #0b0b14;
+                color: #e2e8f0;
+                border: 1px solid #222238;
+                border-radius: 8px;
+                padding: 6px;
+                font-size: 11px;
+            }
+            QMenu::item {
+                padding: 7px 20px 7px 10px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #4f46e5;
+                color: #ffffff;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #1e1e2f;
+                margin: 4px 6px;
+            }
+        """)
+        act_md = self._export_menu.addAction("Export as Markdown (.md)")
+        act_md.triggered.connect(self._export_markdown)
+
+        act_html = self._export_menu.addAction("Export as Interactive HTML (.html)")
+        act_html.triggered.connect(self._export_html)
+
+        self._export_menu.addSeparator()
+
+        act_clip = self._export_menu.addAction("Copy Full Chat to Clipboard")
+        act_clip.triggered.connect(self._copy_full_chat_to_clipboard)
+
+    def _show_export_dropdown_menu(self):
+        if hasattr(self, "_export_menu") and hasattr(self, "export_menu_btn"):
+            pos = self.export_menu_btn.mapToGlobal(self.export_menu_btn.rect().bottomLeft())
+            self._export_menu.exec(pos)
+
+    def _export_markdown(self):
+        recent = db.get_recent_history(limit=250, session_id=self._active_session_id)
+        if not recent:
+            self.show_toast("No messages to export", "WARNING")
+            return
+        lines = [
+            f"# Nova AI Conversation Transcript",
+            f"- Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"- Session ID: `{self._active_session_id}`",
+            f"- Model Engine: `{self.config.llm.model}`\n",
+            "---",
+            ""
+        ]
+        for msg in recent:
+            role = "User" if msg["role"] == "user" else "Nova AI"
+            lines.append(f"### {role}\n\n{msg['content']}\n\n---\n")
+        out_text = "\n".join(lines)
+
+        dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Conversation Markdown", f"Nova_Chat_{dt_str}.md", "Markdown (*.md);;All Files (*.*)"
+        )
+        if file_path:
+            try:
+                Path(file_path).write_text(out_text, encoding="utf-8")
+                self.show_toast(f"Exported to {Path(file_path).name}", "SUCCESS")
+            except Exception as e:
+                self.show_toast(f"Export error: {e}", "ERROR")
+
+    def _export_html(self):
+        recent = db.get_recent_history(limit=250, session_id=self._active_session_id)
+        if not recent:
+            self.show_toast("No messages to export", "WARNING")
+            return
+        dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Interactive HTML", f"Nova_Chat_{dt_str}.html", "Interactive HTML (*.html);;All Files (*.*)"
+        )
+        if file_path:
+            try:
+                html_content = _generate_chat_html(recent, self.config.llm.model)
+                Path(file_path).write_text(html_content, encoding="utf-8")
+                self.show_toast(f"Exported to {Path(file_path).name}", "SUCCESS")
+            except Exception as e:
+                self.show_toast(f"Export error: {e}", "ERROR")
+
+    def _copy_full_chat_to_clipboard(self):
+        recent = db.get_recent_history(limit=250, session_id=self._active_session_id)
+        if not recent:
+            self.show_toast("No messages to copy", "WARNING")
+            return
+        lines = [f"# Nova AI Conversation Transcript ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"]
+        for msg in recent:
+            role = "User" if msg["role"] == "user" else "Nova AI"
+            lines.append(f"[{role}]:\n{msg['content']}\n")
+        clipboard_text = "\n".join(lines)
+        QApplication.clipboard().setText(clipboard_text, QClipboard.Clipboard)
+        self.show_toast("Entire chat copied to clipboard!", "SUCCESS")
+
+    def _refine_current_prompt(self):
+        raw = self.input_edit.toPlainText().strip()
+        if not raw:
+            self.show_toast("Type a prompt draft first to refine it", "INFO")
+            return
+        if hasattr(self, "_refine_worker") and self._refine_worker and self._refine_worker.isRunning():
+            return
+        self.refine_btn.setEnabled(False)
+        self.refine_btn.setText("✨ Refining...")
+        self.show_toast("Refining prompt draft with AI...", "SYSTEM")
+
+        self._refine_worker = _PromptRefineWorker(self.llm_manager, raw)
+        def on_refined(refined_text: str):
+            self.refine_btn.setEnabled(True)
+            self.refine_btn.setText("✨ Refine")
+            self.input_edit.setPlainText(refined_text)
+            from PySide6.QtGui import QTextCursor
+            c = self.input_edit.textCursor()
+            c.movePosition(QTextCursor.End)
+            self.input_edit.setTextCursor(c)
+            self.input_edit.setFocus()
+            self.show_toast("Prompt refined and structured!", "SUCCESS")
+
+        def on_failed(err_msg: str):
+            self.refine_btn.setEnabled(True)
+            self.refine_btn.setText("✨ Refine")
+            structured = (
+                f"{raw}\n\n"
+                "Requirements & Guidelines:\n"
+                "1. Provide a comprehensive, production-grade implementation with industry best practices.\n"
+                "2. Include step-by-step reasoning, handle edge cases, and ensure clean error handling.\n"
+                "3. Deliver concise, actionable outputs with full code snippets."
+            )
+            self.input_edit.setPlainText(structured)
+            self.show_toast("Prompt structured with standard template", "INFO")
+
+        self._refine_worker.refined.connect(on_refined)
+        self._refine_worker.failed.connect(on_failed)
+        self._refine_worker.start()
+
+    def _apply_accent_theme(self, theme_key: str):
+        theme = _THEME_PALETTES.get(theme_key.lower()) or _THEME_PALETTES["indigo"]
+        self._current_theme_key = theme_key.lower()
+        if hasattr(self, "send_btn") and self.send_btn.text() != "Stop":
+            self.send_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {theme['primary']}, stop:1 {theme['accent']});
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: 700;
+                    padding: 0 16px;
+                    font-size: 11px;
+                }}
+                QPushButton:hover {{
+                    background: {theme['primary_hover']};
+                }}
+            """)
+        if hasattr(self, "sidebar_new_btn"):
+            self.sidebar_new_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {theme['badge_bg']};
+                    color: {theme['badge_text']};
+                    border: 1px solid {theme['badge_border']};
+                    border-radius: 7px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    padding-left: 12px;
+                    text-align: left;
+                }}
+                QPushButton:hover {{
+                    background-color: {theme['primary']};
+                    color: #ffffff;
+                }}
+            """)
+        if hasattr(self, "refine_btn"):
+            self.refine_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {theme['badge_bg']};
+                    color: {theme['badge_text']};
+                    border: 1px solid {theme['badge_border']};
+                    border-radius: 6px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    padding: 0 10px;
+                }}
+                QPushButton:hover {{
+                    background-color: {theme['primary']};
+                    color: #ffffff;
+                }}
+            """)
+
     def _refresh_session_combo(self, selected_id: str | None = None):
         target_id = selected_id or getattr(self, "_active_session_id", "default")
         sessions = db.get_all_sessions()
@@ -4582,6 +4980,19 @@ class MainWindow(QWidget):
             if self.session_list.count() > 0:
                 self.session_list.setCurrentRow(active_row)
             self.session_list.blockSignals(False)
+            if hasattr(self, "session_search") and self.session_search.text().strip():
+                self._filter_sessions(self.session_search.text())
+
+    def _filter_sessions(self, query: str):
+        query = (query or "").strip().lower()
+        if not hasattr(self, "session_list"):
+            return
+        for i in range(self.session_list.count()):
+            item = self.session_list.item(i)
+            w = self.session_list.itemWidget(item)
+            if w and hasattr(w, "title"):
+                match = (query in w.title.lower()) if query else True
+                item.setHidden(not match)
 
     def _delete_session(self, session_id: str):
         reply = QMessageBox.question(
@@ -4930,17 +5341,7 @@ class MainWindow(QWidget):
         self.attachment_preview.setText(f"[Attached: {self._attached_path.name}]")
         self.attachment_preview.setVisible(True)
 
-    def _on_attach_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Attach Code, Logs, Data, or Image Context",
-            "",
-            "All Supported (*.py *.js *.ts *.html *.css *.json *.txt *.md *.log *.csv *.png *.jpg *.jpeg *.webp);;Code & Text (*.py *.js *.ts *.html *.css *.json *.txt *.md *.log *.csv *.bat *.ps1 *.sql);;Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*.*)"
-        )
-        if not file_path:
-            return
-
-        p = Path(file_path)
+    def _process_attached_file(self, p: Path):
         img_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
         if p.suffix.lower() in img_exts:
             self._attached_path = p
@@ -4964,6 +5365,17 @@ class MainWindow(QWidget):
                 self.show_toast(f"Injected {p.name} into prompt context", "CODE")
             except Exception as e:
                 self.show_toast(f"Unable to read file: {e}", "WARNING")
+
+    def _on_attach_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Attach Code, Logs, Data, or Image Context",
+            "",
+            "All Supported (*.py *.js *.ts *.html *.css *.json *.txt *.md *.log *.csv *.png *.jpg *.jpeg *.webp);;Code & Text (*.py *.js *.ts *.html *.css *.json *.txt *.md *.log *.csv *.bat *.ps1 *.sql);;Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*.*)"
+        )
+        if not file_path:
+            return
+        self._process_attached_file(Path(file_path))
 
     def _quick_action(self, action_name: str, arg: str = ""):
         self.input_edit.setText(f"Execute {action_name} {arg}".strip())
@@ -5101,6 +5513,25 @@ class MainWindow(QWidget):
 
             if cmd == "/palette":
                 self._open_command_palette()
+                return
+
+            if cmd == "/theme":
+                keys = list(_THEME_PALETTES.keys())
+                if arg and arg.lower() in _THEME_PALETTES:
+                    tgt = arg.lower()
+                else:
+                    cur = getattr(self, "_current_theme_key", "indigo")
+                    next_idx = (keys.index(cur) + 1) % len(keys) if cur in keys else 0
+                    tgt = keys[next_idx]
+                self._apply_accent_theme(tgt)
+                theme_name = _THEME_PALETTES[tgt]["name"]
+                self.show_toast(f"Theme switched to: {theme_name}", "THEME")
+                return
+
+            if cmd == "/refine":
+                if arg:
+                    self.input_edit.setPlainText(arg)
+                self._refine_current_prompt()
                 return
 
             if cmd in ("/sys", "/status", "/diagnostics"):
@@ -5646,6 +6077,10 @@ class MainWindow(QWidget):
                 elif event.key() == Qt.Key_Escape:
                     self.slash_menu.setVisible(False)
                     return True
+
+            if event.key() == Qt.Key_E and (event.modifiers() & Qt.AltModifier):
+                self._refine_current_prompt()
+                return True
 
             if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not (event.modifiers() & Qt.ShiftModifier):
                 self._send_message()

@@ -378,6 +378,14 @@ class SettingsView(QWidget):
         self.opacity_slider.setRange(40, 100)
         form_dt.addRow("Window Opacity:", self.opacity_slider)
 
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("Obsidian Indigo (Default)", "indigo")
+        self.theme_combo.addItem("Emerald Matrix (Cyber Green)", "emerald")
+        self.theme_combo.addItem("Cyber Cyan (Electric Blue)", "cyan")
+        self.theme_combo.addItem("Royal Amethyst (Deep Purple)", "purple")
+        self.theme_combo.addItem("Rose Crimson (Ruby Red)", "crimson")
+        form_dt.addRow("UI Accent Theme:", self.theme_combo)
+
         hotkey_lbl = QLabel("Global Hotkey: <b>Ctrl+Shift+Space</b> (Summon/Dismiss Nova anywhere)")
         hotkey_lbl.setStyleSheet("color: #38bdf8; font-size: 11px;")
         form_dt.addRow("", hotkey_lbl)
@@ -471,6 +479,12 @@ class SettingsView(QWidget):
         self.chk_vision.setChecked(ui.screen_observing)
         self.chk_always_top.setChecked(ui.always_on_top)
         self.opacity_slider.setValue(int(ui.window_opacity * 100))
+        if hasattr(self, "theme_combo"):
+            cur_th = getattr(self.parent(), "_current_theme_key", "indigo") if self.parent() else "indigo"
+            for i in range(self.theme_combo.count()):
+                if self.theme_combo.itemData(i) == cur_th:
+                    self.theme_combo.setCurrentIndex(i)
+                    break
 
     def _toggle_key_visibility(self):
         if self.key_input.echoMode() == QLineEdit.Password:
@@ -577,6 +591,11 @@ class SettingsView(QWidget):
 
         # Persist and synchronize to .env & runtime memory
         save_config(self.config)
+
+        # Apply Accent Theme if changed
+        if hasattr(self, "theme_combo") and self.parent() and hasattr(self.parent(), "_apply_accent_theme"):
+            selected_th = self.theme_combo.currentData()
+            self.parent()._apply_accent_theme(selected_th)
 
         # Notify parent window of updated settings if available
         parent = self.parent()
