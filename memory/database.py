@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     id         TEXT PRIMARY KEY,
     title      TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    is_pinned  INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS custom_commands (
@@ -110,6 +111,10 @@ def init_db() -> None:
         except Exception:
             pass
         try:
+            conn.execute("ALTER TABLE chat_sessions ADD COLUMN is_pinned INTEGER DEFAULT 0")
+        except Exception:
+            pass
+        try:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_conv_sess ON conversation_history(session_id)")
         except Exception:
             pass
@@ -164,16 +169,17 @@ def get_all_sessions() -> list[dict[str, str]]:
     """Returns all chat sessions ordered by most recently updated."""
     with _connection() as conn:
         rows = conn.execute(
-            "SELECT id, title, created_at, updated_at FROM chat_sessions ORDER BY updated_at DESC"
+            "SELECT id, title, created_at, updated_at, COALESCE(is_pinned, 0) as is_pinned "
+            "FROM chat_sessions ORDER BY is_pinned DESC, updated_at DESC"
         ).fetchall()
         sessions = [dict(r) for r in rows]
         if not sessions:
             now = datetime.now().isoformat(timespec="seconds")
             conn.execute(
-                "INSERT INTO chat_sessions (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                ("default", "Main Workspace", now, now)
+                "INSERT INTO chat_sessions (id, title, created_at, updated_at, is_pinned) VALUES (?, ?, ?, ?, ?)",
+                ("default", "Main Workspace", now, now, 0)
             )
-            return [{"id": "default", "title": "Main Workspace", "created_at": now, "updated_at": now}]
+            return [{"id": "default", "title": "Main Workspace", "created_at": now, "updated_at": now, "is_pinned": 0}]
         return sessions
 
 
@@ -181,10 +187,24 @@ def get_session(session_id: str) -> dict[str, str] | None:
     """Fetches metadata for a single session."""
     with _connection() as conn:
         row = conn.execute(
-            "SELECT id, title, created_at, updated_at FROM chat_sessions WHERE id = ?",
+            "SELECT id, title, created_at, updated_at, COALESCE(is_pinned, 0) as is_pinned "
+            "FROM chat_sessions WHERE id = ?",
             (session_id,)
         ).fetchone()
         return dict(row) if row else None
+
+
+def toggle_pin_session(session_id: str) -> bool:
+    """Toggles pinning for a session. Pinned sessions anchor to the top of the sidebar."""
+    with _connection() as conn:
+        row = conn.execute("SELECT COALESCE(is_pinned, 0) as is_pinned FROM chat_sessions WHERE id = ?", (session_id,)).fetchone()
+        if not row:
+            return False
+        cur = row["is_pinned"]
+        new_val = 0 if cur else 1
+        now = datetime.now().isoformat(timespec="seconds")
+        conn.execute("UPDATE chat_sessions SET is_pinned = ?, updated_at = ? WHERE id = ?", (new_val, now, session_id))
+        return bool(new_val)
 
 
 def rename_session(session_id: str, new_title: str) -> None:

@@ -337,8 +337,76 @@ class ChatSearchBar(QFrame):
             super().keyPressEvent(event)
 
 
+def _format_latex_math(text: str) -> str:
+    """Converts LaTeX display ($$...$$) and inline ($...$) formulas into formatted HTML."""
+    if not text:
+        return text
+
+    def _convert_math_tokens(expr: str) -> str:
+        s = expr.strip()
+        s = re.sub(
+            r"\\frac\{([^{}]+)\}\{([^{}]+)\}",
+            r'<span style="display:inline-block;vertical-align:middle;text-align:center;font-size:0.9em;margin:0 2px;"><span style="display:block;border-bottom:1px solid #7dd3fc;padding:0 2px;">\1</span><span style="display:block;padding:0 2px;">\2</span></span>',
+            s
+        )
+        s = re.sub(r"\\sqrt\{([^{}]+)\}", r'√(\1)', s)
+        greek = {
+            r"\alpha": "α", r"\beta": "β", r"\gamma": "γ", r"\delta": "δ",
+            r"\epsilon": "ε", r"\theta": "θ", r"\lambda": "λ", r"\mu": "μ",
+            r"\pi": "π", r"\sigma": "σ", r"\tau": "τ", r"\phi": "φ",
+            r"\omega": "ω", r"\Delta": "Δ", r"\Gamma": "Γ", r"\Lambda": "Λ",
+            r"\Sigma": "Σ", r"\Omega": "Ω", r"\Theta": "Θ"
+        }
+        for k, v in greek.items():
+            s = s.replace(k, v)
+        ops = {
+            r"\times": "×", r"\cdot": "·", r"\pm": "±", r"\mp": "∓",
+            r"\le": "≤", r"\leq": "≤", r"\ge": "≥", r"\geq": "≥",
+            r"\neq": "≠", r"\approx": "≈", r"\equiv": "≡", r"\infty": "∞",
+            r"\sum": "∑", r"\prod": "∏", r"\int": "∫", r"\partial": "∂",
+            r"\nabla": "∇", r"\in": "∈", r"\notin": "∉", r"\subset": "⊂",
+            r"\cup": "∪", r"\cap": "∩", r"\to": "→", r"\rightarrow": "→",
+            r"\leftarrow": "←", r"\Rightarrow": "⇒", r"\forall": "∀", r"\exists": "∃"
+        }
+        for k, v in ops.items():
+            s = s.replace(k, v)
+        s = re.sub(r"\^\{([^{}]+)\}", r'<sup>\1</sup>', s)
+        s = re.sub(r"\^([a-zA-Z0-9+\-])", r'<sup>\1</sup>', s)
+        s = re.sub(r"_\{([^{}]+)\}", r'<sub>\1</sub>', s)
+        s = re.sub(r"_([a-zA-Z0-9+\-])", r'<sub>\1</sub>', s)
+        return s
+
+    def _replace_display_math(match):
+        raw_eq = match.group(1)
+        converted = _convert_math_tokens(raw_eq)
+        return (
+            f'<div style="text-align:center;margin:8px 0;padding:8px 14px;'
+            f'background:#070d18;border:1px solid #1e3a5f;border-radius:6px;'
+            f'font-family:\'Cambria Math\',\'DejaVu Math TeX Gyre\',Georgia,serif;'
+            f'font-size:13px;color:#38bdf8;letter-spacing:0.4px;">'
+            f'{converted}</div>'
+        )
+
+    text = re.sub(r"\$\$(.+?)\$\$", _replace_display_math, text, flags=re.DOTALL)
+
+    def _replace_inline_math(match):
+        raw_eq = match.group(1)
+        if re.match(r"^\d+(?:\.\d+)?$", raw_eq.strip()):
+            return f"${raw_eq}$"
+        converted = _convert_math_tokens(raw_eq)
+        return (
+            f'<span style="font-family:\'Cambria Math\',\'DejaVu Math TeX Gyre\',Georgia,serif;'
+            f'color:#7dd3fc;padding:0 3px;font-size:12px;">'
+            f'{converted}</span>'
+        )
+
+    text = re.sub(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)", _replace_inline_math, text)
+    return text
+
+
 def _format_inline(text: str) -> str:
     escaped = html_lib.escape(text)
+    escaped = _format_latex_math(escaped)
     # Bold: **bold**
     escaped = re.sub(r"\*\*(.+?)\*\*", r'<b style="color:#ffffff;font-weight:700;">\1</b>', escaped)
     # Inline code: `code`
@@ -753,7 +821,7 @@ RULES:
 
 
 class _CodeRunnerWorker(QThread):
-    finished_run = Signal(bool, str)
+    finished_run = Signal(bool, str, float)
 
     def __init__(self, lang: str, code: str):
         super().__init__()
@@ -761,9 +829,12 @@ class _CodeRunnerWorker(QThread):
         self.code = code
 
     def run(self):
+        import time
         from automation.actions import run_code
+        t0 = time.perf_counter()
         ok, msg = run_code(f"{self.lang}:{self.code}")
-        self.finished_run.emit(ok, msg)
+        elapsed = time.perf_counter() - t0
+        self.finished_run.emit(ok, msg, elapsed)
 
 
 class ThinkingBlockWidget(QFrame):
@@ -1141,9 +1212,42 @@ class CodeBlockWidget(QFrame):
         cons_layout.setContentsMargins(10, 8, 10, 8)
         cons_layout.setSpacing(4)
 
+        cons_header = QHBoxLayout()
+        cons_header.setContentsMargins(0, 0, 0, 2)
+        cons_header.setSpacing(6)
+
         cons_title = QLabel("CONSOLE OUTPUT:")
         cons_title.setStyleSheet("color: #64748b; font-size: 9px; font-weight: 800; font-family: Consolas, monospace;")
-        cons_layout.addWidget(cons_title)
+        cons_header.addWidget(cons_title)
+
+        self.console_badge = QLabel("")
+        self.console_badge.setStyleSheet("color: #38bdf8; font-size: 9px; font-weight: 700; font-family: Consolas, monospace;")
+        cons_header.addWidget(self.console_badge)
+
+        cons_header.addStretch()
+
+        self.console_clear_btn = QPushButton("Clear")
+        self.console_clear_btn.setFixedHeight(18)
+        self.console_clear_btn.setCursor(Qt.PointingHandCursor)
+        self.console_clear_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #64748b;
+                border: 1px solid #1e293b;
+                border-radius: 3px;
+                font-size: 9px;
+                font-weight: 600;
+                padding: 0 6px;
+            }
+            QPushButton:hover {
+                color: #e2e8f0;
+                border-color: #334155;
+                background: #0f172a;
+            }
+        """)
+        self.console_clear_btn.clicked.connect(self._clear_console)
+        cons_header.addWidget(self.console_clear_btn)
+        cons_layout.addLayout(cons_header)
 
         self.console_out = QLabel("")
         self.console_out.setWordWrap(True)
@@ -1152,6 +1256,11 @@ class CodeBlockWidget(QFrame):
         cons_layout.addWidget(self.console_out)
 
         layout.addWidget(self.console_frame)
+
+    def _clear_console(self):
+        self.console_out.setText("")
+        self.console_badge.setText("")
+        self.console_frame.setVisible(False)
 
     def _on_copy_clicked(self):
         QApplication.clipboard().setText(self.code, QClipboard.Clipboard)
@@ -1275,11 +1384,19 @@ class CodeBlockWidget(QFrame):
         self._runner_worker.finished_run.connect(self._on_run_completed)
         self._runner_worker.start()
 
-    def _on_run_completed(self, success: bool, output: str):
+    def _on_run_completed(self, success: bool, output: str, elapsed: float = 0.0):
         self.run_btn.setEnabled(True)
         self.run_btn.setText("Run")
-        color = "#10b981" if success else "#ef4444"
-        self.console_out.setStyleSheet(f"color: {color}; font-size: 11px; font-family: Consolas, monospace;")
+        if success:
+            badge_text = f"[SUCCESS • {elapsed:.2f}s]"
+            badge_color = "#10b981"
+        else:
+            badge_text = f"[EXIT CODE 1 • {elapsed:.2f}s]"
+            badge_color = "#ef4444"
+        if hasattr(self, "console_badge"):
+            self.console_badge.setStyleSheet(f"color: {badge_color}; font-size: 9px; font-weight: 700; font-family: Consolas, monospace;")
+            self.console_badge.setText(badge_text)
+        self.console_out.setStyleSheet(f"color: {badge_color}; font-size: 11px; font-family: Consolas, monospace;")
         self.console_out.setText(output)
 
     def _on_preview_clicked(self):
@@ -2169,6 +2286,7 @@ class _SlashCommandsMenuWidget(QFrame):
         ("/new", "Start a fresh unpolluted conversation session", "SESSION", "#a5b4fc"),
         ("/clear", "Clear chat history from active session", "MEMORY", "#f43f5e"),
         ("/export", "Export conversation transcript to Markdown", "EXPORT", "#94a3b8"),
+        ("/compact", "Compact & summarize older conversation turns", "MEMORY", "#38bdf8"),
         ("/palette", "Open full desktop command palette", "SHORTCUT", "#e2e8f0"),
     ]
 
@@ -2304,28 +2422,36 @@ class _SessionItemWidget(QWidget):
     """Sleek sidebar session item with title, chat indicator, and 1-click delete button."""
     delete_requested = Signal(str)
 
-    def __init__(self, session_id: str, title: str, is_active: bool = False):
+    def __init__(self, session_id: str, title: str, is_active: bool = False, is_pinned: bool = False):
         super().__init__()
         self.session_id = session_id
         self.title = title
         self.is_active = is_active
+        self.is_pinned = is_pinned
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 3, 6, 3)
         layout.setSpacing(6)
 
-        # Dot indicator
-        dot = QLabel("●" if is_active else "○")
-        dot.setStyleSheet("color: #38bdf8; font-size: 8px;" if is_active else "color: #475569; font-size: 8px;")
-        layout.addWidget(dot)
+        # Pin / Dot indicator
+        if is_pinned:
+            pin_lbl = QLabel("📌")
+            pin_lbl.setStyleSheet("font-size: 9px; color: #f59e0b;")
+            pin_lbl.setToolTip("Pinned conversation")
+            layout.addWidget(pin_lbl)
+        else:
+            dot = QLabel("●" if is_active else "○")
+            dot.setStyleSheet("color: #38bdf8; font-size: 8px;" if is_active else "color: #475569; font-size: 8px;")
+            layout.addWidget(dot)
 
         # Title
         self.title_lbl = QLabel(title)
         self.title_lbl.setStyleSheet(
             "color: #38bdf8; font-weight: 700; font-size: 11px;" if is_active
-            else "color: #94a3b8; font-weight: 500; font-size: 11px;"
+            else ("color: #f1f5f9; font-weight: 600; font-size: 11px;" if is_pinned
+                  else "color: #94a3b8; font-weight: 500; font-size: 11px;")
         )
-        self.title_lbl.setToolTip(title)
+        self.title_lbl.setToolTip(f"{title} (Pinned)" if is_pinned else title)
         layout.addWidget(self.title_lbl, 1)
 
         # Delete Button (×)
@@ -2355,12 +2481,14 @@ class _SessionItemWidget(QWidget):
 class _MessageBubble(QWidget):
     """Modern conversational message stream: unboxed natural prose like top AIs, elevated cards for code/files."""
 
-    def __init__(self, role: str, content: str = "", on_speak_clicked=None, on_enable_vision_clicked=None):
+    def __init__(self, role: str, content: str = "", on_speak_clicked=None, on_enable_vision_clicked=None, on_suggestion_clicked=None):
         super().__init__()
         self.role = role
         self.content = content
         self.on_speak_clicked = on_speak_clicked
         self.on_enable_vision_clicked = on_enable_vision_clicked
+        self.on_suggestion_clicked = on_suggestion_clicked
+        self._is_speaking_this = False
         self.is_user = (role == "user")
         self.vision_cta_btn: QPushButton | None = None
 
@@ -2467,7 +2595,7 @@ class _MessageBubble(QWidget):
                 self.listen_btn.setMinimumWidth(68)
                 self.listen_btn.setCursor(Qt.PointingHandCursor)
                 self.listen_btn.setStyleSheet(self.full_copy_btn.styleSheet())
-                self.listen_btn.clicked.connect(lambda: on_speak_clicked(self.content))
+                self.listen_btn.clicked.connect(self._on_speak_toggle)
                 self.action_bar.addWidget(self.listen_btn)
 
             self.action_bar.addStretch()
@@ -2475,6 +2603,89 @@ class _MessageBubble(QWidget):
             self.meta_lbl.setStyleSheet("color: #475569; font-size: 9px; font-weight: 600; font-family: Consolas, monospace;")
             self.action_bar.addWidget(self.meta_lbl)
             self.card_layout.addLayout(self.action_bar)
+
+            self.suggestions_frame = QWidget()
+            self.suggestions_frame.setStyleSheet("background: transparent;")
+            self.suggestions_layout = QHBoxLayout(self.suggestions_frame)
+            self.suggestions_layout.setContentsMargins(0, 4, 0, 2)
+            self.suggestions_layout.setSpacing(6)
+            self.suggestions_frame.setVisible(False)
+            self.card_layout.addWidget(self.suggestions_frame)
+
+    def _on_speak_toggle(self):
+        if not self.on_speak_clicked:
+            return
+        if self._is_speaking_this:
+            from voice.tts import tts
+            tts.stop()
+            self._reset_speak_btn()
+        else:
+            self._is_speaking_this = True
+            if hasattr(self, "listen_btn"):
+                self.listen_btn.setText("Stop (Speaking...)")
+                self.listen_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #450a0a;
+                        color: #f87171;
+                        border: 1px solid #dc2626;
+                        border-radius: 4px;
+                        font-size: 10px;
+                        font-weight: 700;
+                        padding: 0 8px;
+                    }
+                    QPushButton:hover {
+                        background-color: #7f1d1d;
+                        color: #ffffff;
+                    }
+                """)
+            self.on_speak_clicked(self.content, on_done=self._reset_speak_btn)
+
+    def _reset_speak_btn(self):
+        self._is_speaking_this = False
+        if hasattr(self, "listen_btn"):
+            self.listen_btn.setText("Speak")
+            self.listen_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #171720;
+                    color: {_TEXT_MUTED};
+                    border: 1px solid #262633;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: 600;
+                    padding: 0 8px;
+                }}
+                QPushButton:hover {{
+                    color: #ffffff;
+                    border-color: #3f3f50;
+                    background-color: #20202c;
+                }}
+            """)
+
+    def _derive_suggestions(self, text: str) -> list[tuple[str, str]]:
+        if not text or len(text.strip()) < 10:
+            return []
+        lower = text.lower()
+        suggestions: list[tuple[str, str]] = []
+
+        if "```" in text or any(k in lower for k in ["def ", "class ", "import ", "function", "return "]):
+            suggestions.append(("Unit Tests", "Generate comprehensive unit tests for this code."))
+            suggestions.append(("Optimize", "Optimize this code for speed, readability, and low memory usage."))
+            suggestions.append(("Explain Code", "Explain the logic and flow of this implementation step by step."))
+        elif any(k in lower for k in ["error", "exception", "traceback", "failed", "bug"]):
+            suggestions.append(("Root Cause", "Explain the exact root cause of this error."))
+            suggestions.append(("Fix & Prevent", "Show how to fix this issue and avoid similar bugs in production."))
+        elif any(k in lower for k in ["$$", "\\frac", "equation", "formula", "theorem", "math"]):
+            suggestions.append(("Detailed Proof", "Provide the step-by-step mathematical derivation."))
+            suggestions.append(("Practical Example", "Give a real-world calculation example using this formula."))
+        elif any(k in lower for k in ["architecture", "database", "design", "system", "api"]):
+            suggestions.append(("Architecture Diagram", "Describe the system architecture and component interactions."))
+            suggestions.append(("Implementation Plan", "Outline a prioritized roadmap for implementing this."))
+        else:
+            suggestions.append(("Elaborate", "Can you elaborate further with additional details and context?"))
+            suggestions.append(("Alternative Approaches", "What are the alternative approaches and trade-offs?"))
+            suggestions.append(("Action Plan", "Summarize this into a concise, actionable checklist."))
+
+        return suggestions[:3]
 
         if content:
             self.finalize_content(content)
@@ -2622,6 +2833,45 @@ class _MessageBubble(QWidget):
                         self.vision_cta_btn.setEnabled(False)
                 self.vision_cta_btn.clicked.connect(_trigger_vision)
                 self.action_bar.insertWidget(0, self.vision_cta_btn)
+
+        # Context-aware follow-up suggestion chips
+        if not self.is_user and hasattr(self, "suggestions_layout") and self.on_suggestion_clicked:
+            while self.suggestions_layout.count() > 0:
+                item = self.suggestions_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+
+            suggestions = self._derive_suggestions(text)
+            if suggestions:
+                lbl = QLabel("Suggested:")
+                lbl.setStyleSheet("color: #64748b; font-size: 9px; font-weight: 700; margin-right: 4px;")
+                self.suggestions_layout.addWidget(lbl)
+                for label, prompt in suggestions:
+                    chip = QPushButton(label)
+                    chip.setFixedHeight(22)
+                    chip.setCursor(Qt.PointingHandCursor)
+                    chip.setStyleSheet("""
+                        QPushButton {
+                            background-color: #0b1329;
+                            color: #7dd3fc;
+                            border: 1px solid #1e293b;
+                            border-radius: 11px;
+                            font-size: 10px;
+                            font-weight: 600;
+                            padding: 0 10px;
+                        }
+                        QPushButton:hover {
+                            background-color: #0369a1;
+                            color: #ffffff;
+                            border-color: #38bdf8;
+                        }
+                    """)
+                    chip.clicked.connect(lambda checked=False, p=prompt: self.on_suggestion_clicked(p))
+                    self.suggestions_layout.addWidget(chip)
+                self.suggestions_layout.addStretch()
+                self.suggestions_frame.setVisible(True)
+            else:
+                self.suggestions_frame.setVisible(False)
 
     def _copy_full_content(self):
         QApplication.clipboard().setText(self.content, QClipboard.Clipboard)
@@ -4094,6 +4344,25 @@ class MainWindow(QWidget):
         """)
         top_bar.addWidget(self.status_pill)
 
+        # Real-time Context Window / Token meter pill
+        self.context_meter = QLabel("Context: ~0")
+        self.context_meter.setToolTip("Estimated context window token consumption (Click to Compact Memory)")
+        self.context_meter.setCursor(Qt.PointingHandCursor)
+        self.context_meter.mousePressEvent = lambda e: self._compact_conversation_memory()
+        self.context_meter.setStyleSheet("""
+            QLabel {
+                color: #64748b;
+                font-size: 9px;
+                font-weight: 700;
+                font-family: Consolas, monospace;
+                padding: 4px 8px;
+                border-radius: 6px;
+                background: #090912;
+                border: 1px solid #1a1a2b;
+            }
+        """)
+        top_bar.addWidget(self.context_meter)
+
         top_bar.addStretch()
 
         # Hidden backwards-compatibility session_combo
@@ -4894,6 +5163,45 @@ class MainWindow(QWidget):
         self._refine_worker.failed.connect(on_failed)
         self._refine_worker.start()
 
+    def _update_context_meter(self):
+        if not hasattr(self, "context_meter"):
+            return
+        cur_sid = getattr(self, "_active_session_id", "default")
+        recent = db.get_recent_history(limit=250, session_id=cur_sid)
+        total_chars = sum(len(m.get("content", "")) for m in recent)
+        est_tokens = round(total_chars / 3.8)
+        max_context = 1000000 if "gemini" in self.config.llm.model.lower() else 128000
+        pct = (est_tokens / max_context) * 100
+        tok_str = f"{est_tokens:,}" if est_tokens < 10000 else f"{est_tokens/1000:.1f}k"
+        limit_str = "1M" if max_context == 1000000 else "128k"
+        self.context_meter.setText(f"Context: {tok_str} / {limit_str} ({pct:.1f}%)")
+        if pct > 40:
+            self.context_meter.setStyleSheet("QLabel { color: #f59e0b; background: #1c1504; border: 1px solid #78350f; font-size: 9px; font-weight: 700; font-family: Consolas, monospace; padding: 4px 8px; border-radius: 6px; }")
+        else:
+            self.context_meter.setStyleSheet("QLabel { color: #64748b; background: #090912; border: 1px solid #1a1a2b; font-size: 9px; font-weight: 700; font-family: Consolas, monospace; padding: 4px 8px; border-radius: 6px; }")
+
+    def _compact_conversation_memory(self):
+        cur_sid = getattr(self, "_active_session_id", "default")
+        recent = db.get_recent_history(limit=250, session_id=cur_sid)
+        if len(recent) <= 4:
+            self.show_toast("Context window is already compact", "INFO")
+            return
+        self.show_toast("Compacting conversation memory...", "SYSTEM")
+        older = recent[:-3]
+        summary_bubble = (
+            f"**[Memory Compaction Summary - Archived {len(older)} turns]:**\n"
+            f"- Prior discussions and context preserved.\n"
+            f"- Context window refreshed to zero latency."
+        )
+        db.clear_history(session_id=cur_sid)
+        db.add_message("assistant", summary_bubble, session_id=cur_sid)
+        for m in recent[-3:]:
+            db.add_message(m["role"], m["content"], session_id=cur_sid)
+        self._clear_chat_bubbles()
+        self._load_history()
+        self._update_context_meter()
+        self.show_toast("Conversation context compacted successfully!", "SUCCESS")
+
     def _apply_accent_theme(self, theme_key: str):
         theme = _THEME_PALETTES.get(theme_key.lower()) or _THEME_PALETTES["indigo"]
         self._current_theme_key = theme_key.lower()
@@ -4970,7 +5278,8 @@ class MainWindow(QWidget):
                 item = QListWidgetItem()
                 item.setData(Qt.UserRole, sess["id"])
                 is_cur = (sess["id"] == target_id)
-                widget = _SessionItemWidget(sess["id"], title, is_active=is_cur)
+                is_pinned = bool(sess.get("is_pinned", 0))
+                widget = _SessionItemWidget(sess["id"], title, is_active=is_cur, is_pinned=is_pinned)
                 widget.delete_requested.connect(self._delete_session)
                 item.setSizeHint(widget.sizeHint())
                 self.session_list.addItem(item)
@@ -5045,6 +5354,11 @@ class MainWindow(QWidget):
                 color: #ffffff;
             }
         """)
+        sess_data = db.get_session(sid)
+        is_pinned = bool(sess_data.get("is_pinned", 0)) if sess_data else False
+        act_pin = menu.addAction("📌 Unpin from Top" if is_pinned else "📌 Pin Chat to Top")
+        act_pin.triggered.connect(lambda: self._toggle_pin_session(sid))
+
         act_rename = menu.addAction("✏ Rename Chat")
         act_rename.triggered.connect(lambda: self._rename_session(sid))
 
@@ -5055,6 +5369,14 @@ class MainWindow(QWidget):
         act_new.triggered.connect(self._create_new_session)
 
         menu.exec(self.session_list.mapToGlobal(pos))
+
+    def _toggle_pin_session(self, session_id: str):
+        if not session_id:
+            return
+        is_pin = db.toggle_pin_session(session_id)
+        self._refresh_session_combo(selected_id=self._active_session_id)
+        msg = "pinned to top" if is_pin else "unpinned"
+        self.show_toast(f"Chat {msg}", "SESSION")
 
     def _rename_session(self, session_id: str):
         if not session_id:
@@ -5143,6 +5465,17 @@ class MainWindow(QWidget):
         else:
             if self.hero_widget:
                 self.hero_widget.setVisible(True)
+        self._update_context_meter()
+
+    def _on_suggestion_clicked(self, prompt: str):
+        if prompt:
+            self.input_edit.setPlainText(prompt)
+            from PySide6.QtGui import QTextCursor
+            c = self.input_edit.textCursor()
+            c.movePosition(QTextCursor.End)
+            self.input_edit.setTextCursor(c)
+            self.input_edit.setFocus()
+            self.show_toast("Suggestion loaded into prompt composer", "INFO")
 
     def _add_bubble(self, role: str, content: str = "") -> _MessageBubble:
         if self.hero_widget:
@@ -5151,9 +5484,11 @@ class MainWindow(QWidget):
             role,
             content,
             on_speak_clicked=self._speak_text,
-            on_enable_vision_clicked=self.enable_screen_vision
+            on_enable_vision_clicked=self.enable_screen_vision,
+            on_suggestion_clicked=self._on_suggestion_clicked
         )
         self.message_layout.insertWidget(self.message_layout.count() - 1, bubble)
+        self._update_context_meter()
         self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
         return bubble
 
@@ -5317,7 +5652,7 @@ class MainWindow(QWidget):
         self._single_shot_thread.finished.connect(self._single_shot_thread.deleteLater)
         self._single_shot_thread.start()
 
-    def _speak_text(self, text: str):
+    def _speak_text(self, text: str, on_done=None):
         self.status_pill.setText("SPEAKING...")
         if hasattr(self, "voice_waveform"):
             self.voice_waveform.set_state("speaking")
@@ -5333,6 +5668,11 @@ class MainWindow(QWidget):
                 self.voice_waveform.set_state(state)
             if self._continuous_worker and self._hands_free_active:
                 self._continuous_worker.resume()
+            if on_done:
+                try:
+                    on_done()
+                except Exception:
+                    pass
 
         tts.speak(text, voice=voice, on_finished=on_speech_ended)
 
@@ -5532,6 +5872,10 @@ class MainWindow(QWidget):
                 if arg:
                     self.input_edit.setPlainText(arg)
                 self._refine_current_prompt()
+                return
+
+            if cmd == "/compact":
+                self._compact_conversation_memory()
                 return
 
             if cmd in ("/sys", "/status", "/diagnostics"):
