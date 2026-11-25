@@ -2283,9 +2283,15 @@ class _SlashCommandsMenuWidget(QFrame):
         ("/rename", "Rename current active conversation session", "SESSION", "#f59e0b"),
         ("/sys", "View live CPU, RAM, and hardware telemetry diagnostics", "HARDWARE", "#60a5fa"),
         ("/super", "Launch autonomous multi-step SuperAgent task", "AUTONOMOUS", "#ec4899"),
+        ("/prompts", "Open Prompt & Workflow Library (Ctrl+P)", "WORKFLOW", "#38bdf8"),
+        ("/model", "Switch LLM model engine or view active model", "ENGINE", "#a855f7"),
+        ("/term", "Launch quick embedded PowerShell console (Ctrl+T)", "TERMINAL", "#10b981"),
+        ("/git", "Open Git Workspace Manager (Ctrl+G)", "GIT", "#f59e0b"),
+        ("/artifacts", "Open Code Artifacts & Script Drawer (Ctrl+B)", "SCRIPTS", "#ec4899"),
+        ("/voice", "Toggle speech output audio on or off", "VOICE", "#10b981"),
         ("/new", "Start a fresh unpolluted conversation session", "SESSION", "#a5b4fc"),
         ("/clear", "Clear chat history from active session", "MEMORY", "#f43f5e"),
-        ("/export", "Export conversation transcript to Markdown", "EXPORT", "#94a3b8"),
+        ("/export", "Export conversation transcript (Markdown, HTML, JSON)", "EXPORT", "#94a3b8"),
         ("/compact", "Compact & summarize older conversation turns", "MEMORY", "#38bdf8"),
         ("/find", "Search all saved conversation history across sessions", "SEARCH", "#38bdf8"),
         ("/starred", "Display bookmarked & starred assistant answers", "BOOKMARK", "#f59e0b"),
@@ -2822,6 +2828,10 @@ class _MessageBubble(QWidget):
                 parts.append(f"~{read_sec}s read")
         if latency_sec > 0:
             parts.append(f"{latency_sec:.1f}s gen")
+            est_tokens = max(1, round(words * 1.33))
+            tok_per_sec = est_tokens / max(0.05, latency_sec)
+            parts.append(f"{tok_per_sec:.0f} tok/s")
+            parts.append(f"{est_tokens} tokens")
         if model_name:
             short_model = model_name.split("/")[-1]
             parts.append(short_model)
@@ -3948,12 +3958,22 @@ class MainWindow(QWidget):
         now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_name = f"Nova_Chat_{now_str}.html"
         file_path, selected_filter = QFileDialog.getSaveFileName(
-            self, "Export Conversation Log", default_name, "Interactive HTML Document (*.html);;Markdown Log (*.md);;Text File (*.txt)"
+            self, "Export Conversation Log", default_name, "Interactive HTML Document (*.html);;Markdown Log (*.md);;JSON Structured (*.json);;Text File (*.txt)"
         )
         if file_path:
             try:
                 p = Path(file_path)
-                if p.suffix.lower() == ".html" or "HTML" in selected_filter:
+                if p.suffix.lower() == ".json" or "JSON" in selected_filter:
+                    import json
+                    payload = {
+                        "session_id": getattr(self, "_active_session_id", "default"),
+                        "exported_at": datetime.now().isoformat(),
+                        "model": self.config.llm.model,
+                        "total_messages": len(recent),
+                        "messages": recent,
+                    }
+                    p.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                elif p.suffix.lower() == ".html" or "HTML" in selected_filter:
                     html_content = _generate_chat_html(recent, self.config.llm.model)
                     p.write_text(html_content, encoding="utf-8")
                 else:
@@ -4479,6 +4499,15 @@ class MainWindow(QWidget):
         """)
         top_bar.addWidget(self.status_pill)
 
+        # Voice Output Toggle Pill
+        self.voice_pill = QPushButton()
+        self.voice_pill.setFixedHeight(22)
+        self.voice_pill.setCursor(Qt.PointingHandCursor)
+        self.voice_pill.setToolTip("Toggle Speech Output Audio (Click to Mute / Unmute)")
+        self._refresh_voice_pill()
+        self.voice_pill.clicked.connect(self._toggle_voice_output)
+        top_bar.addWidget(self.voice_pill)
+
         # Real-time Context Window / Token meter pill
         self.context_meter = QLabel("Context: ~0")
         self.context_meter.setToolTip("Estimated context window token consumption (Click to Compact Memory)")
@@ -4825,6 +4854,30 @@ class MainWindow(QWidget):
         """)
         self.mic_btn.clicked.connect(self._on_single_shot_mic_clicked)
         controls_row.addWidget(self.mic_btn)
+
+        # Prompt & Workflow Library Button
+        self.prompt_btn = QPushButton("Prompts")
+        self.prompt_btn.setToolTip("Prompt & Workflow Library (Ctrl+P)")
+        self.prompt_btn.setFixedHeight(28)
+        self.prompt_btn.setCursor(Qt.PointingHandCursor)
+        self.prompt_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BG_CARD};
+                color: #94a3b8;
+                border: 1px solid {_BORDER};
+                border-radius: 6px;
+                padding: 0 10px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{
+                border-color: #38bdf8;
+                color: #ffffff;
+                background-color: #1e293b;
+            }}
+        """)
+        self.prompt_btn.clicked.connect(self._open_prompt_library)
+        controls_row.addWidget(self.prompt_btn)
 
         # Animated Live Voice Waveform Equalizer
         self.voice_waveform = VoiceWaveformWidget()
@@ -5435,6 +5488,63 @@ class MainWindow(QWidget):
             self.style_btn_concise.setStyleSheet(active_style if cur == "concise" else inactive_style)
             self.style_btn_balanced.setStyleSheet(active_style if cur == "balanced" else inactive_style)
             self.style_btn_deep.setStyleSheet(active_style if cur == "deep" else inactive_style)
+
+    def _refresh_voice_pill(self):
+        if not hasattr(self, "voice_pill"):
+            return
+        is_on = getattr(self.config.voice, "enabled", False)
+        if is_on:
+            self.voice_pill.setText("VOICE: ON")
+            self.voice_pill.setStyleSheet("""
+                QPushButton {
+                    color: #34d399;
+                    font-size: 9px;
+                    font-weight: 800;
+                    letter-spacing: 0.6px;
+                    padding: 2px 8px;
+                    border-radius: 9px;
+                    background: #061a12;
+                    border: 1px solid #065f46;
+                }
+                QPushButton:hover {
+                    background: #0d281e;
+                    border-color: #10b981;
+                }
+            """)
+        else:
+            self.voice_pill.setText("VOICE: MUTE")
+            self.voice_pill.setStyleSheet("""
+                QPushButton {
+                    color: #94a3b8;
+                    font-size: 9px;
+                    font-weight: 800;
+                    letter-spacing: 0.6px;
+                    padding: 2px 8px;
+                    border-radius: 9px;
+                    background: #11111a;
+                    border: 1px solid #2b2b3d;
+                }
+                QPushButton:hover {
+                    background: #1b1b26;
+                    border-color: #475569;
+                    color: #e2e8f0;
+                }
+            """)
+
+    def _toggle_voice_output(self):
+        new_val = not getattr(self.config.voice, "enabled", False)
+        self.config.voice.enabled = new_val
+        save_config(self.config)
+        self._refresh_voice_pill()
+        if not new_val:
+            try:
+                from voice.tts import tts
+                tts.stop()
+            except Exception:
+                pass
+            self.show_toast("Voice output muted", "VOICE")
+        else:
+            self.show_toast("Voice output enabled", "VOICE")
 
     def _set_response_style(self, style: str):
         self._response_style = style
@@ -6165,7 +6275,33 @@ class MainWindow(QWidget):
                 return
 
             if cmd == "/export":
-                self._export_conversation()
+                if arg.lower() in ("json", ".json"):
+                    self._export_json()
+                elif arg.lower() in ("html", ".html"):
+                    self._export_html()
+                elif arg.lower() in ("md", "markdown", ".md"):
+                    self._export_markdown()
+                else:
+                    self._export_conversation()
+                return
+
+            if cmd in ("/voice", "/mute", "/unmute"):
+                if cmd == "/mute":
+                    self.config.voice.enabled = False
+                elif cmd == "/unmute":
+                    self.config.voice.enabled = True
+                else:
+                    self.config.voice.enabled = not getattr(self.config.voice, "enabled", False)
+                save_config(self.config)
+                self._refresh_voice_pill()
+                if not self.config.voice.enabled:
+                    try:
+                        from voice.tts import tts
+                        tts.stop()
+                    except Exception:
+                        pass
+                state_str = "Enabled" if self.config.voice.enabled else "Muted"
+                self.show_toast(f"Voice output: {state_str}", "VOICE")
                 return
 
             if cmd == "/palette":
