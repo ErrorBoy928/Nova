@@ -27,12 +27,15 @@ from PySide6.QtGui import (
     QAction,
     QClipboard,
     QColor,
+    QFont,
     QIcon,
     QKeyEvent,
     QKeySequence,
     QPainter,
     QPixmap,
     QShortcut,
+    QSyntaxHighlighter,
+    QTextCharFormat,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -347,6 +350,75 @@ def _format_inline(text: str) -> str:
     return escaped
 
 
+def _is_table_separator(line: str) -> bool:
+    """Checks whether a markdown line is a table delimiter (e.g. |:---|:---:|---:|)."""
+    s = line.strip()
+    if not s or ("|" not in s and "-" not in s):
+        return False
+    parts = [p.strip() for p in s.strip("|").split("|")]
+    if not parts or not any(parts):
+        return False
+    return all(bool(re.match(r"^:?-{2,}:?$", p)) for p in parts if p)
+
+
+def _render_markdown_table(header_line: str, sep_line: str, body_lines: list[str]) -> str:
+    """Renders a parsed markdown table into a sleek Obsidian-dark HTML table with zebra striping."""
+    sep_parts = [p.strip() for p in sep_line.strip("|").split("|")]
+    alignments: list[str] = []
+    for p in sep_parts:
+        if not p:
+            continue
+        if p.startswith(":") and p.endswith(":"):
+            alignments.append("center")
+        elif p.endswith(":"):
+            alignments.append("right")
+        else:
+            alignments.append("left")
+
+    col_count = len(alignments)
+    if col_count == 0:
+        return ""
+
+    raw_headers = [p.strip() for p in header_line.strip("|").split("|")]
+    while len(raw_headers) < col_count:
+        raw_headers.append("")
+    raw_headers = raw_headers[:col_count]
+
+    th_cells: list[str] = []
+    for idx, h in enumerate(raw_headers):
+        align = alignments[idx] if idx < len(alignments) else "left"
+        th_cells.append(
+            f'<th style="padding:7px 12px;font-weight:700;color:#f8fafc;border-right:1px solid #262638;text-align:{align};letter-spacing:0.3px;">{_format_inline(h)}</th>'
+        )
+
+    tr_rows: list[str] = []
+    for r_idx, r_line in enumerate(body_lines):
+        raw_cells = [p.strip() for p in r_line.strip("|").split("|")]
+        while len(raw_cells) < col_count:
+            raw_cells.append("")
+        raw_cells = raw_cells[:col_count]
+
+        bg_color = "#0e0e18" if r_idx % 2 == 0 else "#090912"
+        td_cells: list[str] = []
+        for c_idx, cell in enumerate(raw_cells):
+            align = alignments[c_idx] if c_idx < len(alignments) else "left"
+            td_cells.append(
+                f'<td style="padding:6px 12px;border-right:1px solid #1a1a28;text-align:{align};color:#e2e8f0;">{_format_inline(cell)}</td>'
+            )
+        tr_rows.append(f'<tr style="background:{bg_color};border-bottom:1px solid #1a1a28;">{"".join(td_cells)}</tr>')
+
+    return (
+        '<div style="overflow-x:auto;margin:8px 0;border-radius:6px;border:1px solid #262638;">'
+        '<table style="width:100%;border-collapse:collapse;font-size:12px;background:#0d0d16;line-height:1.5;">'
+        '<thead>'
+        f'<tr style="background:#161626;border-bottom:2px solid #3b3b55;">{"".join(th_cells)}</tr>'
+        '</thead>'
+        f'<tbody>{"".join(tr_rows)}</tbody>'
+        '</table>'
+        '</div>'
+    )
+
+
 def _render_prose(text: str) -> str:
     """High-fidelity executive markdown parser for chat bubbles."""
     if not text or not text.strip():
@@ -357,8 +429,33 @@ def _render_prose(text: str) -> str:
     in_ul = False
     in_ol = False
 
-    for line in lines:
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         stripped = line.strip()
+
+        # Markdown Table Detection
+        if "|" in stripped and i + 1 < len(lines) and _is_table_separator(lines[i + 1]):
+            if in_ul:
+                html_lines.append("</ul>")
+                in_ul = False
+            if in_ol:
+                html_lines.append("</ol>")
+                in_ol = False
+
+            header_line = stripped
+            sep_line = lines[i + 1].strip()
+            i += 2
+            table_body: list[str] = []
+            while i < len(lines):
+                row = lines[i].strip()
+                if not row or "|" not in row:
+                    break
+                table_body.append(row)
+                i += 1
+
+            html_lines.append(_render_markdown_table(header_line, sep_line, table_body))
+            continue
 
         # Horizontal Rule
         if re.match(r"^(\-{3,}|\_{3,}|\*{3,})$", stripped):
@@ -369,6 +466,7 @@ def _render_prose(text: str) -> str:
                 html_lines.append("</ol>")
                 in_ol = False
             html_lines.append('<hr style="border:none;border-top:1px solid #22222f;margin:8px 0;">')
+            i += 1
             continue
 
         # Headers
@@ -392,6 +490,7 @@ def _render_prose(text: str) -> str:
             else:
                 h_text = _format_inline(h3_m.group(1))
                 html_lines.append(f'<div style="font-size:12px;font-weight:700;color:#e2e8f0;margin:6px 0 2px 0;">{h_text}</div>')
+            i += 1
             continue
 
         # Blockquote
@@ -405,6 +504,7 @@ def _render_prose(text: str) -> str:
                 in_ol = False
             q_text = _format_inline(bq_m.group(1))
             html_lines.append(f'<div style="border-left:3px solid #6366f1;background:#0c0c16;padding:6px 12px;margin:6px 0;border-radius:0 6px 6px 0;color:#cbd5e1;font-size:12px;line-height:1.5;">{q_text}</div>')
+            i += 1
             continue
 
         # Bullet List (- or * or •)
@@ -418,6 +518,7 @@ def _render_prose(text: str) -> str:
                 in_ul = True
             li_text = _format_inline(ul_m.group(1))
             html_lines.append(f'<li style="margin:3px 0;color:#e2e8f0;line-height:1.55;font-size:13px;">{li_text}</li>')
+            i += 1
             continue
 
         # Numbered List (1. 2. etc.)
@@ -431,6 +532,7 @@ def _render_prose(text: str) -> str:
                 in_ol = True
             li_text = _format_inline(ol_m.group(2))
             html_lines.append(f'<li style="margin:3px 0;color:#e2e8f0;line-height:1.55;font-size:13px;">{li_text}</li>')
+            i += 1
             continue
 
         # Normal paragraph line
@@ -446,6 +548,7 @@ def _render_prose(text: str) -> str:
         else:
             p_text = _format_inline(stripped)
             html_lines.append(f'<p style="margin:4px 0;line-height:1.6;color:#e2e8f0;font-size:13px;">{p_text}</p>')
+        i += 1
 
     if in_ul:
         html_lines.append("</ul>")
@@ -533,6 +636,17 @@ FILE & SPREADSHEET CREATION (CRITICAL DIRECT ACTION RULE):
   5. In your chat message, speak directly: confirm that the file has been created on their Desktop.
 - When the user asks to create or write scripts, HTML, text files, or programs on their computer:
   * Use [action:create_file:<filename>:<content>] or [action:save_code_file:<filename>:<content>] or [action:run_code:python:<python_code_that_creates_it>].
+
+EMAIL & WEB ACCOUNTS 2FA SHIELD (CRITICAL DIRECT ACTION RULE):
+- YOU HAVE FULL ACCESS TO CONNECTED EMAIL SERVICES, 2FA/OTP VERIFICATION CODES, AND WEB ACCOUNTS.
+- When the user asks for their login OTP, verification code, or 2FA (e.g. "Google ka OTP kya hai", "GitHub verification code do", "Steam login code check karo"):
+  * ALWAYS use [action:get_otp:<service>].
+  * Example: [action:get_otp:google] or [action:get_otp:github] or [action:get_otp:steam].
+  * If no service is specified, use [action:get_otp].
+- When the user asks what web accounts or online platforms are linked or registered to their email (e.g. "is email pe konse accounts hain", "scan connected accounts", "show my web services"):
+  * ALWAYS use [action:scan_web_accounts].
+- When the user asks to search emails, receipts, or security alerts for a specific service or account:
+  * ALWAYS use [action:search_account_emails:<service_or_query>].
 
 LANGUAGE BEHAVIOR & COHERENCE (CRITICAL):
 - You are fully fluent in English and natural Pakistani Urdu (اردو) and Roman Urdu.
@@ -623,6 +737,9 @@ Embed one or more [action:NAME:ARG] tags when needed:
 - [action:web_search:<query>] — Autonomously searches web and returns research findings
 - [action:send_email:<to>:<subject>:<body>] — Sends an email directly via configured email
 - [action:check_emails] — Checks and reads recent emails
+- [action:get_otp:<service>] — Extracts latest 4-8 digit OTP / 2FA login verification code from email (e.g. Google, GitHub, Steam, Discord, Netflix)
+- [action:scan_web_accounts] — Deep-scans user inbox to detect all connected online services, accounts, and platforms registered under this email
+- [action:search_account_emails:<service_or_query>] — Searches all emails, receipts, and security alerts for a specific service or account
 - [action:schedule_daily:<HH:MM>:<prompt>] — Schedules a daily recurring automated task
 - [action:schedule_once:<HH:MM>:<prompt>] — Schedules a one-off task for today
 - [action:notify:<title>:<message>] — Pushes notification to Desktop, WhatsApp, and Discord
@@ -703,6 +820,159 @@ class ThinkingBlockWidget(QFrame):
         )
 
 
+class _UniversalCodeHighlighter(QSyntaxHighlighter):
+    """
+    Universal syntax highlighter for multi-language code snippets.
+    Supports Python, JavaScript, TypeScript, HTML/CSS, SQL, Bash/PowerShell, JSON, C/C++, Java, Rust.
+    """
+
+    def __init__(self, parent_document, lang: str = "code"):
+        super().__init__(parent_document)
+        self.lang = (lang or "code").lower().strip()
+        self._rules: list[tuple[re.Pattern, QTextCharFormat]] = []
+        self._init_styles()
+        self._compile_rules()
+
+    def _init_styles(self):
+        # Keyword format: vibrant purple/indigo (#c084fc), bold
+        self.fmt_keyword = QTextCharFormat()
+        self.fmt_keyword.setForeground(QColor("#c084fc"))
+        self.fmt_keyword.setFontWeight(QFont.Weight.Bold)
+
+        # Builtin / Type format: sky blue (#38bdf8)
+        self.fmt_builtin = QTextCharFormat()
+        self.fmt_builtin.setForeground(QColor("#38bdf8"))
+
+        # Function / Method format: light blue (#60a5fa)
+        self.fmt_function = QTextCharFormat()
+        self.fmt_function.setForeground(QColor("#60a5fa"))
+        self.fmt_function.setFontWeight(QFont.Weight.DemiBold)
+
+        # String format: vibrant mint/emerald (#4ade80)
+        self.fmt_string = QTextCharFormat()
+        self.fmt_string.setForeground(QColor("#4ade80"))
+
+        # Number format: orange (#fb923c)
+        self.fmt_number = QTextCharFormat()
+        self.fmt_number.setForeground(QColor("#fb923c"))
+
+        # Comment format: muted slate (#64748b), italic
+        self.fmt_comment = QTextCharFormat()
+        self.fmt_comment.setForeground(QColor("#64748b"))
+        self.fmt_comment.setFontItalic(True)
+
+        # Special format (decorators, tags, attributes): rose/pink (#f43f5e)
+        self.fmt_special = QTextCharFormat()
+        self.fmt_special.setForeground(QColor("#f43f5e"))
+
+    def _compile_rules(self):
+        # 1. Numbers (decimal, float, hex)
+        self._rules.append((re.compile(r"\b(0x[0-9a-fA-F]+|\d+(\.\d+)?([eE][+-]?\d+)?)\b"), self.fmt_number))
+
+        # 2. Keywords per language
+        py_keywords = [
+            "and", "as", "assert", "async", "await", "break", "class", "continue",
+            "def", "del", "elif", "else", "except", "finally", "for", "from",
+            "global", "if", "import", "in", "is", "lambda", "nonlocal", "not",
+            "or", "pass", "raise", "return", "try", "while", "with", "yield"
+        ]
+        js_keywords = [
+            "break", "case", "catch", "class", "const", "continue", "debugger",
+            "default", "delete", "do", "else", "export", "extends", "finally",
+            "for", "function", "if", "import", "in", "instanceof", "let", "new",
+            "return", "super", "switch", "this", "throw", "try", "typeof", "var",
+            "void", "while", "with", "yield", "async", "await", "package", "private",
+            "protected", "public", "static", "interface", "type", "enum", "from", "as"
+        ]
+        sql_keywords = [
+            "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET",
+            "DELETE", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "ON",
+            "GROUP", "BY", "ORDER", "ASC", "DESC", "HAVING", "LIMIT", "OFFSET",
+            "CREATE", "TABLE", "DROP", "ALTER", "ADD", "INDEX", "PRIMARY", "KEY",
+            "FOREIGN", "REFERENCES", "AND", "OR", "NOT", "NULL", "IS", "IN", "LIKE",
+            "UNION", "ALL", "EXISTS", "BETWEEN", "CASE", "WHEN", "THEN", "ELSE", "END",
+            "select", "from", "where", "insert", "into", "values", "update", "set",
+            "delete", "join", "left", "right", "inner", "on", "group", "by", "order"
+        ]
+        sh_keywords = [
+            "if", "then", "else", "elif", "fi", "case", "esac", "for", "select",
+            "while", "until", "do", "done", "in", "function", "time", "echo",
+            "return", "exit", "export", "local", "source", "sudo", "apt", "npm",
+            "pip", "python", "git", "node", "pnpm", "yarn", "cargo", "docker"
+        ]
+        c_keywords = [
+            "auto", "break", "case", "char", "const", "continue", "default", "do",
+            "double", "else", "enum", "extern", "float", "for", "goto", "if",
+            "int", "long", "register", "return", "short", "signed", "sizeof",
+            "static", "struct", "switch", "typedef", "union", "unsigned", "void",
+            "volatile", "while", "public", "private", "protected", "virtual",
+            "override", "template", "typename", "namespace", "using", "std", "fn",
+            "mut", "let", "impl", "trait", "pub", "match", "ref", "self", "package"
+        ]
+
+        if self.lang in ("python", "py"):
+            kw_list = py_keywords
+        elif self.lang in ("js", "javascript", "ts", "typescript", "jsx", "tsx", "node", "json"):
+            kw_list = js_keywords
+        elif self.lang in ("sql",):
+            kw_list = sql_keywords
+        elif self.lang in ("bash", "sh", "powershell", "ps", "ps1", "cmd", "bat", "batch"):
+            kw_list = sh_keywords
+        elif self.lang in ("c", "cpp", "h", "hpp", "cs", "java", "rust", "go"):
+            kw_list = c_keywords
+        else:
+            kw_list = list(set(py_keywords + js_keywords + c_keywords))
+
+        if kw_list:
+            pattern = r"\b(" + "|".join(kw_list) + r")\b"
+            self._rules.append((re.compile(pattern), self.fmt_keyword))
+
+        # 3. Builtins & Types
+        builtins = [
+            "True", "False", "None", "self", "cls", "true", "false", "null",
+            "undefined", "NaN", "Infinity", "print", "len", "range", "str", "int",
+            "float", "list", "dict", "set", "tuple", "bool", "type", "isinstance",
+            "console", "window", "document", "Math", "JSON", "Array", "Object", "Promise",
+            "string", "number", "boolean", "any", "void", "Exception", "ValueError", "TypeError"
+        ]
+        self._rules.append((re.compile(r"\b(" + "|".join(builtins) + r")\b"), self.fmt_builtin))
+
+        # 4. Function invocations / definitions: word followed by '('
+        self._rules.append((re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*(?=\()"), self.fmt_function))
+
+        # 5. Decorators (@decorator)
+        self._rules.append((re.compile(r"@[A-Za-z_][A-Za-z0-9_.]*"), self.fmt_special))
+
+        # 6. HTML / XML tags (<tag ... > or </tag>)
+        if self.lang in ("html", "xml", "svg", "vue", "jsx", "tsx"):
+            self._rules.append((re.compile(r"</?[a-zA-Z0-9_\-]+(?:\s|>|/)"), self.fmt_special))
+
+        # 7. Strings (quoted)
+        self._rules.append((re.compile(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\''), self.fmt_string))
+        self._rules.append((re.compile(r'"(?:\\.|[^"\\])*"'), self.fmt_string))
+        self._rules.append((re.compile(r"'(?:\\.|[^'\\])*'"), self.fmt_string))
+        self._rules.append((re.compile(r"`(?:\\.|[^`\\])*`"), self.fmt_string))
+
+        # 8. Comments (top precedence over tokens inside)
+        if self.lang in ("python", "py", "bash", "sh", "powershell", "ps", "ps1", "yaml", "yml", "dockerfile"):
+            self._rules.append((re.compile(r"#.*$"), self.fmt_comment))
+        elif self.lang in ("sql",):
+            self._rules.append((re.compile(r"--.*$"), self.fmt_comment))
+            self._rules.append((re.compile(r"/\*[\s\S]*?\*/"), self.fmt_comment))
+        elif self.lang in ("html", "xml", "svg"):
+            self._rules.append((re.compile(r"<!--[\s\S]*?-->"), self.fmt_comment))
+        else:
+            self._rules.append((re.compile(r"//.*$"), self.fmt_comment))
+            self._rules.append((re.compile(r"/\*[\s\S]*?\*/"), self.fmt_comment))
+
+    def highlightBlock(self, text: str):
+        for pattern, fmt in self._rules:
+            for match in pattern.finditer(text):
+                start = match.start()
+                length = match.end() - start
+                self.setFormat(start, length, fmt)
+
+
 class CodeBlockWidget(QFrame):
     """Interactive Code Block card featuring 1-click Run, Copy, Save, and Live Console Output."""
 
@@ -711,6 +981,7 @@ class CodeBlockWidget(QFrame):
         self.lang = (lang or "code").lower()
         self.code = code
         self._runner_worker: _CodeRunnerWorker | None = None
+        self._highlighter: _UniversalCodeHighlighter | None = None
         self._build_ui()
 
     def _build_ui(self):
@@ -829,6 +1100,7 @@ class CodeBlockWidget(QFrame):
         code_edit = QTextEdit()
         code_edit.setPlainText(self.code)
         code_edit.setReadOnly(True)
+        self._highlighter = _UniversalCodeHighlighter(code_edit.document(), self.lang)
         line_count = len(self.code.splitlines())
         calc_height = min(max(line_count * 18 + 14, 45), 320)
         code_edit.setFixedHeight(calc_height)
@@ -1521,6 +1793,188 @@ class VoiceWaveformWidget(QWidget):
             start_x += bar_width + spacing
 
         p.end()
+
+
+class _SystemPulseWidget(QFrame):
+    """Compact Obsidian System Pulse widget displaying live CPU, RAM, and 1-Click RAM Boost."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("""
+            _SystemPulseWidget {
+                background-color: #0b0b14;
+                border: 1px solid #1a1a2b;
+                border-radius: 7px;
+            }
+        """)
+        self._build_ui()
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._update_metrics)
+        self._timer.start(3000)
+        self._update_metrics()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 7, 8, 7)
+        layout.setSpacing(5)
+
+        # Header: Pulse indicator + Title + Boost Button
+        hdr = QHBoxLayout()
+        hdr.setContentsMargins(0, 0, 0, 0)
+        hdr.setSpacing(5)
+
+        dot = QLabel("●")
+        dot.setStyleSheet("color: #10b981; font-size: 8px;")
+        hdr.addWidget(dot)
+
+        title = QLabel("SYSTEM PULSE")
+        title.setStyleSheet("color: #64748b; font-size: 8px; font-weight: 800; letter-spacing: 0.8px;")
+        hdr.addWidget(title)
+        hdr.addStretch()
+
+        self.boost_btn = QPushButton("Boost")
+        self.boost_btn.setFixedHeight(18)
+        self.boost_btn.setCursor(Qt.PointingHandCursor)
+        self.boost_btn.setToolTip("Trim working memory & optimize PC performance")
+        self.boost_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #022c22;
+                color: #6ee7b7;
+                border: 1px solid #065f46;
+                border-radius: 3px;
+                font-size: 9px;
+                font-weight: 700;
+                padding: 0 6px;
+            }
+            QPushButton:hover {
+                background-color: #047857;
+                color: #ffffff;
+            }
+        """)
+        self.boost_btn.clicked.connect(self._on_boost_clicked)
+        hdr.addWidget(self.boost_btn)
+        layout.addLayout(hdr)
+
+        # CPU Row
+        cpu_box = QHBoxLayout()
+        cpu_box.setContentsMargins(0, 0, 0, 0)
+        self.cpu_lbl = QLabel("CPU: 0%")
+        self.cpu_lbl.setStyleSheet("color: #94a3b8; font-size: 9px; font-weight: 600; font-family: Consolas, monospace;")
+        cpu_box.addWidget(self.cpu_lbl)
+        cpu_box.addStretch()
+        layout.addLayout(cpu_box)
+
+        self.cpu_bar = QProgressBar()
+        self.cpu_bar.setFixedHeight(3)
+        self.cpu_bar.setTextVisible(False)
+        self.cpu_bar.setRange(0, 100)
+        self.cpu_bar.setValue(0)
+        self.cpu_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #161622;
+                border: none;
+                border-radius: 1px;
+            }
+            QProgressBar::chunk {
+                background-color: #38bdf8;
+                border-radius: 1px;
+            }
+        """)
+        layout.addWidget(self.cpu_bar)
+
+        # RAM Row
+        ram_box = QHBoxLayout()
+        ram_box.setContentsMargins(0, 0, 0, 0)
+        self.ram_lbl = QLabel("RAM: 0%")
+        self.ram_lbl.setStyleSheet("color: #94a3b8; font-size: 9px; font-weight: 600; font-family: Consolas, monospace;")
+        ram_box.addWidget(self.ram_lbl)
+        ram_box.addStretch()
+        layout.addLayout(ram_box)
+
+        self.ram_bar = QProgressBar()
+        self.ram_bar.setFixedHeight(3)
+        self.ram_bar.setTextVisible(False)
+        self.ram_bar.setRange(0, 100)
+        self.ram_bar.setValue(0)
+        self.ram_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #161622;
+                border: none;
+                border-radius: 1px;
+            }
+            QProgressBar::chunk {
+                background-color: #818cf8;
+                border-radius: 1px;
+            }
+        """)
+        layout.addWidget(self.ram_bar)
+
+    def _update_metrics(self):
+        try:
+            import psutil
+            cpu = psutil.cpu_percent(interval=None)
+            mem = psutil.virtual_memory()
+            used_gb = mem.used / (1024 ** 3)
+            total_gb = mem.total / (1024 ** 3)
+
+            self.cpu_lbl.setText(f"CPU: {cpu:.0f}%")
+            self.cpu_bar.setValue(int(cpu))
+
+            self.ram_lbl.setText(f"RAM: {mem.percent:.0f}% ({used_gb:.1f}/{total_gb:.0f}G)")
+            self.ram_bar.setValue(int(mem.percent))
+
+            # Color coding on high load
+            if cpu > 85:
+                self.cpu_bar.setStyleSheet("QProgressBar { background-color: #161622; border: none; border-radius: 1px; } QProgressBar::chunk { background-color: #ef4444; }")
+            else:
+                self.cpu_bar.setStyleSheet("QProgressBar { background-color: #161622; border: none; border-radius: 1px; } QProgressBar::chunk { background-color: #38bdf8; }")
+
+            if mem.percent > 85:
+                self.ram_bar.setStyleSheet("QProgressBar { background-color: #161622; border: none; border-radius: 1px; } QProgressBar::chunk { background-color: #ef4444; }")
+            else:
+                self.ram_bar.setStyleSheet("QProgressBar { background-color: #161622; border: none; border-radius: 1px; } QProgressBar::chunk { background-color: #818cf8; }")
+        except Exception:
+            pass
+
+    def _on_boost_clicked(self):
+        import gc
+        gc.collect()
+        try:
+            ctypes.windll.psapi.EmptyWorkingSet(ctypes.windll.kernel32.GetCurrentProcess())
+        except Exception:
+            pass
+        self.boost_btn.setText("Trimmed!")
+        self.boost_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #064e3b;
+                color: #a7f3d0;
+                border: 1px solid #10b981;
+                border-radius: 3px;
+                font-size: 9px;
+                font-weight: 700;
+                padding: 0 6px;
+            }
+        """)
+        QTimer.singleShot(1500, self._reset_boost_btn)
+        self._update_metrics()
+
+    def _reset_boost_btn(self):
+        self.boost_btn.setText("Boost")
+        self.boost_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #022c22;
+                color: #6ee7b7;
+                border: 1px solid #065f46;
+                border-radius: 3px;
+                font-size: 9px;
+                font-weight: 700;
+                padding: 0 6px;
+            }
+            QPushButton:hover {
+                background-color: #047857;
+                color: #ffffff;
+            }
+        """)
 
 
 class _SessionItemWidget(QWidget):
@@ -3141,6 +3595,9 @@ class MainWindow(QWidget):
         quick_toggles_row.addWidget(self.hands_free_btn)
 
         sidebar_layout.addLayout(quick_toggles_row)
+
+        self.system_pulse = _SystemPulseWidget(self)
+        sidebar_layout.addWidget(self.system_pulse)
 
         root.addWidget(self.sidebar)
 
