@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS conversation_history (
     role       TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
     content    TEXT NOT NULL,
     timestamp  TEXT NOT NULL,
-    session_id TEXT DEFAULT 'default'
+    session_id TEXT DEFAULT 'default',
+    is_starred INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -108,6 +109,10 @@ def init_db() -> None:
             pass
         try:
             conn.execute("ALTER TABLE conversation_history ADD COLUMN session_id TEXT DEFAULT 'default'")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE conversation_history ADD COLUMN is_starred INTEGER DEFAULT 0")
         except Exception:
             pass
         try:
@@ -255,17 +260,18 @@ def search_all_sessions(query: str, limit: int = 25) -> list[dict[str, str]]:
         return [dict(r) for r in rows]
 
 
-def add_message(role: str, content: str, session_id: str = "default") -> None:
+def add_message(role: str, content: str, session_id: str = "default") -> int:
     # Sanitize repetitive loops before saving
     import re
     clean_content = re.sub(r'(\S+)(?:\s+\1){2,}', r'\1', (content or "").strip(), flags=re.UNICODE)
     now = datetime.now().isoformat(timespec="seconds")
     sid = session_id or "default"
     with _connection() as conn:
-        conn.execute(
-            "INSERT INTO conversation_history (role, content, timestamp, session_id) VALUES (?, ?, ?, ?)",
+        cursor = conn.execute(
+            "INSERT INTO conversation_history (role, content, timestamp, session_id, is_starred) VALUES (?, ?, ?, ?, 0)",
             (role, clean_content, now, sid),
         )
+        msg_id = cursor.lastrowid
         try:
             conn.execute(
                 "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
@@ -273,27 +279,58 @@ def add_message(role: str, content: str, session_id: str = "default") -> None:
             )
         except Exception:
             pass
+        return msg_id
 
 
-def get_recent_history(limit: int = 50, session_id: str = "default") -> list[dict[str, str]]:
+def get_recent_history(limit: int = 50, session_id: str = "default") -> list[dict]:
     """Return the last `limit` messages for the given session, oldest first."""
     import re
     sid = session_id or "default"
     with _connection() as conn:
         rows = conn.execute(
-            "SELECT role, content FROM conversation_history WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+            "SELECT id, role, content, COALESCE(is_starred, 0) as is_starred FROM conversation_history WHERE session_id = ? ORDER BY id DESC LIMIT ?",
             (sid, limit),
         ).fetchall()
         if not rows and sid == "default":
             rows = conn.execute(
-                "SELECT role, content FROM conversation_history WHERE session_id IS NULL OR session_id = 'default' ORDER BY id DESC LIMIT ?",
+                "SELECT id, role, content, COALESCE(is_starred, 0) as is_starred FROM conversation_history WHERE session_id IS NULL OR session_id = 'default' ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
     history = []
     for r in reversed(rows):
         c = re.sub(r'(\S+)(?:\s+\1){2,}', r'\1', r["content"], flags=re.UNICODE)
-        history.append({"role": r["role"], "content": c})
+        history.append({
+            "id": r["id"],
+            "role": r["role"],
+            "content": c,
+            "is_starred": bool(r["is_starred"])
+        })
     return history
+
+
+def toggle_star_message(message_id: int) -> bool:
+    """Toggles starred / bookmark state for a message by ID."""
+    with _connection() as conn:
+        row = conn.execute("SELECT COALESCE(is_starred, 0) as is_starred FROM conversation_history WHERE id = ?", (message_id,)).fetchone()
+        if not row:
+            return False
+        new_val = 0 if row["is_starred"] else 1
+        conn.execute("UPDATE conversation_history SET is_starred = ? WHERE id = ?", (new_val, message_id))
+        return bool(new_val)
+
+
+def get_starred_messages(limit: int = 50) -> list[dict[str, str]]:
+    """Returns all starred messages across all sessions."""
+    with _connection() as conn:
+        rows = conn.execute(
+            "SELECT c.id, c.session_id, c.role, c.content, c.timestamp, COALESCE(s.title, 'Main Workspace') as session_title "
+            "FROM conversation_history c "
+            "LEFT JOIN chat_sessions s ON c.session_id = s.id "
+            "WHERE c.is_starred = 1 "
+            "ORDER BY c.id DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def clear_history(session_id: str = "default") -> None:

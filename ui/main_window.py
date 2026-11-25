@@ -2288,6 +2288,7 @@ class _SlashCommandsMenuWidget(QFrame):
         ("/export", "Export conversation transcript to Markdown", "EXPORT", "#94a3b8"),
         ("/compact", "Compact & summarize older conversation turns", "MEMORY", "#38bdf8"),
         ("/find", "Search all saved conversation history across sessions", "SEARCH", "#38bdf8"),
+        ("/starred", "Display bookmarked & starred assistant answers", "BOOKMARK", "#f59e0b"),
         ("/shortcuts", "Display keyboard navigation & power keys cheat-sheet", "HELP", "#f59e0b"),
         ("/palette", "Open full desktop command palette", "SHORTCUT", "#e2e8f0"),
     ]
@@ -2483,7 +2484,7 @@ class _SessionItemWidget(QWidget):
 class _MessageBubble(QWidget):
     """Modern conversational message stream: unboxed natural prose like top AIs, elevated cards for code/files."""
 
-    def __init__(self, role: str, content: str = "", on_speak_clicked=None, on_enable_vision_clicked=None, on_suggestion_clicked=None, on_regenerate_clicked=None, on_edit_clicked=None):
+    def __init__(self, role: str, content: str = "", on_speak_clicked=None, on_enable_vision_clicked=None, on_suggestion_clicked=None, on_regenerate_clicked=None, on_edit_clicked=None, message_id: int | None = None, is_starred: bool = False):
         super().__init__()
         self.role = role
         self.content = content
@@ -2492,6 +2493,8 @@ class _MessageBubble(QWidget):
         self.on_suggestion_clicked = on_suggestion_clicked
         self.on_regenerate_clicked = on_regenerate_clicked
         self.on_edit_clicked = on_edit_clicked
+        self.message_id = message_id
+        self.is_starred = is_starred
         self._is_speaking_this = False
         self.is_user = (role == "user")
         self.vision_cta_btn: QPushButton | None = None
@@ -2631,6 +2634,15 @@ class _MessageBubble(QWidget):
             self.full_copy_btn.clicked.connect(self._copy_full_content)
             self.action_bar.addWidget(self.full_copy_btn)
 
+            self.star_btn = QPushButton("Starred" if is_starred else "Star")
+            self.star_btn.setFixedHeight(24)
+            self.star_btn.setMinimumWidth(64)
+            self.star_btn.setCursor(Qt.PointingHandCursor)
+            self.star_btn.setToolTip("Bookmark response in Starred library")
+            self._update_star_btn_style()
+            self.star_btn.clicked.connect(self._toggle_star)
+            self.action_bar.addWidget(self.star_btn)
+
             if on_regenerate_clicked:
                 self.regenerate_btn = QPushButton("Regenerate")
                 self.regenerate_btn.setFixedHeight(24)
@@ -2670,6 +2682,57 @@ class _MessageBubble(QWidget):
         if hasattr(self, "user_copy_btn"):
             self.user_copy_btn.setText("Copied!")
             QTimer.singleShot(1500, lambda: self.user_copy_btn.setText("Copy") if hasattr(self, "user_copy_btn") else None)
+
+    def _update_star_btn_style(self):
+        if not hasattr(self, "star_btn"):
+            return
+        if getattr(self, "is_starred", False):
+            self.star_btn.setText("Starred")
+            self.star_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #291805;
+                    color: #fbbf24;
+                    border: 1px solid #d97706;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: 700;
+                    padding: 0 8px;
+                }
+                QPushButton:hover {
+                    background-color: #3d2308;
+                }
+            """)
+        else:
+            self.star_btn.setText("Star")
+            self.star_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #171720;
+                    color: {_TEXT_MUTED};
+                    border: 1px solid #262633;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: 600;
+                    padding: 0 8px;
+                }}
+                QPushButton:hover {{
+                    color: #ffffff;
+                    border-color: #3f3f50;
+                    background-color: #20202c;
+                }}
+            """)
+
+    def _toggle_star(self):
+        if getattr(self, "message_id", None):
+            import memory.database as db
+            self.is_starred = db.toggle_star_message(self.message_id)
+            self._update_star_btn_style()
+            top = self.window()
+            if hasattr(top, "show_toast"):
+                msg = "Response bookmarked in Starred library" if self.is_starred else "Response removed from Starred library"
+                top.show_toast(msg, "BOOKMARK")
+        else:
+            self.is_starred = not getattr(self, "is_starred", False)
+            self._update_star_btn_style()
 
     def _on_speak_toggle(self):
         if not self.on_speak_clicked:
@@ -3254,6 +3317,8 @@ class MainWindow(QWidget):
                 self._active_toast.move(self.width() - t_width - 24, 18)
             except Exception:
                 pass
+        if hasattr(self, "dropzone_overlay") and self.dropzone_overlay.isVisible() and hasattr(self, "main_stack"):
+            self.dropzone_overlay.setGeometry(self.main_stack.currentWidget().rect())
 
     def _find_model_index(self, name: str) -> int:
         name_lower = name.strip().lower()
@@ -4003,11 +4068,22 @@ class MainWindow(QWidget):
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
+            if hasattr(self, "dropzone_overlay") and hasattr(self, "main_stack") and self.main_stack.currentIndex() == 0:
+                self.dropzone_overlay.setGeometry(self.main_stack.currentWidget().rect())
+                self.dropzone_overlay.setVisible(True)
+                self.dropzone_overlay.raise_()
             event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
 
+    def dragLeaveEvent(self, event):
+        if hasattr(self, "dropzone_overlay"):
+            self.dropzone_overlay.setVisible(False)
+        super().dragLeaveEvent(event)
+
     def dropEvent(self, event):
+        if hasattr(self, "dropzone_overlay"):
+            self.dropzone_overlay.setVisible(False)
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
             if urls:
@@ -4422,6 +4498,34 @@ class MainWindow(QWidget):
         """)
         top_bar.addWidget(self.context_meter)
 
+        # Segmented Response Style Selector (Concise / Balanced / Deep)
+        self._response_style = "balanced"
+        self.style_frame = QFrame()
+        self.style_frame.setStyleSheet("""
+            QFrame {
+                background-color: #080c16;
+                border: 1px solid #1e293b;
+                border-radius: 6px;
+                padding: 1px;
+            }
+        """)
+        style_layout = QHBoxLayout(self.style_frame)
+        style_layout.setContentsMargins(2, 1, 2, 1)
+        style_layout.setSpacing(2)
+
+        self.style_btn_concise = QPushButton("Concise")
+        self.style_btn_balanced = QPushButton("Balanced")
+        self.style_btn_deep = QPushButton("Deep")
+
+        for b, style_key in [(self.style_btn_concise, "concise"), (self.style_btn_balanced, "balanced"), (self.style_btn_deep, "deep")]:
+            b.setFixedHeight(20)
+            b.setCursor(Qt.PointingHandCursor)
+            b.clicked.connect(lambda checked=False, s=style_key: self._set_response_style(s))
+            style_layout.addWidget(b)
+
+        self._refresh_style_buttons()
+        top_bar.addWidget(self.style_frame)
+
         top_bar.addStretch()
 
         # Hidden backwards-compatibility session_combo
@@ -4504,6 +4608,34 @@ class MainWindow(QWidget):
         chat_vbox = QVBoxLayout(chat_page)
         chat_vbox.setContentsMargins(0, 0, 0, 0)
         chat_vbox.setSpacing(8)
+
+        # Visual Drag & Drop Dropzone Overlay
+        self.dropzone_overlay = QFrame(chat_page)
+        self.dropzone_overlay.setVisible(False)
+        self.dropzone_overlay.setStyleSheet("""
+            QFrame {
+                background-color: rgba(7, 10, 18, 0.94);
+                border: 2px dashed #38bdf8;
+                border-radius: 12px;
+            }
+            QLabel {
+                background: transparent;
+                border: none;
+            }
+        """)
+        dz_layout = QVBoxLayout(self.dropzone_overlay)
+        dz_layout.setAlignment(Qt.AlignCenter)
+        dz_layout.setSpacing(6)
+
+        dz_title = QLabel("DROP FILES TO ATTACH")
+        dz_title.setStyleSheet("color: #38bdf8; font-size: 14px; font-weight: 800; letter-spacing: 0.8px;")
+        dz_title.setAlignment(Qt.AlignCenter)
+        dz_layout.addWidget(dz_title)
+
+        dz_sub = QLabel("Supports source code, data tables, text transcripts, and images")
+        dz_sub.setStyleSheet("color: #94a3b8; font-size: 11px; font-weight: 500;")
+        dz_sub.setAlignment(Qt.AlignCenter)
+        dz_layout.addWidget(dz_sub)
 
         # In-Chat Search Bar (Ctrl+F)
         self.search_bar = ChatSearchBar()
@@ -5271,6 +5403,49 @@ class MainWindow(QWidget):
         else:
             self.context_meter.setStyleSheet("QLabel { color: #64748b; background: #090912; border: 1px solid #1a1a2b; font-size: 9px; font-weight: 700; font-family: Consolas, monospace; padding: 4px 8px; border-radius: 6px; }")
 
+    def _refresh_style_buttons(self):
+        active_style = """
+            QPushButton {
+                background: #1e1b4b;
+                color: #a5b4fc;
+                border: 1px solid #4338ca;
+                border-radius: 4px;
+                font-size: 9px;
+                font-weight: 700;
+                padding: 0 6px;
+            }
+        """
+        inactive_style = """
+            QPushButton {
+                background: transparent;
+                color: #64748b;
+                border: none;
+                border-radius: 4px;
+                font-size: 9px;
+                font-weight: 600;
+                padding: 0 6px;
+            }
+            QPushButton:hover {
+                color: #cbd5e1;
+                background: #0f172a;
+            }
+        """
+        cur = getattr(self, "_response_style", "balanced")
+        if hasattr(self, "style_btn_concise"):
+            self.style_btn_concise.setStyleSheet(active_style if cur == "concise" else inactive_style)
+            self.style_btn_balanced.setStyleSheet(active_style if cur == "balanced" else inactive_style)
+            self.style_btn_deep.setStyleSheet(active_style if cur == "deep" else inactive_style)
+
+    def _set_response_style(self, style: str):
+        self._response_style = style
+        self._refresh_style_buttons()
+        desc = {
+            "concise": "Concise (Direct answers & minimal preamble)",
+            "balanced": "Balanced (Clear explanations & structured code)",
+            "deep": "Deep & Exhaustive (Full implementations, tests & reasoning)"
+        }.get(style, style)
+        self.show_toast(f"Response style set to: {desc}", "STYLE")
+
     def _compact_conversation_memory(self):
         cur_sid = getattr(self, "_active_session_id", "default")
         recent = db.get_recent_history(limit=250, session_id=cur_sid)
@@ -5552,7 +5727,12 @@ class MainWindow(QWidget):
             if self.hero_widget:
                 self.hero_widget.setVisible(False)
             for msg in recent:
-                self._add_bubble(msg["role"], msg["content"])
+                self._add_bubble(
+                    msg["role"],
+                    msg["content"],
+                    message_id=msg.get("id"),
+                    is_starred=msg.get("is_starred", False)
+                )
         else:
             if self.hero_widget:
                 self.hero_widget.setVisible(True)
@@ -5606,7 +5786,7 @@ class MainWindow(QWidget):
         self.show_toast("Regenerating response...", "SYSTEM")
         self._send_message(override_prompt=last_user_prompt, is_regeneration=True)
 
-    def _add_bubble(self, role: str, content: str = "") -> _MessageBubble:
+    def _add_bubble(self, role: str, content: str = "", message_id: int | None = None, is_starred: bool = False) -> _MessageBubble:
         if self.hero_widget:
             self.hero_widget.setVisible(False)
         bubble = _MessageBubble(
@@ -5616,7 +5796,9 @@ class MainWindow(QWidget):
             on_enable_vision_clicked=self.enable_screen_vision,
             on_suggestion_clicked=self._on_suggestion_clicked,
             on_regenerate_clicked=self._regenerate_response,
-            on_edit_clicked=self._on_edit_user_message
+            on_edit_clicked=self._on_edit_user_message,
+            message_id=message_id,
+            is_starred=is_starred
         )
         self.message_layout.insertWidget(self.message_layout.count() - 1, bubble)
         self._update_context_meter()
@@ -6024,6 +6206,32 @@ class MainWindow(QWidget):
                 db.add_message("assistant", out_msg, session_id=cur_sid)
                 return
 
+            if cmd in ("/starred", "/bookmarks", "/favorites"):
+                starred = db.get_starred_messages(limit=30)
+                cur_sid = getattr(self, "_active_session_id", "default")
+                if not starred:
+                    self._add_bubble("user", text)
+                    db.add_message("user", text, session_id=cur_sid)
+                    b = self._add_bubble("assistant", "You have not starred any responses yet. Click 'Star' on any assistant message to bookmark it.")
+                    b.set_meta(datetime.now().strftime("%I:%M %p"), 0.01, "Bookmarks")
+                    db.add_message("assistant", "You have not starred any responses yet. Click 'Star' on any assistant message to bookmark it.", session_id=cur_sid)
+                    return
+                lines = [f"**Starred & Bookmarked Responses ({len(starred)} items):**\n"]
+                for s in starred:
+                    snip = s["content"].replace("\n", " ").strip()
+                    if len(snip) > 130:
+                        snip = snip[:130] + "..."
+                    t_str = s.get("timestamp", "")
+                    s_title = s.get("session_title", "Main Workspace")
+                    lines.append(f"- **[{s_title}]** ({t_str}): {snip}")
+                out_msg = "\n".join(lines)
+                self._add_bubble("user", text)
+                db.add_message("user", text, session_id=cur_sid)
+                b = self._add_bubble("assistant", out_msg)
+                b.set_meta(datetime.now().strftime("%I:%M %p"), 0.02, "Bookmarks")
+                db.add_message("assistant", out_msg, session_id=cur_sid)
+                return
+
             if cmd == "/theme":
                 keys = list(_THEME_PALETTES.keys())
                 if arg and arg.lower() in _THEME_PALETTES:
@@ -6311,6 +6519,24 @@ class MainWindow(QWidget):
         if facts:
             system_prompt += "\nUser Facts:\n" + "\n".join(f"- {f}" for f in facts)
 
+        # Response Style Directive (Concise / Balanced / Deep)
+        cur_style = getattr(self, "_response_style", "balanced")
+        if cur_style == "concise":
+            system_prompt += (
+                "\n[Response Directive: CONCISE]\n"
+                "- Deliver direct, ultra-concise answers with essential code only. Omit introductory chit-chat, conversational preamble, and verbose explanations.\n"
+            )
+        elif cur_style == "deep":
+            system_prompt += (
+                "\n[Response Directive: DEEP & EXHAUSTIVE]\n"
+                "- Deliver an exhaustive, production-grade response. Detail architectural trade-offs, step-by-step reasoning, handle edge cases, include unit test cases, and ensure robust error handling.\n"
+            )
+        else:
+            system_prompt += (
+                "\n[Response Directive: BALANCED]\n"
+                "- Deliver clear explanations, structured sections, complete code snippets, and key takeaways.\n"
+            )
+
         # Operating Persona Steering
         mode = getattr(self, "_operating_mode", "ENGINEER")
         if mode == "GEMINI":
@@ -6464,7 +6690,9 @@ class MainWindow(QWidget):
 
         cur_sid = getattr(self, "_active_session_id", "default")
         if clean_text:
-            db.add_message("assistant", clean_text, session_id=cur_sid)
+            msg_id = db.add_message("assistant", clean_text, session_id=cur_sid)
+            if self._current_assistant_bubble:
+                self._current_assistant_bubble.message_id = msg_id
 
         # Auto-name session if it was freshly created
         sess = db.get_session(cur_sid)
