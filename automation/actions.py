@@ -2266,6 +2266,74 @@ def action_check_emails() -> ActionResult:
         return False, f"Checking emails failed: {exc}"
 
 
+def action_get_email_otp(service_name: str = "") -> ActionResult:
+    """Extracts the latest 2FA / OTP verification code for a web service from inbox."""
+    try:
+        from config.settings_schema import load_config
+        from utils.email_manager import get_latest_otp
+        cfg = load_config()
+        if not cfg.email.email or not cfg.email.app_password:
+            return False, "Email credentials not configured in Connections -> Email Settings."
+
+        ok, msg, data = get_latest_otp(
+            user_email=cfg.email.email,
+            app_password=cfg.email.app_password,
+            service_name=service_name.strip()
+        )
+        return ok, msg
+    except Exception as exc:
+        return False, f"Failed to retrieve verification code: {exc}"
+
+
+def action_scan_web_accounts() -> ActionResult:
+    """Scans connected email inbox and identifies online web accounts and platforms."""
+    try:
+        from config.settings_schema import load_config
+        from utils.email_manager import scan_connected_web_accounts
+        cfg = load_config()
+        if not cfg.email.email or not cfg.email.app_password:
+            return False, "Email credentials not configured in Connections -> Email Settings."
+
+        ok, accounts, summary = scan_connected_web_accounts(
+            user_email=cfg.email.email,
+            app_password=cfg.email.app_password,
+            scan_limit=100
+        )
+        if not ok:
+            return False, summary
+
+        if not accounts:
+            return True, "No registered web accounts found in recent emails."
+
+        lines = [f"{summary}\n"]
+        for acc in accounts:
+            lines.append(f"• **{acc['name']}** ({acc['category']})")
+            lines.append(f"  Sender: `{acc['sender']}`")
+            lines.append(f"  Latest Activity: {acc['latest_subject'][:60]} ({acc['latest_date']})")
+        return True, "\n".join(lines)
+    except Exception as exc:
+        return False, f"Failed to scan web accounts: {exc}"
+
+
+def action_search_account_emails(query: str) -> ActionResult:
+    """Searches emails for receipts, password resets, or account credentials."""
+    try:
+        from config.settings_schema import load_config
+        from utils.email_manager import search_service_emails
+        cfg = load_config()
+        if not cfg.email.email or not cfg.email.app_password:
+            return False, "Email credentials not configured in Connections -> Email Settings."
+
+        return search_service_emails(
+            user_email=cfg.email.email,
+            app_password=cfg.email.app_password,
+            query=query.strip(),
+            limit=6
+        )
+    except Exception as exc:
+        return False, f"Failed to search account emails: {exc}"
+
+
 def action_notify(title: str, msg: str) -> ActionResult:
     """Pushes a notification to Desktop, WhatsApp, and Discord."""
     try:

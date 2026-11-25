@@ -18,18 +18,22 @@ import urllib.request
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QThread, Signal
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QImage, QPixmap, QClipboard
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -293,14 +297,14 @@ class ConnectionsView(QWidget):
         layout_dc.addStretch()
         tabs.addTab(tab_dc, "Discord")
 
-        # ── TAB 3: Email & Research ──────────────────────────────────
+        # ── TAB 3: Email & Web Accounts Hub ──────────────────────────
         tab_mail = QWidget()
         layout_mail = QVBoxLayout(tab_mail)
         layout_mail.setContentsMargins(16, 16, 16, 16)
         layout_mail.setSpacing(12)
 
         mail_status_box = QHBoxLayout()
-        mail_title = QLabel("Email Service & Autonomous Web Research")
+        mail_title = QLabel("Email & Connected Web Accounts Manager")
         mail_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
         self.mail_status_lbl = QLabel("Not Configured")
         self.mail_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
@@ -309,54 +313,163 @@ class ConnectionsView(QWidget):
         mail_status_box.addWidget(self.mail_status_lbl)
         layout_mail.addLayout(mail_status_box)
 
-        mail_desc = QLabel("Connect SMTP credentials for automated briefing dispatches, task notifications, and email forwarding.")
-        mail_desc.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        mail_desc = QLabel(
+            "Connect your email with just your Email and Password. Nova automatically detects your provider, "
+            "configures secure IMAP & SMTP, extracts 2FA/OTP login codes, and manages web accounts."
+        )
+        mail_desc.setWordWrap(True)
+        mail_desc.setStyleSheet("color: #94a3b8; font-size: 11px; line-height: 1.4;")
         layout_mail.addWidget(mail_desc)
 
-        form_mail = QFormLayout()
-        form_mail.setSpacing(10)
+        # Connect Credentials Box
+        cred_card = QFrame()
+        cred_card.setStyleSheet("background-color: #0b0b14; border: 1px solid #1e1e2f; border-radius: 8px; padding: 12px;")
+        cred_layout = QVBoxLayout(cred_card)
+        cred_layout.setContentsMargins(12, 10, 12, 10)
+        cred_layout.setSpacing(8)
 
-        self.mail_smtp_input = QLineEdit("smtp.gmail.com")
-        self.mail_port_input = QLineEdit("587")
-        self.mail_sec_combo = QComboBox()
-        self.mail_sec_combo.addItems(["STARTTLS (Port 587)", "SSL (Port 465)", "Plain (Port 25)"])
+        form_mail = QFormLayout()
+        form_mail.setSpacing(8)
 
         self.mail_user_input = QLineEdit()
-        self.mail_user_input.setPlaceholderText("user@example.com")
+        self.mail_user_input.setPlaceholderText("yourname@gmail.com (or outlook, yahoo, icloud, custom)")
+        self.mail_user_input.setStyleSheet("background-color: #12121c; color: #ffffff; border: 1px solid #28283d; border-radius: 6px; padding: 6px 10px; font-size: 12px;")
+        self.mail_user_input.textChanged.connect(self._on_email_text_changed)
+
+        pass_row = QHBoxLayout()
+        pass_row.setSpacing(6)
         self.mail_pass_input = QLineEdit()
         self.mail_pass_input.setEchoMode(QLineEdit.Password)
-        self.mail_pass_input.setPlaceholderText("SMTP App Password")
+        self.mail_pass_input.setPlaceholderText("Password or App Password")
+        self.mail_pass_input.setStyleSheet("background-color: #12121c; color: #ffffff; border: 1px solid #28283d; border-radius: 6px; padding: 6px 10px; font-size: 12px;")
+        pass_row.addWidget(self.mail_pass_input, 1)
 
-        form_mail.addRow("SMTP Host:", self.mail_smtp_input)
-        form_mail.addRow("SMTP Port:", self.mail_port_input)
-        form_mail.addRow("Encryption:", self.mail_sec_combo)
+        self.btn_toggle_pass = QPushButton("Show")
+        self.btn_toggle_pass.setFixedSize(50, 30)
+        self.btn_toggle_pass.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_pass.setStyleSheet("background-color: #1e1e2f; color: #94a3b8; border: 1px solid #2d2d44; border-radius: 5px; font-size: 10px;")
+        self.btn_toggle_pass.clicked.connect(self._toggle_password_visibility)
+        pass_row.addWidget(self.btn_toggle_pass)
+
         form_mail.addRow("Email Address:", self.mail_user_input)
-        form_mail.addRow("Password / Key:", self.mail_pass_input)
-        layout_mail.addLayout(form_mail)
+        form_mail.addRow("App Password:", pass_row)
+        cred_layout.addLayout(form_mail)
 
-        self.chk_auto_research = QCheckBox("Enable Autonomous DuckDuckGo Research Engine")
-        self.chk_auto_research.setChecked(True)
-        self.chk_auto_research.setStyleSheet("color: #38bdf8; font-weight: 600; font-size: 11px;")
-        layout_mail.addWidget(self.chk_auto_research)
+        # Provider Auto-Detection Indicator
+        self.mail_detect_lbl = QLabel("Provider: Auto-detection ready (Type your email)")
+        self.mail_detect_lbl.setStyleSheet("color: #38bdf8; font-size: 10px; font-weight: 600; font-family: Consolas, monospace;")
+        cred_layout.addWidget(self.mail_detect_lbl)
 
+        # Button Row
         mail_btn_row = QHBoxLayout()
-        btn_save_mail = QPushButton("Save Email Configuration")
-        btn_save_mail.clicked.connect(self._save_email_config)
-        mail_btn_row.addWidget(btn_save_mail)
+        mail_btn_row.setSpacing(8)
 
-        btn_test_mail = QPushButton("Test SMTP Connection")
-        btn_test_mail.setStyleSheet("background-color: #1e293b; color: #cbd5e1; border: 1px solid #334155;")
-        btn_test_mail.clicked.connect(self._test_smtp_connection)
-        mail_btn_row.addWidget(btn_test_mail)
+        self.btn_save_mail = QPushButton("Connect & Verify Email")
+        self.btn_save_mail.setCursor(Qt.PointingHandCursor)
+        self.btn_save_mail.setFixedHeight(30)
+        self.btn_save_mail.setStyleSheet("background-color: #064e3b; color: #34d399; border: 1px solid #059669; border-radius: 6px; font-weight: 700; padding: 0 14px;")
+        self.btn_save_mail.clicked.connect(self._save_email_config)
+        mail_btn_row.addWidget(self.btn_save_mail)
 
-        self.btn_disconnect_mail = QPushButton("Clear Email")
-        self.btn_disconnect_mail.setStyleSheet("background-color: #450a0a; color: #fca5a5; border: 1px solid #991b1b;")
+        self.btn_disconnect_mail = QPushButton("Disconnect Email")
+        self.btn_disconnect_mail.setCursor(Qt.PointingHandCursor)
+        self.btn_disconnect_mail.setFixedHeight(30)
+        self.btn_disconnect_mail.setStyleSheet("background-color: #450a0a; color: #fca5a5; border: 1px solid #991b1b; border-radius: 6px; padding: 0 12px;")
         self.btn_disconnect_mail.clicked.connect(self._disconnect_email)
         mail_btn_row.addWidget(self.btn_disconnect_mail)
 
-        layout_mail.addLayout(mail_btn_row)
+        mail_btn_row.addStretch()
+        cred_layout.addLayout(mail_btn_row)
+        layout_mail.addWidget(cred_card)
+
+        # ── Web Accounts & 2FA Security Shield Section ────────────────
+        sec_card = QFrame()
+        sec_card.setStyleSheet("background-color: #0b0b14; border: 1px solid #1e1e2f; border-radius: 8px; padding: 12px;")
+        sec_layout = QVBoxLayout(sec_card)
+        sec_layout.setContentsMargins(12, 10, 12, 10)
+        sec_layout.setSpacing(8)
+
+        sec_hdr_row = QHBoxLayout()
+        sec_title = QLabel("Connected Online Web Accounts & 2FA Shield")
+        sec_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #e2e8f0;")
+        sec_hdr_row.addWidget(sec_title)
+        sec_hdr_row.addStretch()
+
+        self.btn_get_otp = QPushButton("Extract Latest 2FA / OTP Code")
+        self.btn_get_otp.setCursor(Qt.PointingHandCursor)
+        self.btn_get_otp.setFixedHeight(26)
+        self.btn_get_otp.setStyleSheet("background-color: #1e1b4b; color: #a5b4fc; border: 1px solid #4338ca; border-radius: 5px; font-size: 11px; font-weight: 600; padding: 0 10px;")
+        self.btn_get_otp.clicked.connect(self._extract_latest_otp)
+        sec_hdr_row.addWidget(self.btn_get_otp)
+
+        self.btn_scan_accounts = QPushButton("Scan Connected Accounts")
+        self.btn_scan_accounts.setCursor(Qt.PointingHandCursor)
+        self.btn_scan_accounts.setFixedHeight(26)
+        self.btn_scan_accounts.setStyleSheet("background-color: #0f172a; color: #38bdf8; border: 1px solid #0284c7; border-radius: 5px; font-size: 11px; font-weight: 600; padding: 0 10px;")
+        self.btn_scan_accounts.clicked.connect(self._scan_web_accounts)
+        sec_hdr_row.addWidget(self.btn_scan_accounts)
+        sec_layout.addLayout(sec_hdr_row)
+
+        # OTP Code Display Banner (initially hidden)
+        self.otp_banner = QFrame()
+        self.otp_banner.setVisible(False)
+        self.otp_banner.setStyleSheet("background-color: #062b1b; border: 1px solid #10b981; border-radius: 6px; padding: 6px 10px;")
+        otp_box = QHBoxLayout(self.otp_banner)
+        otp_box.setContentsMargins(8, 4, 8, 4)
+        self.otp_lbl = QLabel("")
+        self.otp_lbl.setTextFormat(Qt.RichText)
+        self.otp_lbl.setStyleSheet("color: #e2e8f0; font-size: 11px;")
+        otp_box.addWidget(self.otp_lbl, 1)
+
+        self.btn_copy_otp = QPushButton("Copy Code")
+        self.btn_copy_otp.setCursor(Qt.PointingHandCursor)
+        self.btn_copy_otp.setFixedHeight(24)
+        self.btn_copy_otp.setStyleSheet("background-color: #10b981; color: #022c22; font-weight: 700; border-radius: 4px; padding: 0 10px;")
+        self.btn_copy_otp.clicked.connect(self._copy_extracted_otp)
+        otp_box.addWidget(self.btn_copy_otp)
+        sec_layout.addWidget(self.otp_banner)
+
+        # Accounts Table
+        self.accounts_table = QTableWidget(0, 4)
+        self.accounts_table.setHorizontalHeaderLabels(["Platform / Service", "Category", "Sender Address", "Status"])
+        self.accounts_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.accounts_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.accounts_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.accounts_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.accounts_table.setFixedHeight(120)
+        self.accounts_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #07070c;
+                color: #e2e8f0;
+                border: 1px solid #1e1e2e;
+                border-radius: 6px;
+                gridline-color: #1a1a28;
+                font-size: 11px;
+            }
+            QHeaderView::section {
+                background-color: #0e0e18;
+                color: #94a3b8;
+                border: 1px solid #1e1e2e;
+                padding: 4px;
+                font-weight: 700;
+                font-size: 10px;
+            }
+        """)
+        sec_layout.addWidget(self.accounts_table)
+        layout_mail.addWidget(sec_card)
+
+        # Helpful Google / Outlook App Password tip
+        tip_box = QLabel(
+            "<b>Tip:</b> For Gmail, use an <b>App Password</b> (Google Account &gt; Security &gt; 2-Step Verification &gt; App Passwords). "
+            "Nova will handle the rest automatically with zero manual port or server settings."
+        )
+        tip_box.setTextFormat(Qt.RichText)
+        tip_box.setWordWrap(True)
+        tip_box.setStyleSheet("color: #64748b; font-size: 10px; padding: 4px 6px;")
+        layout_mail.addWidget(tip_box)
+
         layout_mail.addStretch()
-        tabs.addTab(tab_mail, "Email & Research")
+        tabs.addTab(tab_mail, "Email & Web Accounts")
 
         root.addWidget(tabs)
 
@@ -417,15 +530,14 @@ class ConnectionsView(QWidget):
         # 3. Email
         mail_user = self.config.email.email or os.environ.get("EMAIL_USER", "")
         mail_pass = self.config.email.app_password or os.environ.get("EMAIL_PASS", "")
-        mail_smtp = self.config.email.smtp_host or os.environ.get("EMAIL_SMTP", "smtp.gmail.com")
 
         if mail_user and mail_pass:
             self.mail_user_input.setText(mail_user)
             self.mail_pass_input.setText(mail_pass)
-            self.mail_smtp_input.setText(mail_smtp)
-            self.mail_status_lbl.setText("Configured")
+            self.mail_status_lbl.setText(f"Connected: {mail_user}")
             self.mail_status_lbl.setStyleSheet("color: #10b981; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #064e3b; border-radius: 6px; border: 1px solid #059669;")
             self.btn_disconnect_mail.setEnabled(True)
+            self._update_detect_label(mail_user)
         else:
             self.mail_status_lbl.setText("Not Configured")
             self.mail_status_lbl.setStyleSheet("color: #94a3b8; font-weight: 700; font-size: 10px; padding: 3px 10px; background: #1e293b; border-radius: 6px;")
@@ -522,49 +634,63 @@ class ConnectionsView(QWidget):
         self._refresh_connection_states()
         QMessageBox.information(self, "Disconnected", "Discord token cleared.")
 
+    def _toggle_password_visibility(self):
+        if self.mail_pass_input.echoMode() == QLineEdit.Password:
+            self.mail_pass_input.setEchoMode(QLineEdit.Normal)
+            self.btn_toggle_pass.setText("Hide")
+        else:
+            self.mail_pass_input.setEchoMode(QLineEdit.Password)
+            self.btn_toggle_pass.setText("Show")
+
+    def _on_email_text_changed(self, text: str):
+        self._update_detect_label(text)
+
+    def _update_detect_label(self, email_str: str):
+        from utils.email_manager import auto_detect_servers
+        servers = auto_detect_servers(email_str)
+        self.mail_detect_lbl.setText(
+            f"Provider: {servers['name']} • IMAP: {servers['imap_host']}:{servers['imap_port']} • SMTP: {servers['smtp_host']}:{servers['smtp_port']}"
+        )
+
     def _save_email_config(self):
         user = self.mail_user_input.text().strip()
         pwd = self.mail_pass_input.text().strip()
-        smtp = self.mail_smtp_input.text().strip()
 
         if not user or not pwd:
-            QMessageBox.warning(self, "Missing Credentials", "Please enter both Email Address and App Password.")
+            QMessageBox.warning(self, "Missing Credentials", "Please enter both Email Address and Password / App Password.")
             return
 
-        self.config.email.email = user
-        self.config.email.app_password = pwd
-        self.config.email.smtp_host = smtp
-        save_config(self.config)
-
-        self._refresh_connection_states()
-        QMessageBox.information(self, "Saved", "Email configuration saved successfully.")
-
-    def _test_smtp_connection(self):
-        user = self.mail_user_input.text().strip()
-        pwd = self.mail_pass_input.text().strip()
-        smtp_host = self.mail_smtp_input.text().strip() or "smtp.gmail.com"
-        port_str = self.mail_port_input.text().strip() or "587"
-
-        if not user or not pwd:
-            QMessageBox.warning(self, "Missing Fields", "Please enter Email Address and Password to test.")
-            return
+        self.btn_save_mail.setEnabled(False)
+        self.btn_save_mail.setText("Verifying & Connecting...")
+        QApplication.processEvents()
 
         try:
-            port = int(port_str)
-            server = smtplib.SMTP(smtp_host, port, timeout=6)
-            server.ehlo()
-            server.starttls()
-            server.login(user, pwd)
-            server.quit()
-            QMessageBox.information(self, "Success", f"SMTP Connection verified successfully for {user}!")
+            from utils.email_manager import verify_email_credentials
+            ok, msg, servers = verify_email_credentials(user, pwd)
+
+            if ok:
+                self.config.email.email = user
+                self.config.email.app_password = pwd
+                self.config.email.smtp_host = servers.get("smtp_host", "smtp.gmail.com")
+                self.config.email.imap_host = servers.get("imap_host", "imap.gmail.com")
+                self.config.email.enabled = True
+                save_config(self.config)
+
+                self._refresh_connection_states()
+                QMessageBox.information(self, "Email Connected", f"Successfully connected to {user}!\n\n{msg}")
+            else:
+                QMessageBox.critical(self, "Connection Failed", f"Could not authenticate with email servers:\n\n{msg}")
         except Exception as e:
-            QMessageBox.critical(self, "Connection Failed", f"SMTP Authentication failed:\n{str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed during verification: {e}")
+        finally:
+            self.btn_save_mail.setEnabled(True)
+            self.btn_save_mail.setText("Connect & Verify Email")
 
     def _disconnect_email(self):
         reply = QMessageBox.question(
             self,
-            "Clear Email",
-            "Clear saved email credentials?",
+            "Disconnect Email",
+            "Are you sure you want to remove your email credentials and stop web account synchronization?",
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
@@ -572,12 +698,100 @@ class ConnectionsView(QWidget):
 
         self.config.email.email = ""
         self.config.email.app_password = ""
+        self.config.email.enabled = False
         save_config(self.config)
 
         self.mail_user_input.clear()
         self.mail_pass_input.clear()
+        self.otp_banner.setVisible(False)
+        self.accounts_table.setRowCount(0)
         self._refresh_connection_states()
-        QMessageBox.information(self, "Cleared", "Email credentials cleared.")
+        QMessageBox.information(self, "Disconnected", "Email credentials cleared.")
+
+    def _extract_latest_otp(self):
+        user = self.config.email.email
+        pwd = self.config.email.app_password
+
+        if not user or not pwd:
+            QMessageBox.warning(self, "Not Connected", "Please connect your email address first.")
+            return
+
+        self.btn_get_otp.setEnabled(False)
+        self.btn_get_otp.setText("Scanning...")
+        QApplication.processEvents()
+
+        try:
+            from utils.email_manager import get_latest_otp
+            ok, msg, data = get_latest_otp(user, pwd, scan_limit=30)
+            if ok and data:
+                self._current_otp_code = data["code"]
+                self.otp_lbl.setText(
+                    f"<b>Latest Verification Code:</b> <span style='font-size:14px; color:#10b981; font-weight:800; font-family:Consolas;'>{data['code']}</span> "
+                    f"&nbsp;•&nbsp; <b>From:</b> {data['service']} &nbsp;•&nbsp; <span style='color:#94a3b8;'>{data['date']}</span>"
+                )
+                self.otp_banner.setVisible(True)
+                QMessageBox.information(self, "OTP Found", f"Latest Verification Code: {data['code']}\n\nFrom: {data['service']}\nSubject: {data['subject']}")
+            else:
+                self.otp_banner.setVisible(False)
+                QMessageBox.information(self, "No Code Found", msg)
+        except Exception as e:
+            QMessageBox.critical(self, "Scan Error", f"Failed to check inbox for OTP: {e}")
+        finally:
+            self.btn_get_otp.setEnabled(True)
+            self.btn_get_otp.setText("Extract Latest 2FA / OTP Code")
+
+    def _copy_extracted_otp(self):
+        code = getattr(self, "_current_otp_code", "")
+        if code:
+            QApplication.clipboard().setText(code, QClipboard.Clipboard)
+            self.btn_copy_otp.setText("Copied!")
+            QTimer.singleShot(1500, lambda: self.btn_copy_otp.setText("Copy Code"))
+
+    def _scan_web_accounts(self):
+        user = self.config.email.email
+        pwd = self.config.email.app_password
+
+        if not user or not pwd:
+            QMessageBox.warning(self, "Not Connected", "Please connect your email address first.")
+            return
+
+        self.btn_scan_accounts.setEnabled(False)
+        self.btn_scan_accounts.setText("Scanning Accounts...")
+        QApplication.processEvents()
+
+        try:
+            from utils.email_manager import scan_connected_web_accounts
+            ok, accounts, summary = scan_connected_web_accounts(user, pwd, scan_limit=100)
+
+            if not ok:
+                QMessageBox.warning(self, "Scan Failed", summary)
+                return
+
+            self.accounts_table.setRowCount(0)
+            for acc in accounts:
+                row = self.accounts_table.rowCount()
+                self.accounts_table.insertRow(row)
+
+                item_name = QTableWidgetItem(acc["name"])
+                item_name.setForeground(Qt.white)
+                item_cat = QTableWidgetItem(acc["category"])
+                item_cat.setForeground(Qt.cyan)
+                item_sender = QTableWidgetItem(acc["sender"])
+                item_sender.setForeground(Qt.lightGray)
+                item_status = QTableWidgetItem("Active")
+                item_status.setForeground(Qt.green)
+
+                self.accounts_table.setItem(row, 0, item_name)
+                self.accounts_table.setItem(row, 1, item_cat)
+                self.accounts_table.setItem(row, 2, item_sender)
+                self.accounts_table.setItem(row, 3, item_status)
+
+            QMessageBox.information(self, "Accounts Discovered", f"{summary}\n\nAll accounts populated in the table below.")
+        except Exception as e:
+            QMessageBox.critical(self, "Scan Error", f"Error scanning accounts: {e}")
+        finally:
+            self.btn_scan_accounts.setEnabled(True)
+            self.btn_scan_accounts.setText("Scan Connected Accounts")
 
     def _reset_all_connections(self):
         reply = QMessageBox.critical(

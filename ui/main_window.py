@@ -404,7 +404,7 @@ def _render_prose(text: str) -> str:
                 html_lines.append("</ol>")
                 in_ol = False
             q_text = _format_inline(bq_m.group(1))
-            html_lines.append(f'<div style="border-left:3px solid #38bdf8;background:#101018;padding:4px 10px;margin:4px 0;border-radius:0 4px 4px 0;color:#cbd5e1;font-size:11px;">{q_text}</div>')
+            html_lines.append(f'<div style="border-left:3px solid #6366f1;background:#0c0c16;padding:6px 12px;margin:6px 0;border-radius:0 6px 6px 0;color:#cbd5e1;font-size:12px;line-height:1.5;">{q_text}</div>')
             continue
 
         # Bullet List (- or * or •)
@@ -417,7 +417,7 @@ def _render_prose(text: str) -> str:
                 html_lines.append('<ul style="margin:4px 0;padding-left:18px;list-style-type:square;">')
                 in_ul = True
             li_text = _format_inline(ul_m.group(1))
-            html_lines.append(f'<li style="margin:2px 0;color:#e2e8f0;line-height:1.45;">{li_text}</li>')
+            html_lines.append(f'<li style="margin:3px 0;color:#e2e8f0;line-height:1.55;font-size:13px;">{li_text}</li>')
             continue
 
         # Numbered List (1. 2. etc.)
@@ -430,7 +430,7 @@ def _render_prose(text: str) -> str:
                 html_lines.append('<ol style="margin:4px 0;padding-left:20px;">')
                 in_ol = True
             li_text = _format_inline(ol_m.group(2))
-            html_lines.append(f'<li style="margin:2px 0;color:#e2e8f0;line-height:1.45;">{li_text}</li>')
+            html_lines.append(f'<li style="margin:3px 0;color:#e2e8f0;line-height:1.55;font-size:13px;">{li_text}</li>')
             continue
 
         # Normal paragraph line
@@ -445,7 +445,7 @@ def _render_prose(text: str) -> str:
             html_lines.append('<div style="height:4px;"></div>')
         else:
             p_text = _format_inline(stripped)
-            html_lines.append(f'<p style="margin:2px 0;line-height:1.5;">{p_text}</p>')
+            html_lines.append(f'<p style="margin:4px 0;line-height:1.6;color:#e2e8f0;font-size:13px;">{p_text}</p>')
 
     if in_ul:
         html_lines.append("</ul>")
@@ -1523,8 +1523,60 @@ class VoiceWaveformWidget(QWidget):
         p.end()
 
 
+class _SessionItemWidget(QWidget):
+    """Sleek sidebar session item with title, chat indicator, and 1-click delete button."""
+    delete_requested = Signal(str)
+
+    def __init__(self, session_id: str, title: str, is_active: bool = False):
+        super().__init__()
+        self.session_id = session_id
+        self.title = title
+        self.is_active = is_active
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 3, 6, 3)
+        layout.setSpacing(6)
+
+        # Dot indicator
+        dot = QLabel("●" if is_active else "○")
+        dot.setStyleSheet("color: #38bdf8; font-size: 8px;" if is_active else "color: #475569; font-size: 8px;")
+        layout.addWidget(dot)
+
+        # Title
+        self.title_lbl = QLabel(title)
+        self.title_lbl.setStyleSheet(
+            "color: #38bdf8; font-weight: 700; font-size: 11px;" if is_active
+            else "color: #94a3b8; font-weight: 500; font-size: 11px;"
+        )
+        self.title_lbl.setToolTip(title)
+        layout.addWidget(self.title_lbl, 1)
+
+        # Delete Button (×)
+        self.del_btn = QPushButton("×")
+        self.del_btn.setFixedSize(18, 18)
+        self.del_btn.setCursor(Qt.PointingHandCursor)
+        self.del_btn.setToolTip("Delete this chat")
+        self.del_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #64748b;
+                border: none;
+                border-radius: 9px;
+                font-size: 13px;
+                font-weight: 700;
+                line-height: 14px;
+            }
+            QPushButton:hover {
+                background: #450a0a;
+                color: #ef4444;
+            }
+        """)
+        self.del_btn.clicked.connect(lambda: self.delete_requested.emit(self.session_id))
+        layout.addWidget(self.del_btn)
+
+
 class _MessageBubble(QWidget):
-    """Refined message card with live streaming, interactive code blocks, and screen vision action CTA."""
+    """Modern conversational message stream: unboxed natural prose like top AIs, elevated cards for code/files."""
 
     def __init__(self, role: str, content: str = "", on_speak_clicked=None, on_enable_vision_clicked=None):
         super().__init__()
@@ -1536,11 +1588,11 @@ class _MessageBubble(QWidget):
         self.vision_cta_btn: QPushButton | None = None
 
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(6, 3, 6, 3)
+        self.layout.setContentsMargins(8, 4, 8, 4)
 
         self.card = QFrame()
         self.card_layout = QVBoxLayout(self.card)
-        self.card_layout.setContentsMargins(12, 10, 12, 10)
+        self.card_layout.setContentsMargins(12, 8, 12, 8)
         self.card_layout.setSpacing(6)
 
         if self.is_user:
@@ -1548,20 +1600,25 @@ class _MessageBubble(QWidget):
                 QFrame {{
                     background-color: {_BG_USER};
                     color: {_TEXT_MAIN};
-                    border-radius: 10px;
+                    border-radius: 12px;
                     border: 1px solid #2b2b38;
                 }}
             """
+            self.card.setStyleSheet(self._orig_style)
+            self.card.setMaximumWidth(720)
+            self.layout.addStretch()
+            self.layout.addWidget(self.card, 0)
         else:
-            self._orig_style = f"""
-                QFrame {{
-                    background-color: {_BG_CARD};
-                    color: {_TEXT_MAIN};
-                    border-radius: 10px;
-                    border: 1px solid {_BORDER};
-                }}
+            # Top-notch unboxed assistant response: seamless canvas, transparent, no square box
+            self._orig_style = """
+                QFrame {
+                    background-color: transparent;
+                    color: #e2e8f0;
+                    border: none;
+                }
             """
-        self.card.setStyleSheet(self._orig_style)
+            self.card.setStyleSheet(self._orig_style)
+            self.layout.addWidget(self.card, 1)
 
         # Assistant Header
         if not self.is_user:
@@ -1593,7 +1650,7 @@ class _MessageBubble(QWidget):
         self.stream_label.setTextFormat(Qt.RichText)
         self.stream_label.setWordWrap(True)
         self.stream_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
-        self.stream_label.setStyleSheet("background: transparent; border: none; font-size: 13px; line-height: 1.45;")
+        self.stream_label.setStyleSheet("background: transparent; border: none; font-size: 13px; line-height: 1.55;")
         self.content_layout.addWidget(self.stream_label)
 
         # Bottom action bar for Assistant
@@ -1604,7 +1661,8 @@ class _MessageBubble(QWidget):
 
             self.full_copy_btn = QPushButton("Copy All")
             self.full_copy_btn.setIcon(create_copy_icon("#94a3b8", size=12))
-            self.full_copy_btn.setFixedSize(76, 22)
+            self.full_copy_btn.setFixedHeight(24)
+            self.full_copy_btn.setMinimumWidth(76)
             self.full_copy_btn.setCursor(Qt.PointingHandCursor)
             self.full_copy_btn.setStyleSheet(f"""
                 QPushButton {{
@@ -1614,7 +1672,7 @@ class _MessageBubble(QWidget):
                     border-radius: 4px;
                     font-size: 10px;
                     font-weight: 600;
-                    padding: 0 6px;
+                    padding: 0 8px;
                 }}
                 QPushButton:hover {{
                     color: #ffffff;
@@ -1628,7 +1686,8 @@ class _MessageBubble(QWidget):
             if on_speak_clicked:
                 self.listen_btn = QPushButton("Speak")
                 self.listen_btn.setIcon(create_speaker_icon("#94a3b8", size=12))
-                self.listen_btn.setFixedSize(66, 22)
+                self.listen_btn.setFixedHeight(24)
+                self.listen_btn.setMinimumWidth(68)
                 self.listen_btn.setCursor(Qt.PointingHandCursor)
                 self.listen_btn.setStyleSheet(self.full_copy_btn.styleSheet())
                 self.listen_btn.clicked.connect(lambda: on_speak_clicked(self.content))
@@ -1639,13 +1698,6 @@ class _MessageBubble(QWidget):
             self.meta_lbl.setStyleSheet("color: #475569; font-size: 9px; font-weight: 600; font-family: Consolas, monospace;")
             self.action_bar.addWidget(self.meta_lbl)
             self.card_layout.addLayout(self.action_bar)
-
-        if self.is_user:
-            self.layout.addStretch()
-            self.layout.addWidget(self.card, 0)
-        else:
-            self.layout.addWidget(self.card, 0)
-            self.layout.addStretch()
 
         if content:
             self.finalize_content(content)
@@ -1667,10 +1719,11 @@ class _MessageBubble(QWidget):
             return False
         if query.lower() in (self.content or "").lower():
             accent = "#38bdf8"
-            self.card.setStyleSheet(self._orig_style + f"""
+            self.card.setStyleSheet(f"""
                 QFrame {{
-                    border: 2px solid {accent} !important;
-                    background-color: #0f172a !important;
+                    border: 1px solid {accent} !important;
+                    background-color: #0c1524 !important;
+                    border-radius: 8px;
                 }}
             """)
             return True
@@ -2891,10 +2944,11 @@ class MainWindow(QWidget):
 
     def _setup_window(self):
         self.setWindowTitle(f"{self.config.ui.assistant_name} - Autonomous Desktop Studio")
-        start_w = max(self.config.ui.start_width, 1020)
-        start_h = max(self.config.ui.start_height, 720)
+        start_w = max(self.config.ui.start_width, 1140)
+        start_h = max(self.config.ui.start_height, 760)
         self.resize(start_w, start_h)
-        self.setMinimumSize(880, 580)
+        self.setMinimumSize(960, 620)
+        self.setMaximumSize(16777215, 16777215)
 
         flags = Qt.Window
         if self.config.ui.always_on_top:
@@ -2938,7 +2992,7 @@ class MainWindow(QWidget):
 
         # ── LEFT SIDEBAR (Modern ChatGPT / Cursor Style) ──────────────
         self.sidebar = QFrame()
-        self.sidebar.setFixedWidth(230)
+        self.sidebar.setFixedWidth(245)
         self.sidebar.setStyleSheet("""
             QFrame {
                 background-color: #080811;
@@ -3010,6 +3064,8 @@ class MainWindow(QWidget):
         sidebar_layout.addWidget(sess_hdr)
 
         self.session_list = QListWidget()
+        self.session_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.session_list.customContextMenuRequested.connect(self._show_session_context_menu)
         self.session_list.setStyleSheet("""
             QListWidget {
                 background: transparent;
@@ -3019,14 +3075,13 @@ class MainWindow(QWidget):
                 font-weight: 500;
             }
             QListWidget::item {
-                padding: 7px 10px;
+                padding: 3px 4px;
                 border-radius: 6px;
                 margin-bottom: 2px;
             }
             QListWidget::item:selected {
                 background-color: #151528;
                 color: #38bdf8;
-                font-weight: 700;
                 border-left: 3px solid #38bdf8;
             }
             QListWidget::item:hover:!selected {
@@ -3360,7 +3415,7 @@ class MainWindow(QWidget):
         action_strip = QFrame()
         action_strip.setStyleSheet("background: transparent; border: none;")
         strip_layout = QHBoxLayout(action_strip)
-        strip_layout.setContentsMargins(2, 0, 2, 0)
+        strip_layout.setContentsMargins(4, 0, 4, 0)
         strip_layout.setSpacing(6)
 
         strip_pills = [
@@ -3380,16 +3435,17 @@ class MainWindow(QWidget):
         for pill_label, pill_callback in strip_pills:
             p_btn = QPushButton(pill_label)
             p_btn.setCursor(Qt.PointingHandCursor)
-            p_btn.setFixedHeight(22)
+            p_btn.setFixedHeight(24)
             p_btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: #0d0d16;
                     color: #94a3b8;
                     border: 1px solid {_BORDER};
-                    border-radius: 11px;
-                    padding: 0 10px;
-                    font-size: 10px;
+                    border-radius: 12px;
+                    padding: 0 12px;
+                    font-size: 11px;
                     font-weight: 600;
+                    white-space: nowrap;
                 }}
                 QPushButton:hover {{
                     background-color: #1a1a28;
@@ -3401,7 +3457,15 @@ class MainWindow(QWidget):
             strip_layout.addWidget(p_btn)
 
         strip_layout.addStretch()
-        chat_vbox.addWidget(action_strip)
+
+        action_scroll = QScrollArea()
+        action_scroll.setFixedHeight(30)
+        action_scroll.setWidgetResizable(True)
+        action_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        action_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        action_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        action_scroll.setWidget(action_strip)
+        chat_vbox.addWidget(action_scroll)
 
         # Input Card (Modern floating composer)
         input_card = QFrame()
@@ -3862,14 +3926,78 @@ class MainWindow(QWidget):
             active_row = 0
             for idx, sess in enumerate(sessions):
                 title = sess.get("title") or f"Chat {sess['id'][:8]}"
-                item = QListWidgetItem(f"  {title}")
+                item = QListWidgetItem()
                 item.setData(Qt.UserRole, sess["id"])
+                is_cur = (sess["id"] == target_id)
+                widget = _SessionItemWidget(sess["id"], title, is_active=is_cur)
+                widget.delete_requested.connect(self._delete_session)
+                item.setSizeHint(widget.sizeHint())
                 self.session_list.addItem(item)
-                if sess["id"] == target_id:
+                self.session_list.setItemWidget(item, widget)
+                if is_cur:
                     active_row = idx
             if self.session_list.count() > 0:
                 self.session_list.setCurrentRow(active_row)
             self.session_list.blockSignals(False)
+
+    def _delete_session(self, session_id: str):
+        reply = QMessageBox.question(
+            self,
+            "Delete Chat",
+            "Are you sure you want to delete this chat session and its conversation history?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        db.delete_session(session_id)
+
+        # If deleted active session, find next or create new
+        if getattr(self, "_active_session_id", "default") == session_id:
+            remaining = db.get_all_sessions()
+            if remaining:
+                next_id = remaining[0]["id"]
+                self._active_session_id = next_id
+                self._refresh_session_combo(selected_id=next_id)
+                self._clear_chat_bubbles()
+                self._load_history()
+            else:
+                self._create_new_session()
+        else:
+            self._refresh_session_combo()
+
+        self.show_toast("Chat session deleted", "SESSION")
+
+    def _show_session_context_menu(self, pos):
+        item = self.session_list.itemAt(pos)
+        if not item:
+            return
+        sid = item.data(Qt.UserRole)
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #0d0d16;
+                color: #e2e8f0;
+                border: 1px solid #1e2030;
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 18px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #1e1b4b;
+                color: #ffffff;
+            }
+        """)
+        act_del = menu.addAction("Delete Chat")
+        act_del.triggered.connect(lambda: self._delete_session(sid))
+
+        act_new = menu.addAction("New Chat (Ctrl+N)")
+        act_new.triggered.connect(self._create_new_session)
+
+        menu.exec(self.session_list.mapToGlobal(pos))
 
     def _on_session_list_row_changed(self, row: int):
         if row < 0 or not hasattr(self, "session_list"):
@@ -3892,6 +4020,16 @@ class MainWindow(QWidget):
         self._active_session_id = session_id
         self._clear_chat_bubbles()
         self._load_history()
+        if hasattr(self, "session_list"):
+            for i in range(self.session_list.count()):
+                it = self.session_list.item(i)
+                w = self.session_list.itemWidget(it)
+                if w and isinstance(w, _SessionItemWidget):
+                    is_cur = (w.session_id == session_id)
+                    w.title_lbl.setStyleSheet(
+                        "color: #38bdf8; font-weight: 700; font-size: 11px;" if is_cur
+                        else "color: #94a3b8; font-weight: 500; font-size: 11px;"
+                    )
         sess = db.get_session(session_id)
         title = sess.get("title", "Session") if sess else "Session"
         self.show_toast(f"Switched session: {title}", "SESSION")

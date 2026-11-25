@@ -237,6 +237,12 @@ def run_action(name: str, arg: str) -> tuple[bool, str]:
         return actions.action_send_email(arg)
     elif name in ("check_emails", "read_emails", "unread_emails", "inbox"):
         return actions.action_check_emails()
+    elif name in ("get_otp", "check_otp", "verification_code", "read_otp", "otp", "2fa"):
+        return actions.action_get_email_otp(arg)
+    elif name in ("scan_web_accounts", "web_accounts", "find_accounts", "connected_accounts", "list_web_accounts"):
+        return actions.action_scan_web_accounts()
+    elif name in ("search_account_emails", "search_email", "search_inbox"):
+        return actions.action_search_account_emails(arg)
     elif name in ("notify", "send_notification", "alert"):
         parts = arg.split(":", 1)
         t = parts[0].strip() if len(parts) > 1 else "Nova AI Alert"
