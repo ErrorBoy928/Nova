@@ -2287,6 +2287,8 @@ class _SlashCommandsMenuWidget(QFrame):
         ("/clear", "Clear chat history from active session", "MEMORY", "#f43f5e"),
         ("/export", "Export conversation transcript to Markdown", "EXPORT", "#94a3b8"),
         ("/compact", "Compact & summarize older conversation turns", "MEMORY", "#38bdf8"),
+        ("/find", "Search all saved conversation history across sessions", "SEARCH", "#38bdf8"),
+        ("/shortcuts", "Display keyboard navigation & power keys cheat-sheet", "HELP", "#f59e0b"),
         ("/palette", "Open full desktop command palette", "SHORTCUT", "#e2e8f0"),
     ]
 
@@ -2481,13 +2483,15 @@ class _SessionItemWidget(QWidget):
 class _MessageBubble(QWidget):
     """Modern conversational message stream: unboxed natural prose like top AIs, elevated cards for code/files."""
 
-    def __init__(self, role: str, content: str = "", on_speak_clicked=None, on_enable_vision_clicked=None, on_suggestion_clicked=None):
+    def __init__(self, role: str, content: str = "", on_speak_clicked=None, on_enable_vision_clicked=None, on_suggestion_clicked=None, on_regenerate_clicked=None, on_edit_clicked=None):
         super().__init__()
         self.role = role
         self.content = content
         self.on_speak_clicked = on_speak_clicked
         self.on_enable_vision_clicked = on_enable_vision_clicked
         self.on_suggestion_clicked = on_suggestion_clicked
+        self.on_regenerate_clicked = on_regenerate_clicked
+        self.on_edit_clicked = on_edit_clicked
         self._is_speaking_this = False
         self.is_user = (role == "user")
         self.vision_cta_btn: QPushButton | None = None
@@ -2558,6 +2562,45 @@ class _MessageBubble(QWidget):
         self.stream_label.setStyleSheet("background: transparent; border: none; font-size: 13px; line-height: 1.55;")
         self.content_layout.addWidget(self.stream_label)
 
+        # Bottom action bar for User cards (Copy & Edit Prompt)
+        if self.is_user:
+            user_action_row = QHBoxLayout()
+            user_action_row.setContentsMargins(0, 4, 0, 0)
+            user_action_row.setSpacing(6)
+            user_action_row.addStretch()
+
+            self.user_copy_btn = QPushButton("Copy")
+            self.user_copy_btn.setFixedHeight(20)
+            self.user_copy_btn.setCursor(Qt.PointingHandCursor)
+            self.user_copy_btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    color: #64748b;
+                    border: 1px solid #2b2b38;
+                    border-radius: 4px;
+                    font-size: 9px;
+                    font-weight: 600;
+                    padding: 0 6px;
+                }
+                QPushButton:hover {
+                    color: #e2e8f0;
+                    background: #1e1e2d;
+                    border-color: #475569;
+                }
+            """)
+            self.user_copy_btn.clicked.connect(self._copy_user_content)
+            user_action_row.addWidget(self.user_copy_btn)
+
+            if on_edit_clicked:
+                self.user_edit_btn = QPushButton("Edit Prompt")
+                self.user_edit_btn.setFixedHeight(20)
+                self.user_edit_btn.setCursor(Qt.PointingHandCursor)
+                self.user_edit_btn.setStyleSheet(self.user_copy_btn.styleSheet())
+                self.user_edit_btn.clicked.connect(lambda: on_edit_clicked(self.content))
+                user_action_row.addWidget(self.user_edit_btn)
+
+            self.card_layout.addLayout(user_action_row)
+
         # Bottom action bar for Assistant
         if not self.is_user:
             self.action_bar = QHBoxLayout()
@@ -2588,6 +2631,16 @@ class _MessageBubble(QWidget):
             self.full_copy_btn.clicked.connect(self._copy_full_content)
             self.action_bar.addWidget(self.full_copy_btn)
 
+            if on_regenerate_clicked:
+                self.regenerate_btn = QPushButton("Regenerate")
+                self.regenerate_btn.setFixedHeight(24)
+                self.regenerate_btn.setMinimumWidth(82)
+                self.regenerate_btn.setCursor(Qt.PointingHandCursor)
+                self.regenerate_btn.setStyleSheet(self.full_copy_btn.styleSheet())
+                self.regenerate_btn.setToolTip("Regenerate assistant response with fresh perspective")
+                self.regenerate_btn.clicked.connect(lambda: on_regenerate_clicked(self))
+                self.action_bar.addWidget(self.regenerate_btn)
+
             if on_speak_clicked:
                 self.listen_btn = QPushButton("Speak")
                 self.listen_btn.setIcon(create_speaker_icon("#94a3b8", size=12))
@@ -2611,6 +2664,12 @@ class _MessageBubble(QWidget):
             self.suggestions_layout.setSpacing(6)
             self.suggestions_frame.setVisible(False)
             self.card_layout.addWidget(self.suggestions_frame)
+
+    def _copy_user_content(self):
+        QApplication.clipboard().setText(self.content, QClipboard.Clipboard)
+        if hasattr(self, "user_copy_btn"):
+            self.user_copy_btn.setText("Copied!")
+            QTimer.singleShot(1500, lambda: self.user_copy_btn.setText("Copy") if hasattr(self, "user_copy_btn") else None)
 
     def _on_speak_toggle(self):
         if not self.on_speak_clicked:
@@ -4639,6 +4698,11 @@ class MainWindow(QWidget):
         self.voice_waveform = VoiceWaveformWidget()
         controls_row.addWidget(self.voice_waveform)
 
+        # Real-time composer telemetry counter
+        self.composer_stats_lbl = QLabel("")
+        self.composer_stats_lbl.setStyleSheet("color: #475569; font-size: 10px; font-weight: 600; font-family: Consolas, monospace; padding-left: 4px;")
+        controls_row.addWidget(self.composer_stats_lbl)
+
         controls_row.addStretch()
 
         # Send Button
@@ -4664,7 +4728,7 @@ class MainWindow(QWidget):
         controls_row.addWidget(self.send_btn)
 
         # Prompt Refiner / Enhancer button
-        self.refine_btn = QPushButton("✨ Refine")
+        self.refine_btn = QPushButton("Refine Prompt")
         self.refine_btn.setToolTip("Enhance and polish prompt draft into an expert prompt (Shift+Alt+E)")
         self.refine_btn.setFixedHeight(28)
         self.refine_btn.setCursor(Qt.PointingHandCursor)
@@ -5054,6 +5118,9 @@ class MainWindow(QWidget):
         act_html = self._export_menu.addAction("Export as Interactive HTML (.html)")
         act_html.triggered.connect(self._export_html)
 
+        act_json = self._export_menu.addAction("Export as JSON Transcript (.json)")
+        act_json.triggered.connect(self._export_json)
+
         self._export_menu.addSeparator()
 
         act_clip = self._export_menu.addAction("Copy Full Chat to Clipboard")
@@ -5110,6 +5177,30 @@ class MainWindow(QWidget):
             except Exception as e:
                 self.show_toast(f"Export error: {e}", "ERROR")
 
+    def _export_json(self):
+        recent = db.get_recent_history(limit=500, session_id=self._active_session_id)
+        if not recent:
+            self.show_toast("No messages to export", "WARNING")
+            return
+        import json
+        payload = {
+            "session_id": self._active_session_id,
+            "exported_at": datetime.now().isoformat(),
+            "model": self.config.llm.model,
+            "total_messages": len(recent),
+            "messages": recent
+        }
+        dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export JSON Transcript", f"Nova_Chat_{dt_str}.json", "JSON File (*.json);;All Files (*.*)"
+        )
+        if file_path:
+            try:
+                Path(file_path).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                self.show_toast(f"Exported to {Path(file_path).name}", "SUCCESS")
+            except Exception as e:
+                self.show_toast(f"Export error: {e}", "ERROR")
+
     def _copy_full_chat_to_clipboard(self):
         recent = db.get_recent_history(limit=250, session_id=self._active_session_id)
         if not recent:
@@ -5131,13 +5222,13 @@ class MainWindow(QWidget):
         if hasattr(self, "_refine_worker") and self._refine_worker and self._refine_worker.isRunning():
             return
         self.refine_btn.setEnabled(False)
-        self.refine_btn.setText("✨ Refining...")
+        self.refine_btn.setText("Refining Prompt...")
         self.show_toast("Refining prompt draft with AI...", "SYSTEM")
 
         self._refine_worker = _PromptRefineWorker(self.llm_manager, raw)
         def on_refined(refined_text: str):
             self.refine_btn.setEnabled(True)
-            self.refine_btn.setText("✨ Refine")
+            self.refine_btn.setText("Refine Prompt")
             self.input_edit.setPlainText(refined_text)
             from PySide6.QtGui import QTextCursor
             c = self.input_edit.textCursor()
@@ -5148,7 +5239,7 @@ class MainWindow(QWidget):
 
         def on_failed(err_msg: str):
             self.refine_btn.setEnabled(True)
-            self.refine_btn.setText("✨ Refine")
+            self.refine_btn.setText("Refine Prompt")
             structured = (
                 f"{raw}\n\n"
                 "Requirements & Guidelines:\n"
@@ -5477,6 +5568,44 @@ class MainWindow(QWidget):
             self.input_edit.setFocus()
             self.show_toast("Suggestion loaded into prompt composer", "INFO")
 
+    def _on_edit_user_message(self, text: str):
+        if text:
+            self.input_edit.setPlainText(text)
+            from PySide6.QtGui import QTextCursor
+            c = self.input_edit.textCursor()
+            c.movePosition(QTextCursor.End)
+            self.input_edit.setTextCursor(c)
+            self.input_edit.setFocus()
+            self.show_toast("Prompt loaded into composer for editing", "INFO")
+
+    def _regenerate_response(self, bubble: _MessageBubble):
+        if hasattr(self, "_llm_thread") and self._llm_thread and self._llm_thread.isRunning():
+            self.show_toast("Generation already in progress", "WARNING")
+            return
+        if hasattr(self, "_super_agent_worker") and self._super_agent_worker and self._super_agent_worker.isRunning():
+            self.show_toast("SuperAgent is currently running", "WARNING")
+            return
+
+        cur_sid = getattr(self, "_active_session_id", "default")
+        recent = db.get_recent_history(limit=50, session_id=cur_sid)
+        if not recent:
+            return
+
+        last_user_prompt = ""
+        for m in reversed(recent):
+            if m["role"] == "user":
+                last_user_prompt = m["content"]
+                break
+
+        if not last_user_prompt:
+            self.show_toast("No preceding user prompt found to regenerate", "WARNING")
+            return
+
+        db.delete_last_assistant_message(session_id=cur_sid)
+        bubble.deleteLater()
+        self.show_toast("Regenerating response...", "SYSTEM")
+        self._send_message(override_prompt=last_user_prompt, is_regeneration=True)
+
     def _add_bubble(self, role: str, content: str = "") -> _MessageBubble:
         if self.hero_widget:
             self.hero_widget.setVisible(False)
@@ -5485,7 +5614,9 @@ class MainWindow(QWidget):
             content,
             on_speak_clicked=self._speak_text,
             on_enable_vision_clicked=self.enable_screen_vision,
-            on_suggestion_clicked=self._on_suggestion_clicked
+            on_suggestion_clicked=self._on_suggestion_clicked,
+            on_regenerate_clicked=self._regenerate_response,
+            on_edit_clicked=self._on_edit_user_message
         )
         self.message_layout.insertWidget(self.message_layout.count() - 1, bubble)
         self._update_context_meter()
@@ -5749,7 +5880,7 @@ class MainWindow(QWidget):
             }}
         """)
 
-    def _send_message(self, prefix: str = ""):
+    def _send_message(self, prefix: str = "", override_prompt: str = "", is_regeneration: bool = False):
         # If currently streaming, SuperAgent or Swarm running, clicking Stop aborts cleanly
         if self._llm_thread and self._llm_thread.isRunning():
             self._llm_thread.cancel()
@@ -5769,9 +5900,12 @@ class MainWindow(QWidget):
             self.show_toast("Swarm stopped by user", "SYSTEM")
             return
 
-        text = self.input_edit.toPlainText().strip()
-        if prefix:
-            text = f"{prefix} {text}".strip()
+        if override_prompt:
+            text = override_prompt.strip()
+        else:
+            text = self.input_edit.toPlainText().strip()
+            if prefix:
+                text = f"{prefix} {text}".strip()
 
         screen_context_path = None
         active_window_title = ""
@@ -5787,7 +5921,8 @@ class MainWindow(QWidget):
         image_path_to_send = self._attached_path or screen_context_path
         self._attached_path = None
         self.attachment_preview.setVisible(False)
-        self.input_edit.clear()
+        if not is_regeneration:
+            self.input_edit.clear()
 
         # Handle instant slash commands without external API delay
         if text.startswith("/") and not image_path_to_send:
@@ -5853,6 +5988,40 @@ class MainWindow(QWidget):
 
             if cmd == "/palette":
                 self._open_command_palette()
+                return
+
+            if cmd in ("/shortcuts", "/keys", "/hotkeys"):
+                self._show_shortcuts_dialog()
+                return
+
+            if cmd == "/find":
+                if not arg:
+                    self.show_toast("Usage: /find <keyword to search across all chats>", "INFO")
+                    return
+                matches = db.search_all_sessions(arg, limit=15)
+                cur_sid = getattr(self, "_active_session_id", "default")
+                if not matches:
+                    self._add_bubble("user", text)
+                    db.add_message("user", text, session_id=cur_sid)
+                    b = self._add_bubble("assistant", f"No messages matching '{arg}' were found in any saved sessions.")
+                    b.set_meta(datetime.now().strftime("%I:%M %p"), 0.01, "Global Search")
+                    db.add_message("assistant", f"No messages matching '{arg}' were found in any saved sessions.", session_id=cur_sid)
+                    return
+                lines = [f"**Global Search Results for '{arg}' ({len(matches)} matches):**\n"]
+                for m in matches:
+                    role_str = "You" if m["role"] == "user" else "Nova"
+                    snippet = m["content"].replace("\n", " ").strip()
+                    if len(snippet) > 120:
+                        snippet = snippet[:120] + "..."
+                    time_str = m.get("timestamp", "")
+                    s_title = m.get("session_title", "Main Workspace")
+                    lines.append(f"- **[{s_title}]** *{role_str}* ({time_str}): {snippet}")
+                out_msg = "\n".join(lines)
+                self._add_bubble("user", text)
+                db.add_message("user", text, session_id=cur_sid)
+                b = self._add_bubble("assistant", out_msg)
+                b.set_meta(datetime.now().strftime("%I:%M %p"), 0.02, "Global Search")
+                db.add_message("assistant", out_msg, session_id=cur_sid)
                 return
 
             if cmd == "/theme":
@@ -6070,13 +6239,16 @@ class MainWindow(QWidget):
             self._launch_super_agent(text)
             return
 
-        # Add User bubble
-        bubble_text = text or "[Attached Screen Context]"
-        if image_path_to_send:
-            bubble_text = f"{bubble_text}\n[Image: {image_path_to_send}]"
-        self._add_bubble("user", bubble_text)
-        cur_sid = getattr(self, "_active_session_id", "default")
-        db.add_message("user", bubble_text, session_id=cur_sid)
+        if not is_regeneration:
+            # Add User bubble
+            bubble_text = text or "[Attached Screen Context]"
+            if image_path_to_send:
+                bubble_text = f"{bubble_text}\n[Image: {image_path_to_send}]"
+            self._add_bubble("user", bubble_text)
+            cur_sid = getattr(self, "_active_session_id", "default")
+            db.add_message("user", bubble_text, session_id=cur_sid)
+        else:
+            cur_sid = getattr(self, "_active_session_id", "default")
 
         # Smart Auto-Title for fresh conversations on first prompt
         if cur_sid != "default":
@@ -6387,6 +6559,15 @@ class MainWindow(QWidget):
 
     def _on_input_text_changed(self):
         text = self.input_edit.toPlainText()
+        if hasattr(self, "composer_stats_lbl"):
+            chars = len(text)
+            if chars > 0:
+                words = len(text.split())
+                est_tokens = max(1, round(chars / 3.8))
+                self.composer_stats_lbl.setText(f"{chars} chars • {words} words • ~{est_tokens} tokens")
+            else:
+                self.composer_stats_lbl.setText("")
+
         if text.startswith("/") and len(text.strip()) <= 14 and "\n" not in text:
             filter_str = text[1:].lower().strip()
             if hasattr(self, "slash_menu"):

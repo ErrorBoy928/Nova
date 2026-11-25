@@ -224,6 +224,37 @@ def delete_session(session_id: str) -> None:
         conn.execute("DELETE FROM conversation_history WHERE session_id = ?", (session_id,))
 
 
+def delete_last_assistant_message(session_id: str = "default") -> bool:
+    """Deletes the most recent assistant message from the session history."""
+    sid = session_id or "default"
+    with _connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM conversation_history WHERE session_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+            (sid,)
+        ).fetchone()
+        if row:
+            conn.execute("DELETE FROM conversation_history WHERE id = ?", (row["id"],))
+            return True
+        return False
+
+
+def search_all_sessions(query: str, limit: int = 25) -> list[dict[str, str]]:
+    """Searches across all chat sessions for matching messages, returning matched turns with session title."""
+    clean_q = (query or "").strip()
+    if not clean_q:
+        return []
+    with _connection() as conn:
+        rows = conn.execute(
+            "SELECT c.id, c.session_id, c.role, c.content, c.timestamp, COALESCE(s.title, 'Main Workspace') as session_title "
+            "FROM conversation_history c "
+            "LEFT JOIN chat_sessions s ON c.session_id = s.id "
+            "WHERE c.content LIKE ? "
+            "ORDER BY c.id DESC LIMIT ?",
+            (f"%{clean_q}%", limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def add_message(role: str, content: str, session_id: str = "default") -> None:
     # Sanitize repetitive loops before saving
     import re
