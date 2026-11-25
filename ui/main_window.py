@@ -2552,6 +2552,11 @@ class _MessageBubble(QWidget):
             name_lbl.setStyleSheet("color: #38bdf8; font-size: 11px; font-weight: 800; letter-spacing: 0.8px;")
             header_row.addWidget(name_lbl)
 
+            self.stream_status_lbl = QLabel("")
+            self.stream_status_lbl.setStyleSheet("color: #38bdf8; font-size: 10px; font-weight: 600; font-family: Consolas, monospace; font-style: italic; padding-left: 6px;")
+            self.stream_status_lbl.setVisible(False)
+            header_row.addWidget(self.stream_status_lbl)
+
             header_row.addStretch()
             self.card_layout.addLayout(header_row)
 
@@ -2861,10 +2866,21 @@ class _MessageBubble(QWidget):
         """Called dynamically as tokens arrive in real-time."""
         self.content = text
         self.stream_label.setText(_render_images(_render_prose(text)))
+        if not hasattr(self, "_stream_start_time") or self._stream_start_time is None:
+            self._stream_start_time = time.time()
+        elapsed = max(0.05, time.time() - self._stream_start_time)
+        words = len(text.split())
+        est_tokens = max(1, round(words * 1.33))
+        tok_speed = est_tokens / elapsed
+        if hasattr(self, "stream_status_lbl"):
+            self.stream_status_lbl.setText(f"Streaming... {tok_speed:.0f} tok/s • {est_tokens} tokens")
+            self.stream_status_lbl.setVisible(True)
 
     def finalize_content(self, text: str):
         """Parses finished text into prose sections, ThinkingBlockWidgets, and interactive CodeBlockWidgets."""
         self.content = text
+        if hasattr(self, "stream_status_lbl"):
+            self.stream_status_lbl.setVisible(False)
         if self.is_user:
             self.stream_label.setText(_render_images(_render_message_html(text)))
             return
@@ -3009,6 +3025,9 @@ class _MessageBubble(QWidget):
         QApplication.clipboard().setText(self.content, QClipboard.Clipboard)
         self.full_copy_btn.setText("Copied!")
         QTimer.singleShot(1500, lambda: self.full_copy_btn.setText("Copy All"))
+        top = self.window()
+        if hasattr(top, "show_toast"):
+            top.show_toast("Copied full response to clipboard", "COPY")
 
 
 class ChatHeroWidget(QFrame):
@@ -3218,6 +3237,9 @@ class MainWindow(QWidget):
         self.cmd_terminal_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
         self.cmd_terminal_shortcut.activated.connect(self._open_terminal_runner)
 
+        self.cmd_model_shortcut = QShortcut(QKeySequence("Ctrl+M"), self)
+        self.cmd_model_shortcut.activated.connect(self._cycle_next_model)
+
         # Antigravity Shortcuts & Listeners
         self.cmd_skills_shortcut = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
         self.cmd_skills_shortcut.activated.connect(self._open_skills_manager)
@@ -3376,6 +3398,13 @@ class MainWindow(QWidget):
             self.show_toast(f"Engine switched: {short_name}", "MODEL")
             QTimer.singleShot(1500, lambda: self.status_pill.setText("READY"))
 
+    def _cycle_next_model(self):
+        if hasattr(self, "model_combo") and self.model_combo.count() > 1:
+            next_idx = (self.model_combo.currentIndex() + 1) % self.model_combo.count()
+            self.model_combo.setCurrentIndex(next_idx)
+            m_label = self.model_combo.currentText()
+            self.show_toast(f"Switched model: {m_label} (Ctrl+M)", "MODEL")
+
     def _toggle_search_bar(self):
         if hasattr(self, "search_bar"):
             if self.search_bar.isVisible():
@@ -3472,6 +3501,7 @@ class MainWindow(QWidget):
             ("Ctrl + B", "Code Artifacts & Scripts Drawer"),
             ("Ctrl + Shift + S", "Antigravity Skills & Customizations Manager"),
             ("Ctrl + T", "Quick Embedded PowerShell Terminal"),
+            ("Ctrl + M", "Cycle Next LLM Engine Model"),
             ("Ctrl + F", "Find in Chat Conversation"),
             ("Ctrl + Shift + D", "Desktop Screen Snip & Vision OCR"),
             ("Ctrl + Shift + N", "Summon Nova AI from System Tray"),
