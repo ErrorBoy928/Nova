@@ -1146,8 +1146,38 @@ class CodeBlockWidget(QFrame):
 
     def _on_copy_clicked(self):
         QApplication.clipboard().setText(self.code, QClipboard.Clipboard)
-        self.copy_btn.setText("Copied!")
-        QTimer.singleShot(1500, lambda: self.copy_btn.setText("Copy"))
+        self.copy_btn.setText("✓ Copied!")
+        self.copy_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #064e3b;
+                color: #a7f3d0;
+                border: 1px solid #10b981;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 700;
+                padding: 0 8px;
+            }
+        """)
+        QTimer.singleShot(1500, self._reset_copy_btn)
+
+    def _reset_copy_btn(self):
+        self.copy_btn.setText("Copy")
+        self.copy_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #15151f;
+                color: {_TEXT_MUTED};
+                border: 1px solid {_BORDER};
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 600;
+                padding: 0 8px;
+            }}
+            QPushButton:hover {{
+                color: #ffffff;
+                border-color: {_BORDER_LIGHT};
+                background-color: #1e1e2c;
+            }}
+        """)
 
     def _on_save_clicked(self):
         ext_map = {
@@ -1977,6 +2007,152 @@ class _SystemPulseWidget(QFrame):
         """)
 
 
+class _SlashCommandsMenuWidget(QFrame):
+    """Sleek obsidian popup suggesting available slash commands when user types '/' in input."""
+    command_selected = Signal(str)
+
+    COMMANDS = [
+        ("/otp", "Extract 2FA / OTP verification code from email", "SECURITY", "#38bdf8"),
+        ("/accounts", "Discover connected online web accounts & platforms", "ACCOUNTS", "#a855f7"),
+        ("/clean", "1-Click PC cleanup, temp cache flush & RAM trim", "OPTIMIZE", "#10b981"),
+        ("/excel", "Create formatted Excel spreadsheet with formulas", "EXCEL", "#34d399"),
+        ("/rename", "Rename current active conversation session", "SESSION", "#f59e0b"),
+        ("/sys", "View live CPU, RAM, and hardware telemetry diagnostics", "HARDWARE", "#60a5fa"),
+        ("/super", "Launch autonomous multi-step SuperAgent task", "AUTONOMOUS", "#ec4899"),
+        ("/new", "Start a fresh unpolluted conversation session", "SESSION", "#a5b4fc"),
+        ("/clear", "Clear chat history from active session", "MEMORY", "#f43f5e"),
+        ("/export", "Export conversation transcript to Markdown", "EXPORT", "#94a3b8"),
+        ("/palette", "Open full desktop command palette", "SHORTCUT", "#e2e8f0"),
+    ]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("""
+            _SlashCommandsMenuWidget {
+                background-color: #0c0c16;
+                border: 1px solid #232338;
+                border-radius: 8px;
+            }
+        """)
+        self._filtered_cmds = list(self.COMMANDS)
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(4)
+
+        hdr = QHBoxLayout()
+        hdr.setContentsMargins(4, 2, 4, 2)
+        dot = QLabel("●")
+        dot.setStyleSheet("color: #38bdf8; font-size: 8px;")
+        hdr.addWidget(dot)
+
+        title = QLabel("COMMAND SHORTCUTS (Tab or Enter to select)")
+        title.setStyleSheet("color: #64748b; font-size: 8px; font-weight: 800; letter-spacing: 0.6px;")
+        hdr.addWidget(title)
+        hdr.addStretch()
+        layout.addLayout(hdr)
+
+        self.list_widget = QListWidget()
+        self.list_widget.setFixedHeight(140)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background: transparent;
+                border: none;
+                color: #e2e8f0;
+                font-size: 11px;
+            }
+            QListWidget::item {
+                padding: 4px 6px;
+                border-radius: 4px;
+                margin-bottom: 1px;
+            }
+            QListWidget::item:selected {
+                background-color: #1a1a2e;
+                color: #ffffff;
+            }
+            QListWidget::item:hover:!selected {
+                background-color: #121220;
+            }
+        """)
+        self.list_widget.itemClicked.connect(self._on_item_clicked)
+        layout.addWidget(self.list_widget)
+        self._populate_list()
+
+    def _populate_list(self):
+        self.list_widget.clear()
+        for cmd, desc, badge, color in self._filtered_cmds:
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, cmd)
+
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(4, 2, 4, 2)
+            row_layout.setSpacing(8)
+
+            cmd_lbl = QLabel(cmd)
+            cmd_lbl.setStyleSheet(f"color: {color}; font-weight: 700; font-family: Consolas, monospace; font-size: 11px;")
+            row_layout.addWidget(cmd_lbl)
+
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet("color: #94a3b8; font-size: 10px;")
+            row_layout.addWidget(desc_lbl)
+            row_layout.addStretch()
+
+            badge_lbl = QLabel(badge)
+            badge_lbl.setStyleSheet(f"background: #141426; color: {color}; font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px; font-family: Consolas;")
+            row_layout.addWidget(badge_lbl)
+
+            item.setSizeHint(row.sizeHint())
+            self.list_widget.addItem(item)
+            self.list_widget.setItemWidget(item, row)
+
+        if self.list_widget.count() > 0:
+            self.list_widget.setCurrentRow(0)
+
+    def filter_commands(self, query: str):
+        q = (query or "").lower().strip()
+        if not q:
+            self._filtered_cmds = list(self.COMMANDS)
+        else:
+            self._filtered_cmds = [
+                (c, d, b, clr) for (c, d, b, clr) in self.COMMANDS
+                if q in c.lower() or q in d.lower() or q in b.lower()
+            ]
+        self._populate_list()
+
+    def has_matches(self) -> bool:
+        return len(self._filtered_cmds) > 0
+
+    def select_next(self):
+        cur = self.list_widget.currentRow()
+        if cur < self.list_widget.count() - 1:
+            self.list_widget.setCurrentRow(cur + 1)
+        else:
+            self.list_widget.setCurrentRow(0)
+
+    def select_prev(self):
+        cur = self.list_widget.currentRow()
+        if cur > 0:
+            self.list_widget.setCurrentRow(cur - 1)
+        else:
+            self.list_widget.setCurrentRow(self.list_widget.count() - 1)
+
+    def trigger_selected(self):
+        item = self.list_widget.currentItem()
+        if item:
+            cmd = item.data(Qt.UserRole)
+            if cmd:
+                self.command_selected.emit(cmd)
+
+    def _on_item_clicked(self, item):
+        if item:
+            cmd = item.data(Qt.UserRole)
+            if cmd:
+                self.command_selected.emit(cmd)
+
+
 class _SessionItemWidget(QWidget):
     """Sleek sidebar session item with title, chat indicator, and 1-click delete button."""
     delete_requested = Signal(str)
@@ -2363,17 +2539,19 @@ class ChatHeroWidget(QFrame):
         hdr_box.addWidget(sub_title)
         card_vbox.addLayout(hdr_box)
 
-        # 4 Clean Action Cards (2x2 Grid)
+        # 6 Clean Action Cards (3x2 Grid)
         grid_container = QWidget()
         grid = QGridLayout(grid_container)
         grid.setContentsMargins(0, 8, 0, 0)
         grid.setSpacing(10)
 
         actions_data = [
-            ("Interactive Web App", "Live HTML5 app with Chromium live preview", "Create an interactive HTML5 web application with live preview controls and dashboard.", "ARTIFACT", "#818cf8"),
-            ("Data Analysis & Chart", "Build interactive Chart.js graphs & metrics", "Generate an interactive chart comparing annual business growth and revenue.", "CHART.JS", "#34d399"),
-            ("Financial Excel Sheet", "Generate styled spreadsheet with formulas", "Create a professionally styled Excel spreadsheet for monthly expense and budget tracking.", "EXCEL", "#38bdf8"),
-            ("Multimodal Screen Vision", "Inspect active desktop, OCR, and guidance", "Analyze my active screen, explain what is open, and guide me on next actions.", "VISION", "#f59e0b"),
+            ("2FA & Web Accounts", "Extract login OTPs & discover email services", "Check connected web accounts for my email and fetch latest 2FA OTP codes.", "SECURITY", "#38bdf8"),
+            ("Deep PC Optimizer", "Clean temporary junk, flush cache & trim RAM", "Run full PC system optimization, clean temp cache, and trim RAM.", "OPTIMIZE", "#10b981"),
+            ("Automated Excel Creator", "Generate styled spreadsheets with formulas", "Create an Excel spreadsheet on Desktop for Student Marksheet with Roll No, Name, Marks, and Percentage.", "EXCEL", "#34d399"),
+            ("Python Engineering Suite", "Production-ready scripts with 1-click execution", "Write a Python script with GUI using PySide6 that monitors network ping and internet connection.", "RUNNABLE", "#818cf8"),
+            ("Desktop Screen Vision", "Inspect active desktop, read UI & guide actions", "Analyze my active screen, explain what is open, and guide me on next actions.", "VISION", "#f59e0b"),
+            ("Deep Autonomous Research", "Multi-source web synthesis & comprehensive report", "Conduct deep web research on latest AI agent frameworks in 2026 and synthesize a report.", "RESEARCH", "#ec4899"),
         ]
 
         for idx, (title, subtitle, prompt, badge, color) in enumerate(actions_data):
@@ -3544,6 +3722,7 @@ class MainWindow(QWidget):
             }
         """)
         self.session_list.currentRowChanged.connect(self._on_session_list_row_changed)
+        self.session_list.itemDoubleClicked.connect(self._on_session_item_double_clicked)
         sidebar_layout.addWidget(self.session_list, 1)
 
         # Navigation Workspaces
@@ -3957,6 +4136,7 @@ class MainWindow(QWidget):
             }}
         """)
         self.input_edit.installEventFilter(self)
+        self.input_edit.textChanged.connect(self._on_input_text_changed)
         card_layout.addWidget(self.input_edit)
 
         # Bottom controls row
@@ -4034,6 +4214,12 @@ class MainWindow(QWidget):
         controls_row.addWidget(self.send_btn)
 
         card_layout.addLayout(controls_row)
+
+        self.slash_menu = _SlashCommandsMenuWidget(self)
+        self.slash_menu.setVisible(False)
+        self.slash_menu.command_selected.connect(self._on_slash_command_selected)
+        chat_vbox.addWidget(self.slash_menu)
+
         chat_vbox.addWidget(input_card)
 
         self.main_stack.addWidget(chat_page)
@@ -4448,13 +4634,39 @@ class MainWindow(QWidget):
                 color: #ffffff;
             }
         """)
-        act_del = menu.addAction("Delete Chat")
+        act_rename = menu.addAction("✏ Rename Chat")
+        act_rename.triggered.connect(lambda: self._rename_session(sid))
+
+        act_del = menu.addAction("✕ Delete Chat")
         act_del.triggered.connect(lambda: self._delete_session(sid))
 
-        act_new = menu.addAction("New Chat (Ctrl+N)")
+        act_new = menu.addAction("+ New Chat (Ctrl+N)")
         act_new.triggered.connect(self._create_new_session)
 
         menu.exec(self.session_list.mapToGlobal(pos))
+
+    def _rename_session(self, session_id: str):
+        if not session_id:
+            return
+        sess = db.get_session(session_id)
+        current_title = sess.get("title", "") if sess else ""
+        from PySide6.QtWidgets import QInputDialog
+        new_title, ok = QInputDialog.getText(
+            self,
+            "Rename Conversation",
+            "Enter conversation title:",
+            text=current_title
+        )
+        if ok and new_title.strip():
+            db.rename_session(session_id, new_title.strip())
+            self._refresh_session_combo(selected_id=self._active_session_id)
+            self.show_toast(f"Renamed: {new_title.strip()}", "SESSION")
+
+    def _on_session_item_double_clicked(self, item):
+        if item:
+            sid = item.data(Qt.UserRole)
+            if sid:
+                self._rename_session(sid)
 
     def _on_session_list_row_changed(self, row: int):
         if row < 0 or not hasattr(self, "session_list"):
@@ -4831,6 +5043,52 @@ class MainWindow(QWidget):
             cmd = parts[0].lower()
             arg = parts[1].strip() if len(parts) > 1 else ""
 
+            if cmd in ("/otp", "/2fa"):
+                service = arg or "google"
+                self._add_bubble("user", text)
+                cur_sid = getattr(self, "_active_session_id", "default")
+                db.add_message("user", text, session_id=cur_sid)
+                from automation.actions import action_get_email_otp
+                res_text = action_get_email_otp(service)
+                b = self._add_bubble("assistant", res_text)
+                b.set_meta(datetime.now().strftime("%I:%M %p"), 0.02, "Security Shield")
+                db.add_message("assistant", res_text, session_id=cur_sid)
+                return
+
+            if cmd in ("/accounts", "/scan", "/webaccounts"):
+                self._add_bubble("user", text)
+                cur_sid = getattr(self, "_active_session_id", "default")
+                db.add_message("user", text, session_id=cur_sid)
+                from automation.actions import action_scan_web_accounts
+                res_text = action_scan_web_accounts("")
+                b = self._add_bubble("assistant", res_text)
+                b.set_meta(datetime.now().strftime("%I:%M %p"), 0.05, "Account Discovery")
+                db.add_message("assistant", res_text, session_id=cur_sid)
+                return
+
+            if cmd in ("/clean", "/optimize"):
+                self._add_bubble("user", text)
+                cur_sid = getattr(self, "_active_session_id", "default")
+                db.add_message("user", text, session_id=cur_sid)
+                from automation.actions import action_optimize_system
+                res_text = action_optimize_system("")
+                b = self._add_bubble("assistant", res_text)
+                b.set_meta(datetime.now().strftime("%I:%M %p"), 0.02, "PC Optimizer")
+                db.add_message("assistant", res_text, session_id=cur_sid)
+                if hasattr(self, "system_pulse"):
+                    self.system_pulse._on_boost_clicked()
+                return
+
+            if cmd == "/rename":
+                cur_sid = getattr(self, "_active_session_id", "default")
+                if arg:
+                    db.rename_session(cur_sid, arg)
+                    self._refresh_session_combo(selected_id=cur_sid)
+                    self.show_toast(f"Renamed: {arg}", "SESSION")
+                else:
+                    self._rename_session(cur_sid)
+                return
+
             if cmd == "/clear":
                 self._clear_conversation()
                 db.clear_history()
@@ -5044,6 +5302,22 @@ class MainWindow(QWidget):
         self._add_bubble("user", bubble_text)
         cur_sid = getattr(self, "_active_session_id", "default")
         db.add_message("user", bubble_text, session_id=cur_sid)
+
+        # Smart Auto-Title for fresh conversations on first prompt
+        if cur_sid != "default":
+            try:
+                sess_meta = db.get_session(cur_sid)
+                if sess_meta and sess_meta.get("title", "") in ("New Session", "Session", "Untitled Session"):
+                    clean_first = re.sub(r"[^\w\s]", "", text).strip()
+                    words = clean_first.split()
+                    if words:
+                        smart_title = " ".join(words[:4]).capitalize()
+                        if len(smart_title) > 28:
+                            smart_title = smart_title[:28] + "..."
+                        db.rename_session(cur_sid, smart_title)
+                        self._refresh_session_combo(selected_id=cur_sid)
+            except Exception:
+                pass
 
         # Prepare Chat Messages
         history: list[ChatMessage] = []
@@ -5336,8 +5610,43 @@ class MainWindow(QWidget):
         # Only prompt on fatal missing key, never pop up automatically on transient provider errors
         pass
 
+    def _on_input_text_changed(self):
+        text = self.input_edit.toPlainText()
+        if text.startswith("/") and len(text.strip()) <= 14 and "\n" not in text:
+            filter_str = text[1:].lower().strip()
+            if hasattr(self, "slash_menu"):
+                self.slash_menu.filter_commands(filter_str)
+                self.slash_menu.setVisible(self.slash_menu.has_matches())
+        else:
+            if hasattr(self, "slash_menu") and self.slash_menu.isVisible():
+                self.slash_menu.setVisible(False)
+
+    def _on_slash_command_selected(self, cmd: str):
+        if hasattr(self, "slash_menu"):
+            self.slash_menu.setVisible(False)
+        self.input_edit.setPlainText(f"{cmd} ")
+        from PySide6.QtGui import QTextCursor
+        cursor = self.input_edit.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.input_edit.setTextCursor(cursor)
+        self.input_edit.setFocus()
+
     def eventFilter(self, obj, event):
         if obj is self.input_edit and event.type() == QKeyEvent.KeyPress:
+            if hasattr(self, "slash_menu") and self.slash_menu.isVisible():
+                if event.key() == Qt.Key_Down:
+                    self.slash_menu.select_next()
+                    return True
+                elif event.key() == Qt.Key_Up:
+                    self.slash_menu.select_prev()
+                    return True
+                elif event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
+                    self.slash_menu.trigger_selected()
+                    return True
+                elif event.key() == Qt.Key_Escape:
+                    self.slash_menu.setVisible(False)
+                    return True
+
             if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not (event.modifiers() & Qt.ShiftModifier):
                 self._send_message()
                 return True
